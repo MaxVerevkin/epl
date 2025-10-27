@@ -1,7 +1,13 @@
 # Syntax reference
 
 - source = item*
-- ident = [a-zA-Z_][a-zA-Z_0-9]*
+- ident = [a-zA-Z_][a-zA-Z_0-9]* _except keywords_
+
+## Keywords
+
+- `fn`
+- `if`
+- `loop`
 
 ## Items
 
