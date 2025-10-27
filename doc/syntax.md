@@ -1,0 +1,29 @@
+# Syntax reference
+
+- source = item*
+- ident = [a-zA-Z_][a-zA-Z_0-9]*
+
+## Items
+
+- item = function
+
+## Fuctions
+
+- function = `fn` ident `(` fn_arg? (, fn_arg)* `)` `->` ident (block_expr | `;`)
+- fn_arg = ident `:` ident
+
+## Expressions
+
+- expr = expr_with_no_block | expr_with_block
+- expr_with_no_block = literal
+- expr_with_block = block_expr | if_expr | loop_expr
+- statement = `;` | let_statement | expr_with_no_block `;` | expr_with_block
+- block_expr = `{` statement* expr_with_no_block? `}`
+- if_expr = `if` expr block_expr (`else` block_expr)?
+- loop_expr = `loop` block_expr
+
+## Literals
+
+- literal = number_literal | string_literal
+- number_literal = [0-9]+
+- string_literal = `"` [^"] `"`
