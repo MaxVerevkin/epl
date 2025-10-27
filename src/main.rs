@@ -1,3 +1,44 @@
+mod lex;
+
 fn main() {
-    println!("Hello, world!");
+    let mut args = std::env::args();
+    let arg0 = args.next().expect("arg0 is always present");
+    let Some(command) = args.next() else {
+        print_usage(&arg0, 1)
+    };
+
+    match &*command {
+        "help" => {
+            print_usage(&arg0, 0);
+        }
+        "lex" => {
+            let Some(file) = args.next() else {
+                print_usage(&arg0, 1)
+            };
+            if args.next().is_some() {
+                print_usage(&arg0, 1)
+            }
+
+            let src = std::fs::read_to_string(file).unwrap();
+
+            for x in lex::Lexer::new(&src) {
+                let (span, token) = x.unwrap();
+                println!("{}..{}: {token:?}", span.start, span.end);
+            }
+        }
+        other => {
+            println!("Unknown command {other:?}");
+            println!();
+            print_usage(&arg0, 1);
+        }
+    }
+}
+
+fn print_usage(arg0: &str, status_code: i32) -> ! {
+    println!("Usage: {arg0} <command> [command args]");
+    println!();
+    println!("Commands:");
+    println!("  - help");
+    println!("  - lex <file>");
+    std::process::exit(status_code);
 }
