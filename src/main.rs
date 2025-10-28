@@ -1,3 +1,4 @@
+mod ast;
 mod lex;
 
 fn main() {
@@ -26,6 +27,19 @@ fn main() {
                 println!("{}..{}: {token:?}", span.start, span.end);
             }
         }
+        "ast" => {
+            let Some(file) = args.next() else {
+                print_usage(&arg0, 1)
+            };
+            if args.next().is_some() {
+                print_usage(&arg0, 1)
+            }
+
+            let src = std::fs::read_to_string(file).unwrap();
+
+            let ast = ast::Parser::new(&src).parse().unwrap();
+            println!("{ast:#?}");
+        }
         other => {
             println!("Unknown command {other:?}");
             println!();
@@ -40,5 +54,6 @@ fn print_usage(arg0: &str, status_code: i32) -> ! {
     println!("Commands:");
     println!("  - help");
     println!("  - lex <file>");
+    println!("  - ast <file>");
     std::process::exit(status_code);
 }
