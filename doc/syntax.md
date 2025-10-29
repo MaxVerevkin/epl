@@ -23,7 +23,8 @@
 ## Expressions
 
 - expr = expr_with_no_block | expr_with_block
-- expr_with_no_block = base_expr | (base_expr | expr_with_block) (`==` | `!=` | `<=` | `>=` | `<` | `>`) (base_expr | expr_with_block)
+- expr_with_no_block = base_expr | additive_expr (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr
+- additive_expr = (base_expr | expr_with_block) ( (`+` | `-`) (base_expr | expr_with_block) )*
 - expr_with_block = block_expr | if_expr | loop_expr
 - base_expr = literal | function_call_expr | ident
 - statement = `;` | let_statement | expr_with_no_block `;` | expr_with_block

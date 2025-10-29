@@ -128,6 +128,8 @@ pub enum BinaryOp {
     GreaterOrEqual,
     Less,
     Greater,
+    Add,
+    Sub,
 }
 
 /// A parser for the source code
@@ -371,7 +373,7 @@ impl Parser<'_> {
 
     /// Parse an experission
     fn next_expr(&mut self) -> Result<Expr, Error> {
-        let expr = self.next_base_expr_or_with_block()?;
+        let expr = self.next_additive_expr()?;
         let op = match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::CmpEq)) => Some(BinaryOp::Equal),
             Some(lex::Token::Punct(lex::Punct::CmpNeq)) => Some(BinaryOp::NotEqual),
@@ -387,11 +389,29 @@ impl Parser<'_> {
                 Ok(Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                     op,
                     lhs: Box::new(expr),
-                    rhs: Box::new(self.next_base_expr_or_with_block()?),
+                    rhs: Box::new(self.next_additive_expr()?),
                 })))
             }
             None => Ok(expr),
         }
+    }
+
+    fn next_additive_expr(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.next_base_expr_or_with_block()?;
+        loop {
+            let op = match self.peek_token()? {
+                Some(lex::Token::Punct(lex::Punct::Plus)) => BinaryOp::Add,
+                Some(lex::Token::Punct(lex::Punct::Minus)) => BinaryOp::Sub,
+                _ => break,
+            };
+            self.consume_token()?;
+            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+                op,
+                lhs: Box::new(expr),
+                rhs: Box::new(self.next_base_expr_or_with_block()?),
+            }));
+        }
+        Ok(expr)
     }
 
     /// Parse a base experission
