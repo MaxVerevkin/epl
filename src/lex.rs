@@ -98,6 +98,10 @@ pub enum Punct {
     CmpL,
     /// >
     CmpG,
+    /// *
+    Star,
+    /// /
+    Slash,
 }
 
 /// A mapping from strings to punct tokens
@@ -119,6 +123,8 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     ("+", Punct::Plus),
     ("<", Punct::CmpL),
     (">", Punct::CmpG),
+    ("*", Punct::Star),
+    ("/", Punct::Slash),
 ];
 
 /// An error during lexing

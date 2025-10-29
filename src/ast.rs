@@ -130,6 +130,8 @@ pub enum BinaryOp {
     Greater,
     Add,
     Sub,
+    Mul,
+    Div,
 }
 
 /// A parser for the source code
@@ -397,11 +399,29 @@ impl Parser<'_> {
     }
 
     fn next_additive_expr(&mut self) -> Result<Expr, Error> {
-        let mut expr = self.next_base_expr_or_with_block()?;
+        let mut expr = self.next_multiplicative_expr()?;
         loop {
             let op = match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::Plus)) => BinaryOp::Add,
                 Some(lex::Token::Punct(lex::Punct::Minus)) => BinaryOp::Sub,
+                _ => break,
+            };
+            self.consume_token()?;
+            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+                op,
+                lhs: Box::new(expr),
+                rhs: Box::new(self.next_multiplicative_expr()?),
+            }));
+        }
+        Ok(expr)
+    }
+
+    fn next_multiplicative_expr(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.next_base_expr_or_with_block()?;
+        loop {
+            let op = match self.peek_token()? {
+                Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Mul,
+                Some(lex::Token::Punct(lex::Punct::Slash)) => BinaryOp::Div,
                 _ => break,
             };
             self.consume_token()?;
