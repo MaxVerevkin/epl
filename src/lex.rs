@@ -253,13 +253,13 @@ impl Lexer<'_> {
                         });
                     }
                 }
+            } else {
+                match ch {
+                    '"' => break,
+                    '\\' => escaping = true,
+                    _ => string.push(ch),
+                }
             }
-
-            if ch == '"' {
-                break;
-            }
-
-            string.push(ch);
         }
         Ok((span, Token::Literal(Literal::String(string))))
     }
