@@ -64,6 +64,16 @@ pub enum Literal {
 /// A punctuation token
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Punct {
+    /// ==
+    CmpEq,
+    /// !=
+    CmpNeq,
+    /// <=
+    CmpLe,
+    /// >=
+    CmpGe,
+    /// ->
+    Arrow,
     /// ;
     Semicolon,
     /// :
@@ -80,16 +90,23 @@ pub enum Punct {
     LeftBrace,
     /// }
     RightBrace,
-    /// ->
-    Arrow,
     /// -
     Minus,
     /// +
     Plus,
+    /// <
+    CmpL,
+    /// >
+    CmpG,
 }
 
 /// A mapping from strings to punct tokens
 const PUNCT_MAP: &[(&str, Punct)] = &[
+    ("==", Punct::CmpEq),
+    ("!=", Punct::CmpNeq),
+    ("<=", Punct::CmpLe),
+    (">=", Punct::CmpGe),
+    ("->", Punct::Arrow),
     (";", Punct::Semicolon),
     (":", Punct::Colon),
     (",", Punct::Comma),
@@ -98,9 +115,10 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     (")", Punct::RightParen),
     ("{", Punct::LeftBrace),
     ("}", Punct::RightBrace),
-    ("->", Punct::Arrow),
     ("-", Punct::Minus),
     ("+", Punct::Plus),
+    ("<", Punct::CmpL),
+    (">", Punct::CmpG),
 ];
 
 /// An error during lexing
