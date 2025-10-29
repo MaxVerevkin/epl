@@ -102,6 +102,7 @@ pub enum ExprWithBlock {
 pub enum LiteralExpr {
     Number(i64),
     String(String),
+    Bool(bool),
 }
 
 /// A function-call expression
@@ -454,6 +455,18 @@ impl Parser<'_> {
                     lex::Literal::Number(num) => LiteralExpr::Number(num),
                     lex::Literal::String(str) => LiteralExpr::String(str),
                 })))
+            }
+            Some(lex::Token::Keyword(lex::Keyword::True)) => {
+                self.consume_token()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(
+                    LiteralExpr::Bool(true),
+                )))
+            }
+            Some(lex::Token::Keyword(lex::Keyword::False)) => {
+                self.consume_token()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(
+                    LiteralExpr::Bool(false),
+                )))
             }
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()

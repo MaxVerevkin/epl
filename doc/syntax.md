@@ -10,6 +10,8 @@
 - `else`
 - `loop`
 - `let`
+- `true`
+- `false`
 
 ## Items
 
@@ -37,6 +39,7 @@
 
 ## Literals
 
-- literal = number_literal | string_literal
+- literal = number_literal | string_literal | bool_literal
 - number_literal = [0-9]+
 - string_literal = `"` [^"] `"`
+- bool_literal = `true` | `false`

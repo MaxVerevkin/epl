@@ -43,6 +43,8 @@ pub enum Keyword {
     Else,
     Loop,
     Let,
+    True,
+    False,
 }
 
 /// A mapping from strings to keyword tokens
@@ -52,6 +54,8 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("else", Keyword::Else),
     ("loop", Keyword::Loop),
     ("let", Keyword::Let),
+    ("true", Keyword::True),
+    ("false", Keyword::False),
 ];
 
 /// A literal token
