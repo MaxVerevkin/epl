@@ -292,4 +292,8 @@ impl Span {
             end: self.end.max(other.end),
         }
     }
+
+    pub fn contains(self, index: usize) -> bool {
+        (self.start..self.end).contains(&index)
+    }
 }

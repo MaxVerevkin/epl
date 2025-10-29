@@ -1,4 +1,5 @@
 mod ast;
+mod diagnostics;
 mod lex;
 
 fn main() {
@@ -35,9 +36,13 @@ fn main() {
                 print_usage(&arg0, 1)
             }
 
-            let src = std::fs::read_to_string(file).unwrap();
+            let src = std::fs::read_to_string(&file).unwrap();
 
-            let ast = ast::Parser::new(&src).parse().unwrap();
+            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
             println!("{ast:#?}");
         }
         other => {
