@@ -86,6 +86,7 @@ pub enum ExprWithNoBlock {
     Literal(LiteralExpr),
     FunctionCallExpr(FunctionCallExpr),
     Ident(Ident),
+    Binary(BinaryExpr),
 }
 
 /// An expression which can be a statement on its own
@@ -108,6 +109,25 @@ pub enum LiteralExpr {
 pub struct FunctionCallExpr {
     pub name: Ident,
     pub args: Vec<Expr>,
+}
+
+/// A binary expression
+#[derive(Debug, Clone)]
+pub struct BinaryExpr {
+    pub op: BinaryOp,
+    pub lhs: Box<Expr>,
+    pub rhs: Box<Expr>,
+}
+
+/// A binary operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Equal,
+    NotEqual,
+    LessOrEqual,
+    GreaterOrEqual,
+    Less,
+    Greater,
 }
 
 /// A parser for the source code
@@ -349,8 +369,33 @@ impl Parser<'_> {
         Ok(Statement::Let(LetStatement { name }))
     }
 
-    /// Parse experission
+    /// Parse an experission
     fn next_expr(&mut self) -> Result<Expr, Error> {
+        let expr = self.next_base_expr_or_with_block()?;
+        let op = match self.peek_token()? {
+            Some(lex::Token::Punct(lex::Punct::CmpEq)) => Some(BinaryOp::Equal),
+            Some(lex::Token::Punct(lex::Punct::CmpNeq)) => Some(BinaryOp::NotEqual),
+            Some(lex::Token::Punct(lex::Punct::CmpLe)) => Some(BinaryOp::LessOrEqual),
+            Some(lex::Token::Punct(lex::Punct::CmpGe)) => Some(BinaryOp::GreaterOrEqual),
+            Some(lex::Token::Punct(lex::Punct::CmpL)) => Some(BinaryOp::Less),
+            Some(lex::Token::Punct(lex::Punct::CmpG)) => Some(BinaryOp::Greater),
+            _ => None,
+        };
+        match op {
+            Some(op) => {
+                self.consume_token()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+                    op,
+                    lhs: Box::new(expr),
+                    rhs: Box::new(self.next_base_expr_or_with_block()?),
+                })))
+            }
+            None => Ok(expr),
+        }
+    }
+
+    /// Parse a base experission
+    fn next_base_expr_or_with_block(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
             Some(lex::Token::Ident(_)) => {
                 if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
