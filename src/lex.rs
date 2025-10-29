@@ -40,14 +40,18 @@ fn is_valid_ident_char(ch: char) -> bool {
 pub enum Keyword {
     Fn,
     If,
+    Else,
     Loop,
+    Let,
 }
 
 /// A mapping from strings to keyword tokens
 const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("fn", Keyword::Fn),
     ("if", Keyword::If),
+    ("else", Keyword::Else),
     ("loop", Keyword::Loop),
+    ("let", Keyword::Let),
 ];
 
 /// A literal token

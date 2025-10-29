@@ -7,7 +7,9 @@
 
 - `fn`
 - `if`
+- `else`
 - `loop`
+- `let`
 
 ## Items
 
@@ -21,13 +23,14 @@
 ## Expressions
 
 - expr = expr_with_no_block | expr_with_block
-- expr_with_no_block = literal | function_call_expr
+- expr_with_no_block = literal | function_call_expr | ident
 - expr_with_block = block_expr | if_expr | loop_expr
-- statement = `;` | expr_with_no_block `;` | expr_with_block
+- statement = `;` | let_statement | expr_with_no_block `;` | expr_with_block
 - block_expr = `{` statement* expr_with_no_block? `}`
 - if_expr = `if` expr block_expr (`else` block_expr)?
 - loop_expr = `loop` block_expr
 - function_call_expr = ident `(` expr? (, expr)* `)`
+- let_statement = `let` ident `;`
 
 ## Literals
 
