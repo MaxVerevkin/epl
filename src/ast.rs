@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::fmt;
 
 use crate::lex;
 
@@ -9,7 +10,7 @@ pub struct Ast {
 }
 
 /// A top level item
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Item {
     Function(Function),
 }
@@ -31,7 +32,7 @@ pub struct FunctionArg {
 }
 
 /// An identifier with its span
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Ident {
     pub span: lex::Span,
     pub value: String,
@@ -535,5 +536,22 @@ impl Parser<'_> {
         self.expect_keyword(lex::Keyword::Loop)?;
         let body = self.next_block_expr()?;
         Ok(LoopExpr { body })
+    }
+}
+
+impl fmt::Debug for Item {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Function(function) => {
+                f.write_str("Item::")?;
+                function.fmt(f)
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}..{}", self.value, self.span.start, self.span.end)
     }
 }
