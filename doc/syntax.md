@@ -35,7 +35,7 @@
 - if_expr = `if` expr block_expr (`else` block_expr)?
 - loop_expr = `loop` block_expr
 - function_call_expr = ident `(` expr? (, expr)* `)`
-- let_statement = `let` ident `;`
+- let_statement = `let` ident `:` ident `;`
 
 ## Literals
 

@@ -314,13 +314,14 @@ impl Lexer<'_> {
 
 impl Span {
     /// Create a new span covering both spans and everything in between
-    fn join(self, other: Self) -> Self {
+    pub fn join(self, other: Self) -> Self {
         Self {
             start: self.start.min(other.start),
             end: self.end.max(other.end),
         }
     }
 
+    /// Check if a given index is inside the span
     pub fn contains(self, index: usize) -> bool {
         (self.start..self.end).contains(&index)
     }

@@ -43,6 +43,7 @@ pub struct Ident {
 pub struct BlockExpr {
     pub statements: Vec<Statement>,
     pub final_expr: Option<ExprWithNoBlock>,
+    pub closing_brace_span: lex::Span,
 }
 
 /// An `if` expression
@@ -71,7 +72,8 @@ pub enum Statement {
 /// A statement
 #[derive(Debug, Clone)]
 pub struct LetStatement {
-    name: Ident,
+    pub name: Ident,
+    pub ty: Ident,
 }
 
 /// An expression
@@ -98,9 +100,16 @@ pub enum ExprWithBlock {
     Loop(LoopExpr),
 }
 
-/// A literal expression
+/// A literal expression with its span
 #[derive(Debug, Clone)]
-pub enum LiteralExpr {
+pub struct LiteralExpr {
+    pub span: lex::Span,
+    pub value: LiteralExprValue,
+}
+
+/// A literal expression value
+#[derive(Debug, Clone)]
+pub enum LiteralExprValue {
     Number(i64),
     String(String),
     Bool(bool),
@@ -111,6 +120,7 @@ pub enum LiteralExpr {
 pub struct FunctionCallExpr {
     pub name: Ident,
     pub args: Vec<Expr>,
+    pub args_span: lex::Span,
 }
 
 /// A binary expression
@@ -330,7 +340,6 @@ impl Parser<'_> {
         loop {
             match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
-                    self.consume_token()?;
                     break;
                 }
                 Some(lex::Token::Punct(lex::Punct::Semicolon)) => {
@@ -343,7 +352,6 @@ impl Parser<'_> {
                 _ => match self.next_expr()? {
                     Expr::WithNoBlock(expr_with_no_block) => match self.peek_token()? {
                         Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
-                            self.consume_token()?;
                             final_expr = Some(expr_with_no_block);
                             break;
                         }
@@ -361,9 +369,11 @@ impl Parser<'_> {
                 },
             }
         }
+        let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
         Ok(BlockExpr {
             statements,
             final_expr,
+            closing_brace_span,
         })
     }
 
@@ -371,8 +381,10 @@ impl Parser<'_> {
     fn next_let_statement(&mut self) -> Result<Statement, Error> {
         self.expect_keyword(lex::Keyword::Let)?;
         let name = self.next_ident()?;
+        self.expect_punct(lex::Punct::Colon)?;
+        let ty = self.next_ident()?;
         self.expect_punct(lex::Punct::Semicolon)?;
-        Ok(Statement::Let(LetStatement { name }))
+        Ok(Statement::Let(LetStatement { name, ty }))
     }
 
     /// Parse an experission
@@ -449,25 +461,30 @@ impl Parser<'_> {
                 }
             }
             Some(lex::Token::Literal(_)) => {
-                let Some((_, lex::Token::Literal(lit))) = self.consume_token()? else {
+                let Some((span, lex::Token::Literal(lit))) = self.consume_token()? else {
                     unreachable!()
                 };
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(match lit {
-                    lex::Literal::Number(num) => LiteralExpr::Number(num),
-                    lex::Literal::String(str) => LiteralExpr::String(str),
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                    span,
+                    value: match lit {
+                        lex::Literal::Number(num) => LiteralExprValue::Number(num),
+                        lex::Literal::String(str) => LiteralExprValue::String(str),
+                    },
                 })))
             }
             Some(lex::Token::Keyword(lex::Keyword::True)) => {
-                self.consume_token()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(
-                    LiteralExpr::Bool(true),
-                )))
+                let (span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                    span,
+                    value: LiteralExprValue::Bool(true),
+                })))
             }
             Some(lex::Token::Keyword(lex::Keyword::False)) => {
-                self.consume_token()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(
-                    LiteralExpr::Bool(false),
-                )))
+                let (span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                    span,
+                    value: LiteralExprValue::Bool(false),
+                })))
             }
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()
@@ -485,12 +502,11 @@ impl Parser<'_> {
     /// Parse function call
     fn next_function_call_expr(&mut self) -> Result<FunctionCallExpr, Error> {
         let name = self.next_ident()?;
-        self.expect_punct(lex::Punct::LeftParen)?;
+        let left_paren_span = self.expect_punct(lex::Punct::LeftParen)?;
         let mut args = Vec::new();
         loop {
             match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::RightParen)) => {
-                    self.consume_token()?;
                     break;
                 }
                 _ => {
@@ -500,7 +516,6 @@ impl Parser<'_> {
                             self.consume_token()?;
                         }
                         Some(lex::Token::Punct(lex::Punct::RightParen)) => {
-                            self.consume_token()?;
                             break;
                         }
                         _ => {
@@ -510,7 +525,12 @@ impl Parser<'_> {
                 }
             }
         }
-        Ok(FunctionCallExpr { name, args })
+        let right_paren_span = self.expect_punct(lex::Punct::RightParen)?;
+        Ok(FunctionCallExpr {
+            name,
+            args,
+            args_span: left_paren_span.join(right_paren_span),
+        })
     }
 
     /// Parse if expression
