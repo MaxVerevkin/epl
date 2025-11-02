@@ -3,6 +3,10 @@
 - source = item*
 - ident = [a-zA-Z_][a-zA-Z_0-9]* _except keywords_
 
+## Comments
+
+Everything after `#` is treated as a comment.
+
 ## Keywords
 
 - `fn`

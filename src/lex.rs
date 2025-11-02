@@ -153,6 +153,11 @@ impl Iterator for Lexer<'_> {
         loop {
             let ch = self.peek_char()?;
 
+            if ch == '#' {
+                self.skip_line();
+                continue;
+            }
+
             if ch.is_ascii_whitespace() {
                 self.consume_char();
                 continue;
@@ -216,6 +221,14 @@ impl Lexer<'_> {
         Span {
             start,
             end: self.offset,
+        }
+    }
+
+    /// Skip everything until a new line
+    fn skip_line(&mut self) {
+        match self.src[self.offset..].find('\n') {
+            Some(i) => self.offset += i + 1,
+            None => self.offset = self.src.len(),
         }
     }
 
