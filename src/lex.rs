@@ -39,6 +39,7 @@ fn is_valid_ident_char(ch: char) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keyword {
     Fn,
+    Return,
     If,
     Else,
     Loop,
@@ -50,6 +51,7 @@ pub enum Keyword {
 /// A mapping from strings to keyword tokens
 const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("fn", Keyword::Fn),
+    ("return", Keyword::Return),
     ("if", Keyword::If),
     ("else", Keyword::Else),
     ("loop", Keyword::Loop),

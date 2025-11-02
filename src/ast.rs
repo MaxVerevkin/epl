@@ -52,12 +52,14 @@ pub struct IfExpr {
     pub cond: Box<Expr>,
     pub if_true: BlockExpr,
     pub if_false: Option<BlockExpr>,
+    pub if_keyword_span: lex::Span,
 }
 
 /// A `loop` expression
 #[derive(Debug, Clone)]
 pub struct LoopExpr {
     pub body: BlockExpr,
+    pub loop_keyword_span: lex::Span,
 }
 
 /// A statement
@@ -86,6 +88,7 @@ pub enum Expr {
 /// An expression which cannot be a statement on its own
 #[derive(Debug, Clone)]
 pub enum ExprWithNoBlock {
+    Return(ReturnExpr),
     Literal(LiteralExpr),
     FunctionCallExpr(FunctionCallExpr),
     Ident(Ident),
@@ -98,6 +101,12 @@ pub enum ExprWithBlock {
     Block(BlockExpr),
     If(IfExpr),
     Loop(LoopExpr),
+}
+
+/// A return expression
+#[derive(Debug, Clone)]
+pub struct ReturnExpr {
+    pub value: Box<Expr>,
 }
 
 /// A literal expression with its span
@@ -121,6 +130,7 @@ pub struct FunctionCallExpr {
     pub name: Ident,
     pub args: Vec<Expr>,
     pub args_span: lex::Span,
+    pub expr_span: lex::Span,
 }
 
 /// A binary expression
@@ -129,6 +139,7 @@ pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: Box<Expr>,
     pub rhs: Box<Expr>,
+    pub op_span: lex::Span,
 }
 
 /// A binary operation
@@ -401,11 +412,12 @@ impl Parser<'_> {
         };
         match op {
             Some(op) => {
-                self.consume_token()?;
+                let (op_span, _) = self.consume_token()?.unwrap();
                 Ok(Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                     op,
                     lhs: Box::new(expr),
                     rhs: Box::new(self.next_additive_expr()?),
+                    op_span,
                 })))
             }
             None => Ok(expr),
@@ -420,11 +432,12 @@ impl Parser<'_> {
                 Some(lex::Token::Punct(lex::Punct::Minus)) => BinaryOp::Sub,
                 _ => break,
             };
-            self.consume_token()?;
+            let (op_span, _) = self.consume_token()?.unwrap();
             expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
                 rhs: Box::new(self.next_multiplicative_expr()?),
+                op_span,
             }));
         }
         Ok(expr)
@@ -438,11 +451,12 @@ impl Parser<'_> {
                 Some(lex::Token::Punct(lex::Punct::Slash)) => BinaryOp::Div,
                 _ => break,
             };
-            self.consume_token()?;
+            let (op_span, _) = self.consume_token()?.unwrap();
             expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
                 rhs: Box::new(self.next_base_expr_or_with_block()?),
+                op_span,
             }));
         }
         Ok(expr)
@@ -451,6 +465,13 @@ impl Parser<'_> {
     /// Parse a base experission
     fn next_base_expr_or_with_block(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
+            Some(lex::Token::Keyword(lex::Keyword::Return)) => {
+                self.consume_token()?.unwrap();
+                let value = self.next_expr()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Return(ReturnExpr {
+                    value: Box::new(value),
+                })))
+            }
             Some(lex::Token::Ident(_)) => {
                 if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
                     self.next_function_call_expr()
@@ -526,16 +547,18 @@ impl Parser<'_> {
             }
         }
         let right_paren_span = self.expect_punct(lex::Punct::RightParen)?;
+        let name_span = name.span;
         Ok(FunctionCallExpr {
             name,
             args,
             args_span: left_paren_span.join(right_paren_span),
+            expr_span: name_span.join(right_paren_span),
         })
     }
 
     /// Parse if expression
     fn next_if_expr(&mut self) -> Result<IfExpr, Error> {
-        self.expect_keyword(lex::Keyword::If)?;
+        let if_keyword_span = self.expect_keyword(lex::Keyword::If)?;
         let cond = self.next_expr()?;
         let if_true = self.next_block_expr()?;
         let if_false = if self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::Else)) {
@@ -548,14 +571,18 @@ impl Parser<'_> {
             cond: Box::new(cond),
             if_true,
             if_false,
+            if_keyword_span,
         })
     }
 
     /// Parse loop expression
     fn next_loop_expr(&mut self) -> Result<LoopExpr, Error> {
-        self.expect_keyword(lex::Keyword::Loop)?;
+        let loop_keyword_span = self.expect_keyword(lex::Keyword::Loop)?;
         let body = self.next_block_expr()?;
-        Ok(LoopExpr { body })
+        Ok(LoopExpr {
+            body,
+            loop_keyword_span,
+        })
     }
 }
 
