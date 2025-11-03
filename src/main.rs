@@ -69,6 +69,29 @@ fn main() {
 
             println!("{ir:#?}");
         }
+        "cfg" => {
+            let Some(file) = args.next() else {
+                print_usage(&arg0, 1)
+            };
+            if args.next().is_some() {
+                print_usage(&arg0, 1)
+            }
+
+            let src = std::fs::read_to_string(&file).unwrap();
+
+            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
+            let ir = ir::Ir::from_ast(&ast).unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
+            let graph = ir::graphviz::graph(&ir);
+            print!("{graph}");
+        }
         other => {
             println!("Unknown command {other:?}");
             println!();
@@ -85,5 +108,6 @@ fn print_usage(arg0: &str, status_code: i32) -> ! {
     println!("  - lex <file>");
     println!("  - ast <file>");
     println!("  - ir <file>");
+    println!("  - cfg <file>");
     std::process::exit(status_code);
 }

@@ -1,4 +1,5 @@
 mod builder;
+pub mod graphviz;
 
 use std::collections::HashMap;
 use std::fmt;
