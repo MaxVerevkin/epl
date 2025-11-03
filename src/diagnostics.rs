@@ -1,30 +1,55 @@
-use crate::ast;
+use crate::{ast, ir, lex};
 
-/// Print an error in 'diagnostic' style, pointing to the location of the problem
-pub fn print_error(path: &str, src: &str, error: ast::Error) {
-    eprint!("error: ");
-    match error.kind {
-        ast::ErrorKind::Lex(error_kind) => match error_kind {
-            crate::lex::ErrorKind::UnexpectedChar(ch) => {
-                eprintln!("unexpected character {ch:?}");
-            }
-            crate::lex::ErrorKind::UnclosedDelimeter(del) => {
-                eprintln!("unclosed delimiter {del:?}");
-            }
-            crate::lex::ErrorKind::UnknownEscapeSequence(seq) => {
-                eprintln!("unknown escape sequence {seq:?}");
-            }
-        },
-        ast::ErrorKind::UnexpectedToken { expected, got } => {
-            eprint!("expected {expected}, found ");
-            match got {
-                Some(got) => eprintln!("{got:?}"),
-                None => eprintln!("EOF"),
+pub trait SpanError {
+    fn message(&self) -> String;
+    fn span(&self) -> Option<lex::Span>;
+}
+
+impl SpanError for ast::Error {
+    fn message(&self) -> String {
+        match &self.kind {
+            ast::ErrorKind::Lex(error_kind) => match error_kind {
+                crate::lex::ErrorKind::UnexpectedChar(ch) => {
+                    format!("unexpected character {ch:?}")
+                }
+                crate::lex::ErrorKind::UnclosedDelimeter(del) => {
+                    format!("unclosed delimiter {del:?}")
+                }
+                crate::lex::ErrorKind::UnknownEscapeSequence(seq) => {
+                    format!("unknown escape sequence {seq:?}")
+                }
+            },
+            ast::ErrorKind::UnexpectedToken { expected, got } => {
+                let mut s = format!("expected {expected}, found ");
+                match got {
+                    Some(got) => s.push_str(&format!("{got:?}")),
+                    None => s.push_str("EOF"),
+                }
+                s
             }
         }
     }
 
-    if let Some(span) = error.span {
+    fn span(&self) -> Option<lex::Span> {
+        self.span
+    }
+}
+
+impl SpanError for ir::Error {
+    fn message(&self) -> String {
+        self.message.clone()
+    }
+
+    fn span(&self) -> Option<lex::Span> {
+        self.span
+    }
+}
+
+/// Print an error in 'diagnostic' style, pointing to the location of the problem
+pub fn print_error(path: &str, src: &str, error: impl SpanError) {
+    eprint!("error: {}", error.message());
+
+    if let Some(span) = error.span() {
         let line_number = src.as_bytes()[..span.start]
             .iter()
             .filter(|b| **b == b'\n')

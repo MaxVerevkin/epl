@@ -1,5 +1,7 @@
 mod ast;
 mod diagnostics;
+mod entity_id;
+mod ir;
 mod lex;
 
 fn main() {
@@ -45,6 +47,28 @@ fn main() {
 
             println!("{ast:#?}");
         }
+        "ir" => {
+            let Some(file) = args.next() else {
+                print_usage(&arg0, 1)
+            };
+            if args.next().is_some() {
+                print_usage(&arg0, 1)
+            }
+
+            let src = std::fs::read_to_string(&file).unwrap();
+
+            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
+            let ir = ir::Ir::from_ast(&ast).unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
+            println!("{ir:#?}");
+        }
         other => {
             println!("Unknown command {other:?}");
             println!();
@@ -60,5 +84,6 @@ fn print_usage(arg0: &str, status_code: i32) -> ! {
     println!("  - help");
     println!("  - lex <file>");
     println!("  - ast <file>");
+    println!("  - ir <file>");
     std::process::exit(status_code);
 }
