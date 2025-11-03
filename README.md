@@ -9,3 +9,27 @@ Motivation: Many modern languages implement some sort of compile time evaluation
 ## Docs
 
 - [Syntax reference](doc/syntax.md)
+
+## Roadmap
+
+- [ ] Basic, documented, usable language with LLVM backend and no metaprogramming capabilities.
+- [ ] Basic optimizations operating on IR.
+- [ ] Research and document the current state of the art solutions.
+- [ ] Design the model of compile time evaluation, reflection, and macros.
+- [ ] Implement the design above.
+- [ ] Extra backends (Cranelift, GCC, custom).
+- [ ] More advanced optimizations.
+
+## Useful commands
+
+Inspect the parsed abstract syntax tree:
+
+```
+cargo run -- ast <file>
+```
+
+Inspect the intermediate representation in the contro-flow-graph form (requires `graphviz`):
+
+```
+cargo run -- cfg <file> > /tmp/cfg.dot && dot -Tsvg /tmp/cfg.dot -o /tmp/cfg.svg && open /tmp/cfg.svg
+```
