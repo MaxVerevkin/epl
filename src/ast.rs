@@ -444,7 +444,7 @@ impl Parser<'_> {
     }
 
     fn next_multiplicative_expr(&mut self) -> Result<Expr, Error> {
-        let mut expr = self.next_base_expr_or_with_block()?;
+        let mut expr = self.next_base_expr()?;
         loop {
             let op = match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Mul,
@@ -455,7 +455,7 @@ impl Parser<'_> {
             expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
-                rhs: Box::new(self.next_base_expr_or_with_block()?),
+                rhs: Box::new(self.next_base_expr()?),
                 op_span,
             }));
         }
@@ -463,7 +463,7 @@ impl Parser<'_> {
     }
 
     /// Parse a base experission
-    fn next_base_expr_or_with_block(&mut self) -> Result<Expr, Error> {
+    fn next_base_expr(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
             Some(lex::Token::Keyword(lex::Keyword::Return)) => {
                 self.consume_token()?.unwrap();
@@ -506,6 +506,12 @@ impl Parser<'_> {
                     span,
                     value: LiteralExprValue::Bool(false),
                 })))
+            }
+            Some(lex::Token::Punct(lex::Punct::LeftParen)) => {
+                self.consume_token()?;
+                let expr = self.next_expr()?;
+                self.expect_punct(lex::Punct::RightParen)?;
+                Ok(expr)
             }
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()
