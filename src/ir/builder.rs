@@ -483,7 +483,38 @@ impl<'a> FunctionBuilder<'a> {
                         },
                     })
                 }
-                ast::BinaryOp::Mul => todo!(),
+                ast::BinaryOp::Mul => {
+                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
+                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
+                    if lhs_eval.ty != rhs_eval.ty {
+                        return Err(Error::new(format!(
+                            "cannot multipy different types: {:?} and {:?}",
+                            lhs_eval.ty, rhs_eval.ty
+                        ))
+                        .with_span(binary_expr.op_span));
+                    }
+                    if !lhs_eval.ty.is_int() {
+                        return Err(Error::new(format!(
+                            "only integer types can be multiplied, not{:?}",
+                            lhs_eval.ty
+                        ))
+                        .with_span(binary_expr.op_span));
+                    }
+                    Ok(EvalResult {
+                        ty: lhs_eval.ty,
+                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
+                            && let MaybeValue::Value(rhs) = rhs_eval.value
+                        {
+                            MaybeValue::Value(Value::Definition(self.cursor().mul(
+                                lhs,
+                                rhs,
+                                lhs_eval.ty,
+                            )))
+                        } else {
+                            MaybeValue::Diverges
+                        },
+                    })
+                }
                 ast::BinaryOp::Div => todo!(),
             },
         }
@@ -694,6 +725,17 @@ impl InstructionCursor<'_> {
             definition_id,
             ty,
             kind: InstructionKind::Sub { lhs, rhs },
+        });
+        definition_id
+    }
+
+    /// Generate a `Mul` instruction
+    fn mul(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
+        let definition_id = DefinitionId::new();
+        self.buf.push(Instruction {
+            definition_id,
+            ty,
+            kind: InstructionKind::Mul { lhs, rhs },
         });
         definition_id
     }

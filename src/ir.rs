@@ -190,6 +190,7 @@ pub enum InstructionKind {
     CmpL { lhs: Value, rhs: Value },
     Add { lhs: Value, rhs: Value },
     Sub { lhs: Value, rhs: Value },
+    Mul { lhs: Value, rhs: Value },
 }
 
 /// The terminator of a basic block
