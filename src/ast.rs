@@ -93,6 +93,7 @@ pub enum ExprWithNoBlock {
     FunctionCallExpr(FunctionCallExpr),
     Ident(Ident),
     Binary(BinaryExpr),
+    Unary(UnaryExpr),
 }
 
 /// An expression which can be a statement on its own
@@ -142,6 +143,14 @@ pub struct BinaryExpr {
     pub op_span: lex::Span,
 }
 
+/// A unary expression
+#[derive(Debug, Clone)]
+pub struct UnaryExpr {
+    pub op: UnaryOp,
+    pub rhs: Box<Expr>,
+    pub op_span: lex::Span,
+}
+
 /// A binary operation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -155,6 +164,12 @@ pub enum BinaryOp {
     Sub,
     Mul,
     Div,
+}
+
+/// A unary operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Negate,
 }
 
 /// A parser for the source code
@@ -512,6 +527,15 @@ impl Parser<'_> {
                 let expr = self.next_expr()?;
                 self.expect_punct(lex::Punct::RightParen)?;
                 Ok(expr)
+            }
+            Some(lex::Token::Punct(lex::Punct::Minus)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                let rhs = self.next_base_expr()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                    op: UnaryOp::Negate,
+                    rhs: Box::new(rhs),
+                    op_span,
+                })))
             }
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()

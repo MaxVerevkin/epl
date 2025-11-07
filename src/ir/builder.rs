@@ -402,7 +402,7 @@ impl<'a> FunctionBuilder<'a> {
                     }
                     if !lhs_eval.ty.is_int() {
                         return Err(Error::new(format!(
-                            "only integer types can be compared, not{:?}",
+                            "only integer types can be compared, not {:?}",
                             lhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
@@ -431,7 +431,7 @@ impl<'a> FunctionBuilder<'a> {
                     }
                     if !lhs_eval.ty.is_int() {
                         return Err(Error::new(format!(
-                            "only integer types can be added, not{:?}",
+                            "only integer types can be added, not {:?}",
                             lhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
@@ -463,7 +463,7 @@ impl<'a> FunctionBuilder<'a> {
                     }
                     if !lhs_eval.ty.is_int() {
                         return Err(Error::new(format!(
-                            "only integer types can be subtracted, not{:?}",
+                            "only integer types can be subtracted, not {:?}",
                             lhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
@@ -495,7 +495,7 @@ impl<'a> FunctionBuilder<'a> {
                     }
                     if !lhs_eval.ty.is_int() {
                         return Err(Error::new(format!(
-                            "only integer types can be multiplied, not{:?}",
+                            "only integer types can be multiplied, not {:?}",
                             lhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
@@ -516,6 +516,30 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
                 ast::BinaryOp::Div => todo!(),
+            },
+            ast::ExprWithNoBlock::Unary(unary_expr) => match unary_expr.op {
+                ast::UnaryOp::Negate => {
+                    let rhs_eval = self.eval_expr(&unary_expr.rhs, None)?;
+                    if !rhs_eval.ty.is_int() {
+                        return Err(Error::new(format!(
+                            "only integer types can be subtracted, not {:?}",
+                            rhs_eval.ty
+                        ))
+                        .with_span(unary_expr.op_span));
+                    }
+                    Ok(EvalResult {
+                        ty: rhs_eval.ty,
+                        value: if let MaybeValue::Value(rhs) = rhs_eval.value {
+                            MaybeValue::Value(Value::Definition(self.cursor().sub(
+                                Value::Constant(Constant::Number(0)),
+                                rhs,
+                                rhs_eval.ty,
+                            )))
+                        } else {
+                            MaybeValue::Diverges
+                        },
+                    })
+                }
             },
         }
     }

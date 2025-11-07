@@ -150,7 +150,17 @@ impl Type {
 
     /// Returns `true` if this data type is an integer
     fn is_int(self) -> bool {
-        matches!(self, Self::I32 | Self::U32)
+        self.is_signed_int() || self.is_unsigned_int()
+    }
+
+    /// Returns `true` if this data type is a signed integer
+    fn is_signed_int(self) -> bool {
+        matches!(self, Self::I32)
+    }
+
+    /// Returns `true` if this data type is an unsigned integer
+    fn is_unsigned_int(self) -> bool {
+        matches!(self, Self::U32)
     }
 }
 
