@@ -5,7 +5,3 @@ fn fib(n: u32) -> u32 {
 		fib(n - 2) + fib(n - 1)
 	}
 }
-
-fn negate(x: i32) -> i32 {
-	-x
-}
