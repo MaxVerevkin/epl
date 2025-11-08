@@ -275,9 +275,18 @@ impl<'a> FunctionBuilder<'a> {
                             literal_expr.span,
                         ))
                     } else {
+                        let ty = expect_type.unwrap_or(Type::I32);
                         Ok(EvalResult {
-                            ty: expect_type.unwrap_or(Type::I32),
-                            value: MaybeValue::Value(Value::Constant(Constant::Number(*number))),
+                            ty,
+                            value: MaybeValue::Value(Value::Constant(Constant::Number {
+                                data: *number,
+                                bits: match ty {
+                                    Type::I32 | Type::U32 => 32,
+                                    Type::Never | Type::Void | Type::Bool | Type::CStr => {
+                                        unreachable!()
+                                    }
+                                },
+                            })),
                         })
                     }
                 }
@@ -412,7 +421,12 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().cmp_l(lhs, rhs)))
+                            MaybeValue::Value(Value::Definition(
+                                match lhs_eval.ty.is_signed_int() {
+                                    true => self.cursor().cmp_sl(lhs, rhs),
+                                    false => self.cursor().cmp_ul(lhs, rhs),
+                                },
+                            ))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -531,7 +545,17 @@ impl<'a> FunctionBuilder<'a> {
                         ty: rhs_eval.ty,
                         value: if let MaybeValue::Value(rhs) = rhs_eval.value {
                             MaybeValue::Value(Value::Definition(self.cursor().sub(
-                                Value::Constant(Constant::Number(0)),
+                                Value::Constant(Constant::Number {
+                                    data: 0,
+                                    bits: match rhs_eval.ty {
+                                        Type::I32 => 32,
+                                        Type::Never
+                                        | Type::Void
+                                        | Type::Bool
+                                        | Type::U32
+                                        | Type::CStr => unreachable!(),
+                                    },
+                                }),
                                 rhs,
                                 rhs_eval.ty,
                             )))
@@ -720,13 +744,24 @@ impl InstructionCursor<'_> {
         definition_id
     }
 
-    /// Generate a `CmpL` instruction
-    fn cmp_l(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+    /// Generate a `CmpSL` instruction
+    fn cmp_sl(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
         let definition_id = DefinitionId::new();
         self.buf.push(Instruction {
             definition_id,
             ty: Type::Bool,
-            kind: InstructionKind::CmpL { lhs, rhs },
+            kind: InstructionKind::CmpSL { lhs, rhs },
+        });
+        definition_id
+    }
+
+    /// Generate a `CmpUL` instruction
+    fn cmp_ul(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+        let definition_id = DefinitionId::new();
+        self.buf.push(Instruction {
+            definition_id,
+            ty: Type::Bool,
+            kind: InstructionKind::CmpUL { lhs, rhs },
         });
         definition_id
     }

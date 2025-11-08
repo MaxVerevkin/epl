@@ -9,6 +9,7 @@ Motivation: Many modern languages implement some sort of compile time evaluation
 ## Docs
 
 - [Syntax reference](doc/syntax.md)
+- [Building with LLVM](doc/llvm.md)
 
 ## Roadmap
 

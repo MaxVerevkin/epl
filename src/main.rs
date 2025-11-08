@@ -3,6 +3,7 @@ mod diagnostics;
 mod entity_id;
 mod ir;
 mod lex;
+mod llvm;
 
 fn main() {
     let mut args = std::env::args();
@@ -92,6 +93,33 @@ fn main() {
             let graph = ir::graphviz::graph(&ir);
             print!("{graph}");
         }
+        "llvm-ir" => {
+            let Some(file) = args.next() else {
+                print_usage(&arg0, 1)
+            };
+            if args.next().is_some() {
+                print_usage(&arg0, 1)
+            }
+
+            let src = std::fs::read_to_string(&file).unwrap();
+
+            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
+            let ir = ir::Ir::from_ast(&ast).unwrap_or_else(|err| {
+                diagnostics::print_error(&file, &src, err);
+                std::process::exit(1);
+            });
+
+            let llvm_module = llvm::LlvmModule::from_ir(&ir).unwrap_or_else(|err| {
+                eprintln!("LLVM verification error: {}", err.to_string_lossy());
+                std::process::exit(1);
+            });
+
+            println!("{llvm_module}");
+        }
         other => {
             println!("Unknown command {other:?}");
             println!();
@@ -109,5 +137,6 @@ fn print_usage(arg0: &str, status_code: i32) -> ! {
     println!("  - ast <file>");
     println!("  - ir <file>");
     println!("  - cfg <file>");
+    println!("  - llvm-ir <file>");
     std::process::exit(status_code);
 }

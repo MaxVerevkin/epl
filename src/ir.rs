@@ -172,6 +172,33 @@ pub struct Function {
     pub basic_blokcs: HashMap<BasicBlockId, BasicBlock>,
 }
 
+impl Function {
+    /// Return the basick blocks IDs in post order
+    pub fn postorder(&self) -> Vec<BasicBlockId> {
+        fn visit(
+            order: &mut Vec<BasicBlockId>,
+            basic_blocks: &HashMap<BasicBlockId, BasicBlock>,
+            cur: BasicBlockId,
+        ) {
+            if order.contains(&cur) {
+                return;
+            }
+
+            for succ in basic_blocks[&cur].terminator.successors() {
+                visit(order, basic_blocks, succ);
+            }
+
+            if !order.contains(&cur) {
+                order.push(cur);
+            }
+        }
+
+        let mut order = Vec::new();
+        visit(&mut order, &self.basic_blokcs, self.entry);
+        order
+    }
+}
+
 make_entity_id!(BasicBlockId, "bb_{}");
 
 make_entity_id!(DefinitionId, "def_{}");
@@ -197,7 +224,8 @@ pub enum InstructionKind {
     Load { ptr: Value },
     Store { ptr: Value, value: Value },
     FunctionCall { name: String, args: Vec<Value> },
-    CmpL { lhs: Value, rhs: Value },
+    CmpSL { lhs: Value, rhs: Value },
+    CmpUL { lhs: Value, rhs: Value },
     Add { lhs: Value, rhs: Value },
     Sub { lhs: Value, rhs: Value },
     Mul { lhs: Value, rhs: Value },
@@ -220,6 +248,21 @@ pub enum Terminator {
     Unreachable,
 }
 
+impl Terminator {
+    /// Return the list of this block's successors
+    pub fn successors(&self) -> Vec<BasicBlockId> {
+        match self {
+            Self::Jump { to } => vec![*to],
+            Self::CondJump {
+                cond: _,
+                if_true,
+                if_false,
+            } => vec![*if_true, *if_false],
+            Self::Return { value: _ } | Self::Unreachable => vec![],
+        }
+    }
+}
+
 /// An abstract value
 pub enum Value {
     Definition(DefinitionId),
@@ -232,7 +275,7 @@ pub enum Constant {
     Void,
     Bool(bool),
     String(String),
-    Number(i64),
+    Number { data: i64, bits: u8 },
 }
 
 impl fmt::Debug for Value {
