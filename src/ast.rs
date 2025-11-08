@@ -287,7 +287,7 @@ impl Parser<'_> {
             got => Err(Error {
                 span: got.as_ref().map(|t| t.0),
                 kind: ErrorKind::UnexpectedToken {
-                    expected: format!("identifier"),
+                    expected: String::from("identifier"),
                     got: got.map(|t| t.1),
                 },
             }),
