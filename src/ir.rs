@@ -148,6 +148,25 @@ impl Type {
         }
     }
 
+    /// The byte size of this type
+    fn size(self) -> u64 {
+        match self {
+            Type::Never | Type::Void => 0,
+            Type::Bool => 1,
+            Type::I32 | Type::U32 => 4,
+            Type::CStr => 8, // TODO: use target platforms pointer size
+        }
+    }
+
+    /// The byte alignment of this type
+    fn align(self) -> u64 {
+        match self {
+            Type::Never | Type::Void | Type::Bool => 1,
+            Type::I32 | Type::U32 => 4,
+            Type::CStr => 8, // TODO: use target platforms pointer size
+        }
+    }
+
     /// Returns `true` if this data type is an integer
     fn is_int(self) -> bool {
         self.is_signed_int() || self.is_unsigned_int()
@@ -167,7 +186,7 @@ impl Type {
 /// An intermediate representation of a function
 #[derive(Debug)]
 pub struct Function {
-    pub allocas: HashMap<DefinitionId, Type>,
+    pub allocas: Vec<Alloca>,
     pub entry: BasicBlockId,
     pub basic_blokcs: HashMap<BasicBlockId, BasicBlock>,
 }
@@ -207,9 +226,17 @@ make_entity_id!(DefinitionId, "def_{}");
 pub struct TypedDefinitionId(pub DefinitionId, pub Type);
 
 impl fmt::Debug for TypedDefinitionId {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}: {:?}", self.0, self.1)
     }
+}
+
+/// A static allocation slot
+#[derive(Debug, Clone, Copy)]
+pub struct Alloca {
+    pub definition_id: DefinitionId,
+    pub size: u64,
+    pub align: u64,
 }
 
 /// A basic block

@@ -46,8 +46,11 @@ impl LlvmModule {
             }
 
             builder.position_at_end(basic_blocks_map[&fn_ir.entry]);
-            for (&alloca, &ty) in &fn_ir.allocas {
-                value_map.insert(alloca, builder.alloca(build_type(ty)));
+            for alloca in &fn_ir.allocas {
+                value_map.insert(
+                    alloca.definition_id,
+                    builder.alloca(alloca.size, alloca.align),
+                );
             }
 
             for &basic_block_id in fn_ir.basic_blokcs.keys() {
@@ -232,8 +235,13 @@ impl LlvmBuilder {
     }
 
     /// Build the `alloca` instruction
-    fn alloca(&self, ty: LLVMTypeRef) -> LLVMValueRef {
-        unsafe { LLVMBuildAlloca(self.raw, ty, c"".as_ptr()) }
+    fn alloca(&self, size: u64, align: u64) -> LLVMValueRef {
+        unsafe {
+            let alloca =
+                LLVMBuildAlloca(self.raw, LLVMArrayType2(LLVMInt8Type(), size), c"".as_ptr());
+            LLVMSetAlignment(alloca, align as u32);
+            alloca
+        }
     }
 
     /// Build the `phi` instruction

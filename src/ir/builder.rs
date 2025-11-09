@@ -19,7 +19,7 @@ pub fn build_function(
         builder
             .scope
             .variables
-            .insert(arg.name.value.clone(), alloca);
+            .insert(arg.name.value.clone(), (alloca, arg.ty));
         builder
             .cursor()
             .store(Value::Definition(alloca), Value::Definition(block_arg));
@@ -44,7 +44,7 @@ pub fn build_function(
 struct FunctionBuilder<'a> {
     return_ty: Type,
     function_decls: &'a HashMap<String, FunctionDecl>,
-    allocas: HashMap<DefinitionId, Type>,
+    allocas: Vec<Alloca>,
     basic_blocks: HashMap<BasicBlockId, BasicBlock>,
     current_block_id: BasicBlockId,
     current_block_args: Vec<TypedDefinitionId>,
@@ -55,7 +55,7 @@ struct FunctionBuilder<'a> {
 /// A lexical scope
 #[derive(Default)]
 struct Scope {
-    variables: HashMap<String, DefinitionId>,
+    variables: HashMap<String, (DefinitionId, Type)>,
     parent: Option<Box<Self>>,
 }
 
@@ -72,7 +72,7 @@ impl Scope {
     }
 
     /// Lookup a variable by its name, recursively traversind the list of scopes
-    fn lookup_variable(&self, name: &str) -> Option<DefinitionId> {
+    fn lookup_variable(&self, name: &str) -> Option<(DefinitionId, Type)> {
         if let Some(definition_id) = self.variables.get(name) {
             return Some(*definition_id);
         }
@@ -110,7 +110,7 @@ impl<'a> FunctionBuilder<'a> {
         Self {
             return_ty,
             function_decls,
-            allocas: HashMap::new(),
+            allocas: Vec::new(),
             basic_blocks: HashMap::new(),
             current_block_id: BasicBlockId::new(),
             current_block_args: Vec::new(),
@@ -153,7 +153,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Returns a new static allocation slot
     fn alloca(&mut self, ty: Type) -> DefinitionId {
         let alloca = DefinitionId::new();
-        self.allocas.insert(alloca, ty);
+        self.allocas.push(Alloca {
+            definition_id: alloca,
+            size: ty.size(),
+            align: ty.align(),
+        });
         alloca
     }
 
@@ -183,10 +187,11 @@ impl<'a> FunctionBuilder<'a> {
             match stmt {
                 ast::Statement::Empty => (),
                 ast::Statement::Let(let_statement) => {
-                    let alloca = self.alloca(Type::from_ast(&let_statement.ty)?);
+                    let ty = Type::from_ast(&let_statement.ty)?;
+                    let alloca = self.alloca(ty);
                     self.scope
                         .variables
-                        .insert(let_statement.name.value.clone(), alloca);
+                        .insert(let_statement.name.value.clone(), (alloca, ty));
                 }
                 ast::Statement::ExprWithNoBlock(expr_with_no_block) => {
                     diverges |= self
@@ -381,11 +386,15 @@ impl<'a> FunctionBuilder<'a> {
                 }
             }
             ast::ExprWithNoBlock::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
-                Some(alloca) => {
-                    let ty = self.allocas[&alloca];
+                Some((alloca, ty)) => {
+                    if let Some(expect_type) = expect_type
+                        && expect_type != ty
+                    {
+                        return Err(Error::expr_type_missmatch(expect_type, ty, ident.span));
+                    }
                     let definition_id = self.cursor().load(Value::Definition(alloca), ty);
                     Ok(EvalResult {
-                        ty: self.allocas[&alloca],
+                        ty,
                         value: MaybeValue::Value(Value::Definition(definition_id)),
                     })
                 }
