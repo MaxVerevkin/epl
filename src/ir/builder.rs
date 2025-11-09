@@ -15,7 +15,7 @@ pub fn build_function(
     for arg in &decl.args {
         let alloca = builder.alloca(arg.ty);
         let block_arg = DefinitionId::new();
-        entry_block_args.push(block_arg);
+        entry_block_args.push(TypedDefinitionId(block_arg, arg.ty));
         builder
             .scope
             .variables
@@ -47,6 +47,7 @@ struct FunctionBuilder<'a> {
     allocas: HashMap<DefinitionId, Type>,
     basic_blocks: HashMap<BasicBlockId, BasicBlock>,
     current_block_id: BasicBlockId,
+    current_block_args: Vec<TypedDefinitionId>,
     current_instructions: Vec<Instruction>,
     scope: Scope,
 }
@@ -112,6 +113,7 @@ impl<'a> FunctionBuilder<'a> {
             allocas: HashMap::new(),
             basic_blocks: HashMap::new(),
             current_block_id: BasicBlockId::new(),
+            current_block_args: Vec::new(),
             current_instructions: Vec::new(),
             scope: Scope::default(),
         }
@@ -120,10 +122,11 @@ impl<'a> FunctionBuilder<'a> {
     /// Finalize the current basic block, and start editing a new empty basic block
     fn finalize_block(&mut self, terminator: Terminator) -> BasicBlockId {
         let instructions = std::mem::take(&mut self.current_instructions);
+        let args = std::mem::take(&mut self.current_block_args);
         self.basic_blocks.insert(
             self.current_block_id,
             BasicBlock {
-                args: Vec::new(),
+                args,
                 instructions,
                 terminator,
             },
@@ -131,11 +134,6 @@ impl<'a> FunctionBuilder<'a> {
         let retval = self.current_block_id;
         self.current_block_id = BasicBlockId::new();
         retval
-    }
-
-    /// A shortcut for `finalize_block` with a jump terminator
-    fn finalize_block_jump(&mut self, to: BasicBlockId) -> BasicBlockId {
-        self.finalize_block(Terminator::Jump { to })
     }
 
     /// Get the cursor for the current basic block
@@ -607,7 +605,10 @@ impl<'a> FunctionBuilder<'a> {
 
                 self.current_block_id = if_true_id;
                 self.eval_block_expr(&if_expr.if_true, Some(Type::Void))?;
-                self.finalize_block_jump(continuation_id);
+                self.finalize_block(Terminator::Jump {
+                    to: continuation_id,
+                    args: Vec::new(),
+                });
                 self.current_block_id = continuation_id;
 
                 Ok(EvalResult {
@@ -643,10 +644,34 @@ impl<'a> FunctionBuilder<'a> {
 
                 self.current_block_id = if_true_id;
                 let if_true_eval = self.eval_block_expr(&if_expr.if_true, expect_type)?;
-                let if_true_last_block = self.finalize_block_jump(continuation_id);
+                let if_true_diverges = match if_true_eval.value {
+                    MaybeValue::Diverges => {
+                        self.finalize_block(Terminator::Unreachable);
+                        true
+                    }
+                    MaybeValue::Value(value) => {
+                        self.finalize_block(Terminator::Jump {
+                            to: continuation_id,
+                            args: vec![value],
+                        });
+                        false
+                    }
+                };
                 self.current_block_id = if_false_id;
                 let if_false_eval = self.eval_block_expr(if_false_expr, expect_type)?;
-                let if_false_last_block = self.finalize_block_jump(continuation_id);
+                let if_false_diverges = match if_false_eval.value {
+                    MaybeValue::Diverges => {
+                        self.finalize_block(Terminator::Unreachable);
+                        true
+                    }
+                    MaybeValue::Value(value) => {
+                        self.finalize_block(Terminator::Jump {
+                            to: continuation_id,
+                            args: vec![value],
+                        });
+                        false
+                    }
+                };
                 self.current_block_id = continuation_id;
 
                 if if_true_eval.ty != if_false_eval.ty {
@@ -656,46 +681,34 @@ impl<'a> FunctionBuilder<'a> {
                     );
                 }
 
-                if cond_diverges {
+                if cond_diverges || (if_true_diverges && if_false_diverges) {
                     Ok(EvalResult {
-                        ty: expect_type.unwrap_or(Type::Never),
+                        ty: expect_type.unwrap_or(if_true_eval.ty),
                         value: MaybeValue::Diverges,
                     })
                 } else {
-                    match (if_true_eval.value, if_false_eval.value) {
-                        (MaybeValue::Diverges, MaybeValue::Diverges) => Ok(EvalResult {
-                            ty: if_true_eval.ty,
-                            value: MaybeValue::Diverges,
-                        }),
-                        (MaybeValue::Diverges, MaybeValue::Value(value))
-                        | (MaybeValue::Value(value), MaybeValue::Diverges) => Ok(EvalResult {
-                            ty: if_true_eval.ty,
-                            value: MaybeValue::Value(value),
-                        }),
-                        (MaybeValue::Value(if_true_value), MaybeValue::Value(if_false_value)) => {
-                            let result_alloca = self.alloca(if_true_eval.ty);
-                            self.cursor_at(if_true_last_block)
-                                .store(Value::Definition(result_alloca), if_true_value);
-                            self.cursor_at(if_false_last_block)
-                                .store(Value::Definition(result_alloca), if_false_value);
-                            let load_result = self
-                                .cursor()
-                                .load(Value::Definition(result_alloca), if_true_eval.ty);
-                            Ok(EvalResult {
-                                ty: if_true_eval.ty,
-                                value: MaybeValue::Value(Value::Definition(load_result)),
-                            })
-                        }
-                    }
+                    let value = DefinitionId::new();
+                    self.current_block_args
+                        .push(TypedDefinitionId(value, if_true_eval.ty));
+                    Ok(EvalResult {
+                        ty: if_true_eval.ty,
+                        value: MaybeValue::Value(Value::Definition(value)),
+                    })
                 }
             }
             ast::ExprWithBlock::Loop(loop_expr) => {
                 let body_id = BasicBlockId::new();
-                self.finalize_block_jump(body_id);
+                self.finalize_block(Terminator::Jump {
+                    to: body_id,
+                    args: Vec::new(),
+                });
                 self.current_block_id = body_id;
 
                 let _body_eval = self.eval_block_expr(&loop_expr.body, Some(Type::Void))?;
-                self.finalize_block_jump(body_id);
+                self.finalize_block(Terminator::Jump {
+                    to: body_id,
+                    args: Vec::new(),
+                });
                 // TODO: diverges if body_eval diverges, even if breaks are inside.
 
                 Ok(EvalResult {

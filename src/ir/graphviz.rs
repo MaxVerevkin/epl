@@ -26,16 +26,22 @@ pub fn function_subgraph(decl: &FunctionDecl, ir: &Function) -> String {
             escape_label(&make_basic_block_label(basic_block_id, basic_block))
         ));
         match &basic_block.terminator {
-            Terminator::Jump { to } => {
-                retval.push_str(&format!("{basic_block_id:?} -> {to:?}\n"));
+            Terminator::Jump { to, args } => {
+                retval.push_str(&format!(
+                    "{basic_block_id:?} -> {to:?} [ label=\"{args:?}\" ]\n"
+                ));
             }
             Terminator::CondJump {
                 cond: _,
                 if_true,
                 if_false,
             } => {
-                retval.push_str(&format!("{basic_block_id:?} -> {if_true:?}\n"));
-                retval.push_str(&format!("{basic_block_id:?} -> {if_false:?}\n"));
+                retval.push_str(&format!(
+                    "{basic_block_id:?} -> {if_true:?} [ label=\"True\" ];\n"
+                ));
+                retval.push_str(&format!(
+                    "{basic_block_id:?} -> {if_false:?} [ label=\"False\" ];\n"
+                ));
             }
             Terminator::Return { .. } | Terminator::Unreachable => (),
         }
@@ -73,12 +79,10 @@ fn make_basic_block_label(id: BasicBlockId, basic_block: &BasicBlock) -> String 
         Terminator::Jump { .. } => (),
         Terminator::CondJump {
             cond,
-            if_true,
-            if_false,
+            if_true: _,
+            if_false: _,
         } => {
-            label.push_str(&format!(
-                "if {cond:?} jump {if_true:?} else jump {if_false:?}\n"
-            ));
+            label.push_str(&format!("if {cond:?}\n"));
         }
         Terminator::Return { value } => {
             label.push_str(&format!("return {value:?}\n"));

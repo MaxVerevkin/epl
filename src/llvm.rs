@@ -37,7 +37,7 @@ impl LlvmModule {
             let postorder = fn_ir.postorder();
 
             for (i, &arg) in fn_ir.basic_blokcs[&fn_ir.entry].args.iter().enumerate() {
-                value_map.insert(arg, fn_value.get_param(i));
+                value_map.insert(arg.0, fn_value.get_param(i));
             }
 
             let mut basic_blocks_map = HashMap::new();
@@ -50,9 +50,19 @@ impl LlvmModule {
                 value_map.insert(alloca, builder.alloca(build_type(ty)));
             }
 
+            for &basic_block_id in fn_ir.basic_blokcs.keys() {
+                if basic_block_id != fn_ir.entry {
+                    builder.position_at_end(basic_blocks_map[&basic_block_id]);
+                    for &arg in &fn_ir.basic_blokcs[&basic_block_id].args {
+                        value_map.insert(arg.0, builder.phi(build_type(arg.1)));
+                    }
+                }
+            }
+
             for &basic_block_id in postorder.iter().rev() {
                 let basic_block_ir = &fn_ir.basic_blokcs[&basic_block_id];
                 builder.position_at_end(basic_blocks_map[&basic_block_id]);
+
                 for instruction in &basic_block_ir.instructions {
                     let ty = build_type(instruction.ty);
                     let value = match &instruction.kind {
@@ -94,8 +104,18 @@ impl LlvmModule {
                     value_map.insert(instruction.definition_id, value);
                 }
                 match &basic_block_ir.terminator {
-                    ir::Terminator::Jump { to } => {
+                    ir::Terminator::Jump { to, args } => {
                         builder.jump(basic_blocks_map[to]);
+                        for (&arg, arg_value) in fn_ir.basic_blokcs[to].args.iter().zip(args) {
+                            unsafe {
+                                LLVMAddIncoming(
+                                    value_map[&arg.0],
+                                    [build_value(arg_value, &value_map, &module)].as_mut_ptr(),
+                                    [basic_blocks_map[&basic_block_id]].as_mut_ptr(),
+                                    1,
+                                );
+                            }
+                        }
                     }
                     ir::Terminator::CondJump {
                         cond,
@@ -214,6 +234,11 @@ impl LlvmBuilder {
     /// Build the `alloca` instruction
     fn alloca(&self, ty: LLVMTypeRef) -> LLVMValueRef {
         unsafe { LLVMBuildAlloca(self.raw, ty, c"".as_ptr()) }
+    }
+
+    /// Build the `phi` instruction
+    fn phi(&self, ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMBuildPhi(self.raw, ty, c"".as_ptr()) }
     }
 
     /// Build the `load` instruction

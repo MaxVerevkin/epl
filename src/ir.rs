@@ -203,10 +203,19 @@ make_entity_id!(BasicBlockId, "bb_{}");
 
 make_entity_id!(DefinitionId, "def_{}");
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TypedDefinitionId(pub DefinitionId, pub Type);
+
+impl fmt::Debug for TypedDefinitionId {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "{:?}: {:?}", self.0, self.1)
+    }
+}
+
 /// A basic block
 #[derive(Debug)]
 pub struct BasicBlock {
-    pub args: Vec<DefinitionId>,
+    pub args: Vec<TypedDefinitionId>,
     pub instructions: Vec<Instruction>,
     pub terminator: Terminator,
 }
@@ -236,6 +245,7 @@ pub enum InstructionKind {
 pub enum Terminator {
     Jump {
         to: BasicBlockId,
+        args: Vec<Value>,
     },
     CondJump {
         cond: Value,
@@ -252,7 +262,7 @@ impl Terminator {
     /// Return the list of this block's successors
     pub fn successors(&self) -> Vec<BasicBlockId> {
         match self {
-            Self::Jump { to } => vec![*to],
+            Self::Jump { to, args: _ } => vec![*to],
             Self::CondJump {
                 cond: _,
                 if_true,
