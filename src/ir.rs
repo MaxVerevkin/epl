@@ -277,7 +277,9 @@ pub enum Terminator {
     CondJump {
         cond: Value,
         if_true: BasicBlockId,
+        if_true_args: Vec<Value>,
         if_false: BasicBlockId,
+        if_false_args: Vec<Value>,
     },
     Return {
         value: Value,
@@ -293,7 +295,9 @@ impl Terminator {
             Self::CondJump {
                 cond: _,
                 if_true,
+                if_true_args: _,
                 if_false,
+                if_false_args: _,
             } => vec![*if_true, *if_false],
             Self::Return { value: _ } | Self::Unreachable => vec![],
         }

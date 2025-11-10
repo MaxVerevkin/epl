@@ -123,13 +123,39 @@ impl LlvmModule {
                     ir::Terminator::CondJump {
                         cond,
                         if_true,
+                        if_true_args,
                         if_false,
+                        if_false_args,
                     } => {
                         builder.cond_jump(
                             build_value(cond, &value_map, &module),
                             basic_blocks_map[if_true],
                             basic_blocks_map[if_false],
                         );
+                        for (&arg, arg_value) in
+                            fn_ir.basic_blokcs[if_true].args.iter().zip(if_true_args)
+                        {
+                            unsafe {
+                                LLVMAddIncoming(
+                                    value_map[&arg.0],
+                                    [build_value(arg_value, &value_map, &module)].as_mut_ptr(),
+                                    [basic_blocks_map[&basic_block_id]].as_mut_ptr(),
+                                    1,
+                                );
+                            }
+                        }
+                        for (&arg, arg_value) in
+                            fn_ir.basic_blokcs[if_false].args.iter().zip(if_false_args)
+                        {
+                            unsafe {
+                                LLVMAddIncoming(
+                                    value_map[&arg.0],
+                                    [build_value(arg_value, &value_map, &module)].as_mut_ptr(),
+                                    [basic_blocks_map[&basic_block_id]].as_mut_ptr(),
+                                    1,
+                                );
+                            }
+                        }
                     }
                     ir::Terminator::Return { value } => {
                         builder.ret(build_value(value, &value_map, &module));

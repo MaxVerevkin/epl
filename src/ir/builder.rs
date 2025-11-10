@@ -606,7 +606,9 @@ impl<'a> FunctionBuilder<'a> {
                         self.finalize_block(Terminator::CondJump {
                             cond,
                             if_true: if_true_id,
+                            if_true_args: Vec::new(),
                             if_false: continuation_id,
+                            if_false_args: Vec::new(),
                         });
                         false
                     }
@@ -645,7 +647,9 @@ impl<'a> FunctionBuilder<'a> {
                         self.finalize_block(Terminator::CondJump {
                             cond,
                             if_true: if_true_id,
+                            if_true_args: Vec::new(),
                             if_false: if_false_id,
+                            if_false_args: Vec::new(),
                         });
                         false
                     }
