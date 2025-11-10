@@ -173,6 +173,23 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
+    /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
+    fn eval_place_expr(&mut self, expr: &ast::Expr) -> Result<EvalResult, Error> {
+        match expr {
+            ast::Expr::WithNoBlock(ast::ExprWithNoBlock::Ident(ident)) => {
+                match self.scope.lookup_variable(&ident.value) {
+                    Some((alloca, ty)) => Ok(EvalResult {
+                        ty,
+                        value: MaybeValue::Value(Value::Definition(alloca)),
+                    }),
+                    None => Err(Error::new(format!("variable {:?} not found", ident.value))
+                        .with_span(ident.span)),
+                }
+            }
+            _ => Err(Error::new("expected a place expression (ident)").with_span(expr.span())),
+        }
+    }
+
     /// Evaluate a block expression
     fn eval_block_expr(
         &mut self,
@@ -398,6 +415,24 @@ impl<'a> FunctionBuilder<'a> {
                     Ok(EvalResult {
                         ty: decl.return_ty,
                         value: MaybeValue::Value(Value::Definition(definition_id)),
+                    })
+                }
+            }
+            ast::ExprWithNoBlock::Assignment(assignment_expr) => {
+                let place_eval = self.eval_place_expr(&assignment_expr.place)?;
+                let value_eval = self.eval_expr(&assignment_expr.value, Some(place_eval.ty))?;
+                if let MaybeValue::Value(ptr) = place_eval.value
+                    && let MaybeValue::Value(value) = value_eval.value
+                {
+                    self.cursor().store(ptr, value);
+                    Ok(EvalResult {
+                        ty: Type::Void,
+                        value: MaybeValue::Value(Value::Constant(Constant::Void)),
+                    })
+                } else {
+                    Ok(EvalResult {
+                        ty: Type::Void,
+                        value: MaybeValue::Diverges,
                     })
                 }
             }

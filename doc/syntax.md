@@ -29,7 +29,8 @@ Everything after `#` is treated as a comment.
 
 ## Expressions
 
-- expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
+- expr = comp_expr ( `=` comp_expr )?
+- comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
 - multiplicative_expr = base_expr ( (`*` | `/`) base_expr )*
 - expr_with_block = block_expr | if_expr | loop_expr
