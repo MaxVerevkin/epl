@@ -110,14 +110,11 @@ impl LlvmModule {
                     ir::Terminator::Jump { to, args } => {
                         builder.jump(basic_blocks_map[to]);
                         for (&arg, arg_value) in fn_ir.basic_blokcs[to].args.iter().zip(args) {
-                            unsafe {
-                                LLVMAddIncoming(
-                                    value_map[&arg.0],
-                                    [build_value(arg_value, &value_map, &module)].as_mut_ptr(),
-                                    [basic_blocks_map[&basic_block_id]].as_mut_ptr(),
-                                    1,
-                                );
-                            }
+                            phi_add_incoming(
+                                value_map[&arg.0],
+                                basic_blocks_map[&basic_block_id],
+                                build_value(arg_value, &value_map, &module),
+                            );
                         }
                     }
                     ir::Terminator::CondJump {
@@ -135,26 +132,20 @@ impl LlvmModule {
                         for (&arg, arg_value) in
                             fn_ir.basic_blokcs[if_true].args.iter().zip(if_true_args)
                         {
-                            unsafe {
-                                LLVMAddIncoming(
-                                    value_map[&arg.0],
-                                    [build_value(arg_value, &value_map, &module)].as_mut_ptr(),
-                                    [basic_blocks_map[&basic_block_id]].as_mut_ptr(),
-                                    1,
-                                );
-                            }
+                            phi_add_incoming(
+                                value_map[&arg.0],
+                                basic_blocks_map[&basic_block_id],
+                                build_value(arg_value, &value_map, &module),
+                            );
                         }
                         for (&arg, arg_value) in
                             fn_ir.basic_blokcs[if_false].args.iter().zip(if_false_args)
                         {
-                            unsafe {
-                                LLVMAddIncoming(
-                                    value_map[&arg.0],
-                                    [build_value(arg_value, &value_map, &module)].as_mut_ptr(),
-                                    [basic_blocks_map[&basic_block_id]].as_mut_ptr(),
-                                    1,
-                                );
-                            }
+                            phi_add_incoming(
+                                value_map[&arg.0],
+                                basic_blocks_map[&basic_block_id],
+                                build_value(arg_value, &value_map, &module),
+                            );
                         }
                     }
                     ir::Terminator::Return { value } => {
@@ -424,5 +415,11 @@ fn build_value(
                 }
             }
         },
+    }
+}
+
+fn phi_add_incoming(phi: LLVMValueRef, from_block: LLVMBasicBlockRef, value: LLVMValueRef) {
+    unsafe {
+        LLVMAddIncoming(phi, [value].as_mut_ptr(), [from_block].as_mut_ptr(), 1);
     }
 }
