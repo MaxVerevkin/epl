@@ -23,14 +23,20 @@ Motivation: Many modern languages implement some sort of compile time evaluation
 
 ## Useful commands
 
-Inspect the parsed abstract syntax tree:
-
-```
-cargo run -- ast <file>
-```
-
 Inspect the intermediate representation in the contro-flow-graph form (requires `graphviz`):
 
 ```
 cargo run -- cfg <file> > /tmp/cfg.dot && dot -Tsvg /tmp/cfg.dot -o /tmp/cfg.svg && open /tmp/cfg.svg
+```
+
+Print the LLVM IR:
+
+```
+cargo run -- llvm-ir <file>
+```
+
+Compile and run
+
+```
+cargo run -- llvm-obj <file> && cc a.out.o && ./a.out
 ```
