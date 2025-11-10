@@ -6,6 +6,8 @@ use std::fmt;
 use llvm_sys::analysis::LLVMVerifyModule;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::target::*;
+use llvm_sys::target_machine::*;
 
 use crate::ir;
 
@@ -160,6 +162,55 @@ impl LlvmModule {
         Ok(module)
     }
 
+    /// Compile this module for the native target and save the object as a.out.o
+    pub fn compile(&self) -> Result<(), CString> {
+        unsafe {
+            let target_tripple = LLVMGetDefaultTargetTriple();
+
+            LLVM_InitializeAllTargetInfos();
+            LLVM_InitializeAllTargets();
+            LLVM_InitializeAllTargetMCs();
+            LLVM_InitializeAllAsmParsers();
+            LLVM_InitializeAllAsmPrinters();
+
+            let mut target = std::ptr::null_mut();
+            let mut error_ptr = std::ptr::null_mut();
+            if LLVMGetTargetFromTriple(target_tripple, &mut target, &mut error_ptr) != 0 {
+                let error = cstring_from_ptr(error_ptr);
+                LLVMDisposeMessage(error_ptr);
+                return Err(error);
+            }
+
+            let target_machine = LLVMCreateTargetMachine(
+                target,
+                target_tripple,
+                c"generic".as_ptr(),
+                c"".as_ptr(),
+                LLVMCodeGenOptLevel::LLVMCodeGenLevelNone,
+                LLVMRelocMode::LLVMRelocDefault,
+                LLVMCodeModel::LLVMCodeModelDefault,
+            );
+
+            LLVMSetModuleDataLayout(self.raw, LLVMCreateTargetDataLayout(target_machine));
+            LLVMSetTarget(self.raw, target_tripple);
+
+            if LLVMTargetMachineEmitToFile(
+                target_machine,
+                self.raw,
+                c"a.out.o".as_ptr(),
+                LLVMCodeGenFileType::LLVMObjectFile,
+                &mut error_ptr,
+            ) != 0
+            {
+                let error = cstring_from_ptr(error_ptr);
+                LLVMDisposeMessage(error_ptr);
+                return Err(error);
+            }
+
+            Ok(())
+        }
+    }
+
     /// Create a new module with a given name
     fn new(name: &CStr) -> Self {
         Self {
@@ -184,7 +235,7 @@ impl LlvmModule {
             )
         };
         if status == 1 {
-            let error = unsafe { CStr::from_ptr(error_ptr) }.to_owned();
+            let error = unsafe { cstring_from_ptr(error_ptr) };
             unsafe { LLVMDisposeMessage(error_ptr) };
             Err(error)
         } else {
@@ -422,4 +473,9 @@ fn phi_add_incoming(phi: LLVMValueRef, from_block: LLVMBasicBlockRef, value: LLV
     unsafe {
         LLVMAddIncoming(phi, [value].as_mut_ptr(), [from_block].as_mut_ptr(), 1);
     }
+}
+
+unsafe fn cstring_from_ptr(ptr: *const std::ffi::c_char) -> CString {
+    let cstr = unsafe { CStr::from_ptr(ptr) };
+    cstr.to_owned()
 }
