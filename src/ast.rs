@@ -508,8 +508,22 @@ impl Parser<'_> {
             }
         }))
     }
+
     /// Parse an experission
     fn next_expr(&mut self) -> Result<Expr, Error> {
+        if self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::Return)) {
+            let (return_keyword_span, _) = self.consume_token()?.unwrap();
+            let value = self.next_expr()?;
+            Ok(Expr::WithNoBlock(ExprWithNoBlock::Return(ReturnExpr {
+                return_keyword_span,
+                value: Box::new(value),
+            })))
+        } else {
+            self.next_assigning_expr()
+        }
+    }
+
+    fn next_assigning_expr(&mut self) -> Result<Expr, Error> {
         let expr = self.next_comp_expr()?;
         if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Assign)) {
             self.consume_token()?;
@@ -590,14 +604,6 @@ impl Parser<'_> {
     /// Parse a base experission
     fn next_base_expr(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
-            Some(lex::Token::Keyword(lex::Keyword::Return)) => {
-                let (return_keyword_span, _) = self.consume_token()?.unwrap();
-                let value = self.next_expr()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Return(ReturnExpr {
-                    return_keyword_span,
-                    value: Box::new(value),
-                })))
-            }
             Some(lex::Token::Ident(_)) => {
                 if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
                     self.next_function_call_expr()
