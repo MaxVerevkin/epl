@@ -28,7 +28,8 @@ pub fn function_subgraph(decl: &FunctionDecl, ir: &Function) -> String {
         match &basic_block.terminator {
             Terminator::Jump { to, args } => {
                 retval.push_str(&format!(
-                    "{basic_block_id:?} -> {to:?} [ label=\"{args:?}\" ]\n"
+                    "{basic_block_id:?} -> {to:?} [ label=\"{}\" ];\n",
+                    escape_label(&format!("{args:?}")),
                 ));
             }
             Terminator::CondJump {
@@ -39,10 +40,12 @@ pub fn function_subgraph(decl: &FunctionDecl, ir: &Function) -> String {
                 if_false_args,
             } => {
                 retval.push_str(&format!(
-                    "{basic_block_id:?} -> {if_true:?} [ label=\"True {if_true_args:?}\" ];\n"
+                    "{basic_block_id:?} -> {if_true:?} [ label=\"{}\" ];\n",
+                    escape_label(&format!("True {if_true_args:?}")),
                 ));
                 retval.push_str(&format!(
-                    "{basic_block_id:?} -> {if_false:?} [ label=\"False {if_false_args:?}\" ];\n"
+                    "{basic_block_id:?} -> {if_false:?} [ label=\"{}\" ];\n",
+                    escape_label(&format!("False {if_false_args:?}")),
                 ));
             }
             Terminator::Return { .. } | Terminator::Unreachable => (),
