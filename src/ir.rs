@@ -181,6 +181,21 @@ impl Type {
     fn is_unsigned_int(self) -> bool {
         matches!(self, Self::U32)
     }
+
+    /// Combines two types into one, handling the Never type
+    ///
+    /// 1. If `self` or `other` is Never, the other type is returned.
+    /// 2. If both are Never, Never is returned.
+    /// 3. Ohterwise require types to be equal, and return the type.
+    fn comine_ignoring_never(self, other: Self) -> Option<Self> {
+        if self == Self::Never {
+            Some(other)
+        } else if other == Self::Never {
+            Some(self)
+        } else {
+            (self == other).then_some(self)
+        }
+    }
 }
 
 /// An intermediate representation of a function

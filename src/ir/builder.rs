@@ -687,24 +687,26 @@ impl<'a> FunctionBuilder<'a> {
                 };
                 self.current_block_id = continuation_id;
 
-                if if_true_eval.ty != if_false_eval.ty {
-                    return Err(
-                        Error::new("if expression branches evaluate to different types")
-                            .with_span(if_expr.if_keyword_span),
-                    );
-                }
+                let Some(result_ty) = if_true_eval.ty.comine_ignoring_never(if_false_eval.ty)
+                else {
+                    return Err(Error::new(format!(
+                        "if expression branches evaluate to different types: {:?} and {:?}",
+                        if_true_eval.ty, if_false_eval.ty
+                    ))
+                    .with_span(if_expr.if_keyword_span));
+                };
 
                 if cond_diverges || (if_true_diverges && if_false_diverges) {
                     Ok(EvalResult {
-                        ty: expect_type.unwrap_or(if_true_eval.ty),
+                        ty: result_ty,
                         value: MaybeValue::Diverges,
                     })
                 } else {
                     let value = DefinitionId::new();
                     self.current_block_args
-                        .push(TypedDefinitionId(value, if_true_eval.ty));
+                        .push(TypedDefinitionId(value, result_ty));
                     Ok(EvalResult {
-                        ty: if_true_eval.ty,
+                        ty: result_ty,
                         value: MaybeValue::Value(Value::Definition(value)),
                     })
                 }
