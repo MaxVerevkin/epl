@@ -80,6 +80,8 @@ pub enum Punct {
     CmpGe,
     /// ->
     Arrow,
+    /// =
+    Assign,
     /// ;
     Semicolon,
     /// :
@@ -117,6 +119,7 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     ("<=", Punct::CmpLe),
     (">=", Punct::CmpGe),
     ("->", Punct::Arrow),
+    ("=", Punct::Assign),
     (";", Punct::Semicolon),
     (":", Punct::Colon),
     (",", Punct::Comma),

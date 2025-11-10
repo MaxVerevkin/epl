@@ -73,9 +73,16 @@ pub enum Statement {
 
 /// A statement
 #[derive(Debug, Clone)]
-pub struct LetStatement {
-    pub name: Ident,
-    pub ty: Ident,
+pub enum LetStatement {
+    WithValue {
+        name: Ident,
+        ty: Option<Ident>,
+        value: Box<Expr>,
+    },
+    WithoutValue {
+        name: Ident,
+        ty: Ident,
+    },
 }
 
 /// An expression
@@ -193,6 +200,7 @@ pub enum ErrorKind {
         expected: String,
         got: Option<lex::Token>,
     },
+    LetNoValueNoType,
 }
 
 impl<'a> Parser<'a> {
@@ -405,12 +413,33 @@ impl Parser<'_> {
 
     /// Parse let statement
     fn next_let_statement(&mut self) -> Result<Statement, Error> {
-        self.expect_keyword(lex::Keyword::Let)?;
+        let let_keyword_span = self.expect_keyword(lex::Keyword::Let)?;
         let name = self.next_ident()?;
-        self.expect_punct(lex::Punct::Colon)?;
-        let ty = self.next_ident()?;
+        let mut ty = None;
+        let mut value = None;
+
+        if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Colon)) {
+            self.consume_token()?;
+            ty = Some(self.next_ident()?);
+        }
+
+        if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Assign)) {
+            self.consume_token()?;
+            value = Some(Box::new(self.next_expr()?));
+        }
+
         self.expect_punct(lex::Punct::Semicolon)?;
-        Ok(Statement::Let(LetStatement { name, ty }))
+
+        Ok(Statement::Let(match (ty, value) {
+            (Some(ty), None) => LetStatement::WithoutValue { name, ty },
+            (ty, Some(value)) => LetStatement::WithValue { name, ty, value },
+            (None, None) => {
+                return Err(Error {
+                    span: Some(let_keyword_span),
+                    kind: ErrorKind::LetNoValueNoType,
+                });
+            }
+        }))
     }
 
     /// Parse an experission

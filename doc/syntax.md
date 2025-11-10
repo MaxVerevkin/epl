@@ -40,7 +40,7 @@ Everything after `#` is treated as a comment.
 - if_expr = `if` expr block_expr (`else` block_expr)?
 - loop_expr = `loop` block_expr
 - function_call_expr = ident `(` expr? (, expr)* `)`
-- let_statement = `let` ident `:` ident `;`
+- let_statement =  `let` ident `:` ident `;` | `let` ident (`:` ident)? `=` expr `;`
 
 ## Literals
 

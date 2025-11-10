@@ -186,13 +186,29 @@ impl<'a> FunctionBuilder<'a> {
         for (i, stmt) in expr.statements.iter().enumerate() {
             match stmt {
                 ast::Statement::Empty => (),
-                ast::Statement::Let(let_statement) => {
-                    let ty = Type::from_ast(&let_statement.ty)?;
-                    let alloca = self.alloca(ty);
-                    self.scope
-                        .variables
-                        .insert(let_statement.name.value.clone(), (alloca, ty));
-                }
+                ast::Statement::Let(let_statement) => match let_statement {
+                    ast::LetStatement::WithValue { name, ty, value } => {
+                        let ty = ty.as_ref().map(Type::from_ast).transpose()?;
+                        let value_eval = self.eval_expr(value, ty)?;
+                        let alloca = self.alloca(value_eval.ty);
+                        self.scope
+                            .variables
+                            .insert(name.value.clone(), (alloca, value_eval.ty));
+                        match value_eval.value {
+                            MaybeValue::Diverges => diverges = true,
+                            MaybeValue::Value(value) => {
+                                self.cursor().store(Value::Definition(alloca), value);
+                            }
+                        }
+                    }
+                    ast::LetStatement::WithoutValue { name, ty } => {
+                        let ty = Type::from_ast(ty)?;
+                        let alloca = self.alloca(ty);
+                        self.scope
+                            .variables
+                            .insert(name.value.clone(), (alloca, ty));
+                    }
+                },
                 ast::Statement::ExprWithNoBlock(expr_with_no_block) => {
                     diverges |= self
                         .eval_expr_with_no_block(expr_with_no_block, None)?

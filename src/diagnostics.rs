@@ -27,6 +27,9 @@ impl SpanError for ast::Error {
                 }
                 s
             }
+            ast::ErrorKind::LetNoValueNoType => {
+                String::from("let statement with no value requires type to be specified")
+            }
         }
     }
 
