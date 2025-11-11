@@ -305,20 +305,23 @@ impl<'a> FunctionBuilder<'a> {
                         ))
                     } else {
                         let ty = expect_type.unwrap_or(Type::I32);
+                        let (bits, signed) = match ty {
+                            Type::I32 => (32, true),
+                            Type::U32 => (32, false),
+                            Type::Never
+                            | Type::Void
+                            | Type::Bool
+                            | Type::CStr
+                            | Type::OpaquePointer => {
+                                unreachable!()
+                            }
+                        };
                         Ok(EvalResult {
                             ty,
                             value: MaybeValue::Value(Value::Constant(Constant::Number {
                                 data: *number,
-                                bits: match ty {
-                                    Type::I32 | Type::U32 => 32,
-                                    Type::Never
-                                    | Type::Void
-                                    | Type::Bool
-                                    | Type::CStr
-                                    | Type::OpaquePointer => {
-                                        unreachable!()
-                                    }
-                                },
+                                bits,
+                                signed,
                             })),
                         })
                     }
@@ -510,11 +513,7 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().add(
-                                lhs,
-                                rhs,
-                                lhs_eval.ty,
-                            )))
+                            MaybeValue::Value(Value::Definition(self.cursor().add(lhs, rhs)))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -542,11 +541,7 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().sub(
-                                lhs,
-                                rhs,
-                                lhs_eval.ty,
-                            )))
+                            MaybeValue::Value(Value::Definition(self.cursor().sub(lhs, rhs)))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -574,11 +569,7 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().mul(
-                                lhs,
-                                rhs,
-                                lhs_eval.ty,
-                            )))
+                            MaybeValue::Value(Value::Definition(self.cursor().mul(lhs, rhs)))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -589,31 +580,34 @@ impl<'a> FunctionBuilder<'a> {
             ast::ExprWithNoBlock::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
                     let rhs_eval = self.eval_expr(&unary_expr.rhs, None)?;
-                    if !rhs_eval.ty.is_int() {
+                    if !rhs_eval.ty.is_signed_int() {
                         return Err(Error::new(format!(
-                            "only integer types can be subtracted, not {:?}",
+                            "only signed integer types can be negated, not {:?}",
                             rhs_eval.ty
                         ))
                         .with_span(unary_expr.op_span));
                     }
+                    let (bits, signed) = match rhs_eval.ty {
+                        Type::I32 => (32, true),
+                        Type::Never
+                        | Type::Void
+                        | Type::Bool
+                        | Type::U32
+                        | Type::CStr
+                        | Type::OpaquePointer => {
+                            unreachable!()
+                        }
+                    };
                     Ok(EvalResult {
                         ty: rhs_eval.ty,
                         value: if let MaybeValue::Value(rhs) = rhs_eval.value {
                             MaybeValue::Value(Value::Definition(self.cursor().sub(
                                 Value::Constant(Constant::Number {
                                     data: 0,
-                                    bits: match rhs_eval.ty {
-                                        Type::I32 => 32,
-                                        Type::Never
-                                        | Type::Void
-                                        | Type::Bool
-                                        | Type::U32
-                                        | Type::CStr
-                                        | Type::OpaquePointer => unreachable!(),
-                                    },
+                                    bits,
+                                    signed,
                                 }),
                                 rhs,
-                                rhs_eval.ty,
                             )))
                         } else {
                             MaybeValue::Diverges
@@ -838,8 +832,9 @@ impl InstructionCursor<'_> {
     }
 
     /// Generate a `Add` instruction
-    fn add(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new(ty);
+    fn add(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+        assert_eq!(lhs.ty(), rhs.ty());
+        let definition_id = DefinitionId::new(lhs.ty());
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::Add { lhs, rhs },
@@ -848,8 +843,9 @@ impl InstructionCursor<'_> {
     }
 
     /// Generate a `Sub` instruction
-    fn sub(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new(ty);
+    fn sub(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+        assert_eq!(lhs.ty(), rhs.ty());
+        let definition_id = DefinitionId::new(lhs.ty());
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::Sub { lhs, rhs },
@@ -858,8 +854,9 @@ impl InstructionCursor<'_> {
     }
 
     /// Generate a `Mul` instruction
-    fn mul(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new(ty);
+    fn mul(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+        assert_eq!(lhs.ty(), rhs.ty());
+        let definition_id = DefinitionId::new(lhs.ty());
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::Mul { lhs, rhs },

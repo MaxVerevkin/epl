@@ -377,13 +377,45 @@ pub enum Value {
     Constant(Constant),
 }
 
+impl Value {
+    /// Get the type of this constant
+    pub fn ty(&self) -> Type {
+        match self {
+            Self::Definition(definition_id) => definition_id.ty(),
+            Self::Constant(constant) => constant.ty(),
+        }
+    }
+}
+
 /// A primitive constant
 #[derive(Debug)]
 pub enum Constant {
     Void,
     Bool(bool),
     String(String),
-    Number { data: i64, bits: u8 },
+    Number { data: i64, bits: u8, signed: bool },
+}
+
+impl Constant {
+    /// Get the type of this constant
+    pub fn ty(&self) -> Type {
+        match self {
+            Self::Void => Type::Void,
+            Self::Bool(_) => Type::Bool,
+            Self::String(_) => Type::CStr,
+            Self::Number {
+                data: _,
+                bits,
+                signed,
+            } => match *bits {
+                32 => match *signed {
+                    true => Type::I32,
+                    false => Type::U32,
+                },
+                _ => unreachable!(),
+            },
+        }
+    }
 }
 
 impl fmt::Debug for Value {

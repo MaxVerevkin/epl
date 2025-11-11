@@ -463,8 +463,8 @@ fn build_value(
                     );
                     global
                 }
-                ir::Constant::Number { data, bits } => {
-                    LLVMConstInt(LLVMIntType(*bits as u32), *data as u64, 0)
+                ir::Constant::Number { data, bits, signed } => {
+                    LLVMConstInt(LLVMIntType(*bits as u32), *data as u64, *signed as i32)
                 }
             }
         },
