@@ -3,6 +3,8 @@ pub mod graphviz;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::num::NonZeroU64;
 
 use crate::ast;
@@ -132,6 +134,7 @@ pub enum Type {
     I32,
     U32,
     CStr,
+    OpaquePointer,
 }
 
 impl Type {
@@ -144,6 +147,7 @@ impl Type {
             "i32" => Ok(Self::I32),
             "u32" => Ok(Self::U32),
             "cstr" => Ok(Self::CStr),
+            "ptr" => Ok(Self::OpaquePointer),
             other => Err(Error::new(format!("unknown type {other:?}")).with_span(ast.span)),
         }
     }
@@ -154,7 +158,7 @@ impl Type {
             Type::Never | Type::Void => 0,
             Type::Bool => 1,
             Type::I32 | Type::U32 => 4,
-            Type::CStr => 8, // TODO: use target platforms pointer size
+            Type::CStr | Type::OpaquePointer => 8, // TODO: use target platforms pointer size
         }
     }
 
@@ -163,7 +167,7 @@ impl Type {
         match self {
             Type::Never | Type::Void | Type::Bool => 1,
             Type::I32 | Type::U32 => 4,
-            Type::CStr => 8, // TODO: use target platforms pointer size
+            Type::CStr | Type::OpaquePointer => 8, // TODO: use target platforms pointer size
         }
     }
 
@@ -235,14 +239,31 @@ impl Function {
 
 make_entity_id!(BasicBlockId, "bb_{}");
 
-make_entity_id!(DefinitionId, "def_{}");
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TypedDefinitionId(pub DefinitionId, pub Type);
+pub struct DefinitionId(NonZeroU64, Type);
 
-impl fmt::Debug for TypedDefinitionId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}: {:?}", self.0, self.1)
+impl DefinitionId {
+    pub fn new(ty: Type) -> Self {
+        use std::sync::atomic;
+        static NEXT: atomic::AtomicU64 = atomic::AtomicU64::new(1);
+        let id = NEXT.fetch_add(1, atomic::Ordering::SeqCst);
+        Self(NonZeroU64::new(id).unwrap(), ty)
+    }
+
+    pub fn ty(self) -> Type {
+        self.1
+    }
+}
+
+impl Hash for DefinitionId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl fmt::Debug for DefinitionId {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "def_{}: {:?}", self.0.get(), self.1)
     }
 }
 
@@ -257,7 +278,7 @@ pub struct Alloca {
 /// A basic block
 #[derive(Debug)]
 pub struct BasicBlock {
-    pub args: Vec<TypedDefinitionId>,
+    pub args: Vec<DefinitionId>,
     pub instructions: Vec<Instruction>,
     pub terminator: Terminator,
 }
@@ -265,7 +286,6 @@ pub struct BasicBlock {
 /// A basic instruction
 pub struct Instruction {
     pub definition_id: DefinitionId,
-    pub ty: Type,
     pub kind: InstructionKind,
 }
 
@@ -301,6 +321,38 @@ pub enum Terminator {
     },
     Unreachable,
 }
+
+// impl InstructionKind {
+//     pub fn visit_values(&self, mut cb: impl FnMut(&Value)) {
+//         match self {
+//             Self::Load { ptr } => cb(ptr),
+//             Self::Store { ptr, value } => {
+//                 cb(ptr);
+//                 cb(value);
+//             }
+//             Self::FunctionCall { name: _, args } => {
+//                 for arg in args {
+//                     cb(arg);
+//                 }
+//             }
+//             Self::CmpSL { lhs, rhs }
+//             | Self::CmpUL { lhs, rhs }
+//             | Self::Add { lhs, rhs }
+//             | Self::Sub { lhs, rhs }
+//             | Self::Mul { lhs, rhs } => {
+//                 cb(lhs);
+//                 cb(rhs);
+//             }
+//         }
+//     }
+
+//     pub fn visit_used_definitions(&self, mut cb: impl FnMut(DefinitionId)) {
+//         self.visit_values(|value| match value {
+//             Value::Definition(definition_id) => cb(*definition_id),
+//             Value::Constant(_) => (),
+//         });
+//     }
+// }
 
 impl Terminator {
     /// Return the list of this block's successors
@@ -345,10 +397,6 @@ impl fmt::Debug for Value {
 
 impl fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{:?}: {:?} <- {:?}",
-            self.definition_id, self.ty, self.kind
-        )
+        write!(f, "{:?} <- {:?}", self.definition_id, self.kind)
     }
 }

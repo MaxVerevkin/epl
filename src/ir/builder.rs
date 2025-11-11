@@ -14,8 +14,8 @@ pub fn build_function(
     let mut entry_block_args = Vec::new();
     for arg in &decl.args {
         let alloca = builder.alloca(arg.ty);
-        let block_arg = DefinitionId::new();
-        entry_block_args.push(TypedDefinitionId(block_arg, arg.ty));
+        let block_arg = DefinitionId::new(arg.ty);
+        entry_block_args.push(block_arg);
         builder
             .scope
             .variables
@@ -47,7 +47,7 @@ struct FunctionBuilder<'a> {
     allocas: Vec<Alloca>,
     basic_blocks: HashMap<BasicBlockId, BasicBlock>,
     current_block_id: BasicBlockId,
-    current_block_args: Vec<TypedDefinitionId>,
+    current_block_args: Vec<DefinitionId>,
     current_instructions: Vec<Instruction>,
     scope: Scope,
 }
@@ -152,7 +152,7 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Returns a new static allocation slot
     fn alloca(&mut self, ty: Type) -> DefinitionId {
-        let alloca = DefinitionId::new();
+        let alloca = DefinitionId::new(Type::OpaquePointer);
         self.allocas.push(Alloca {
             definition_id: alloca,
             size: ty.size(),
@@ -318,7 +318,11 @@ impl<'a> FunctionBuilder<'a> {
                                 data: *number,
                                 bits: match ty {
                                     Type::I32 | Type::U32 => 32,
-                                    Type::Never | Type::Void | Type::Bool | Type::CStr => {
+                                    Type::Never
+                                    | Type::Void
+                                    | Type::Bool
+                                    | Type::CStr
+                                    | Type::OpaquePointer => {
                                         unreachable!()
                                     }
                                 },
@@ -611,7 +615,8 @@ impl<'a> FunctionBuilder<'a> {
                                         | Type::Void
                                         | Type::Bool
                                         | Type::U32
-                                        | Type::CStr => unreachable!(),
+                                        | Type::CStr
+                                        | Type::OpaquePointer => unreachable!(),
                                     },
                                 }),
                                 rhs,
@@ -753,9 +758,8 @@ impl<'a> FunctionBuilder<'a> {
                         value: MaybeValue::Diverges,
                     })
                 } else {
-                    let value = DefinitionId::new();
-                    self.current_block_args
-                        .push(TypedDefinitionId(value, result_ty));
+                    let value = DefinitionId::new(result_ty);
+                    self.current_block_args.push(value);
                     Ok(EvalResult {
                         ty: result_ty,
                         value: MaybeValue::Value(Value::Definition(value)),
@@ -794,10 +798,9 @@ struct InstructionCursor<'a> {
 impl InstructionCursor<'_> {
     /// Generate a `Load` instruction
     fn load(&mut self, ptr: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(ty);
         self.buf.push(Instruction {
             definition_id,
-            ty,
             kind: InstructionKind::Load { ptr },
         });
         definition_id
@@ -806,18 +809,16 @@ impl InstructionCursor<'_> {
     /// Generate a `Store` instruction
     fn store(&mut self, ptr: Value, value: Value) {
         self.buf.push(Instruction {
-            definition_id: DefinitionId::new(),
-            ty: Type::Void,
+            definition_id: DefinitionId::new(Type::Void),
             kind: InstructionKind::Store { ptr, value },
         });
     }
 
     /// Generate a `FunctionCall` instruction
     fn function_call(&mut self, name: String, args: Vec<Value>, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(ty);
         self.buf.push(Instruction {
             definition_id,
-            ty,
             kind: InstructionKind::FunctionCall { name, args },
         });
         definition_id
@@ -825,10 +826,9 @@ impl InstructionCursor<'_> {
 
     /// Generate a `CmpSL` instruction
     fn cmp_sl(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(Type::Bool);
         self.buf.push(Instruction {
             definition_id,
-            ty: Type::Bool,
             kind: InstructionKind::CmpSL { lhs, rhs },
         });
         definition_id
@@ -836,10 +836,9 @@ impl InstructionCursor<'_> {
 
     /// Generate a `CmpUL` instruction
     fn cmp_ul(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(Type::Bool);
         self.buf.push(Instruction {
             definition_id,
-            ty: Type::Bool,
             kind: InstructionKind::CmpUL { lhs, rhs },
         });
         definition_id
@@ -847,10 +846,9 @@ impl InstructionCursor<'_> {
 
     /// Generate a `Add` instruction
     fn add(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(ty);
         self.buf.push(Instruction {
             definition_id,
-            ty,
             kind: InstructionKind::Add { lhs, rhs },
         });
         definition_id
@@ -858,10 +856,9 @@ impl InstructionCursor<'_> {
 
     /// Generate a `Sub` instruction
     fn sub(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(ty);
         self.buf.push(Instruction {
             definition_id,
-            ty,
             kind: InstructionKind::Sub { lhs, rhs },
         });
         definition_id
@@ -869,10 +866,9 @@ impl InstructionCursor<'_> {
 
     /// Generate a `Mul` instruction
     fn mul(&mut self, lhs: Value, rhs: Value, ty: Type) -> DefinitionId {
-        let definition_id = DefinitionId::new();
+        let definition_id = DefinitionId::new(ty);
         self.buf.push(Instruction {
             definition_id,
-            ty,
             kind: InstructionKind::Mul { lhs, rhs },
         });
         definition_id

@@ -39,7 +39,7 @@ impl LlvmModule {
             let postorder = fn_ir.postorder();
 
             for (i, &arg) in fn_ir.basic_blokcs[&fn_ir.entry].args.iter().enumerate() {
-                value_map.insert(arg.0, fn_value.get_param(i));
+                value_map.insert(arg, fn_value.get_param(i));
             }
 
             let mut basic_blocks_map = HashMap::new();
@@ -59,7 +59,7 @@ impl LlvmModule {
                 if basic_block_id != fn_ir.entry {
                     builder.position_at_end(basic_blocks_map[&basic_block_id]);
                     for &arg in &fn_ir.basic_blokcs[&basic_block_id].args {
-                        value_map.insert(arg.0, builder.phi(build_type(arg.1)));
+                        value_map.insert(arg, builder.phi(build_type(arg.ty())));
                     }
                 }
             }
@@ -69,7 +69,7 @@ impl LlvmModule {
                 builder.position_at_end(basic_blocks_map[&basic_block_id]);
 
                 for instruction in &basic_block_ir.instructions {
-                    let ty = build_type(instruction.ty);
+                    let ty = build_type(instruction.definition_id.ty());
                     let value = match &instruction.kind {
                         ir::InstructionKind::Load { ptr } => {
                             builder.load(build_value(ptr, &value_map, &module), ty)
@@ -113,7 +113,7 @@ impl LlvmModule {
                         builder.jump(basic_blocks_map[to]);
                         for (&arg, arg_value) in fn_ir.basic_blokcs[to].args.iter().zip(args) {
                             phi_add_incoming(
-                                value_map[&arg.0],
+                                value_map[&arg],
                                 basic_blocks_map[&basic_block_id],
                                 build_value(arg_value, &value_map, &module),
                             );
@@ -135,7 +135,7 @@ impl LlvmModule {
                             fn_ir.basic_blokcs[if_true].args.iter().zip(if_true_args)
                         {
                             phi_add_incoming(
-                                value_map[&arg.0],
+                                value_map[&arg],
                                 basic_blocks_map[&basic_block_id],
                                 build_value(arg_value, &value_map, &module),
                             );
@@ -144,7 +144,7 @@ impl LlvmModule {
                             fn_ir.basic_blokcs[if_false].args.iter().zip(if_false_args)
                         {
                             phi_add_incoming(
-                                value_map[&arg.0],
+                                value_map[&arg],
                                 basic_blocks_map[&basic_block_id],
                                 build_value(arg_value, &value_map, &module),
                             );
@@ -434,7 +434,9 @@ fn build_type(ty: ir::Type) -> LLVMTypeRef {
             ir::Type::Never | ir::Type::Void => LLVMStructType([].as_mut_ptr(), 0, 0),
             ir::Type::Bool => LLVMInt1Type(),
             ir::Type::I32 | ir::Type::U32 => LLVMInt32Type(),
-            ir::Type::CStr => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
+            ir::Type::CStr | ir::Type::OpaquePointer => {
+                LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0)
+            }
         }
     }
 }
