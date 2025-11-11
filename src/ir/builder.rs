@@ -143,13 +143,6 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Get the cursor fo an arbitrary (finalized) basic block
-    fn cursor_at(&mut self, block_id: BasicBlockId) -> InstructionCursor<'_> {
-        InstructionCursor {
-            buf: &mut self.basic_blocks.get_mut(&block_id).unwrap().instructions,
-        }
-    }
-
     /// Returns a new static allocation slot
     fn alloca(&mut self, ty: Type) -> DefinitionId {
         let alloca = DefinitionId::new(Type::OpaquePointer);

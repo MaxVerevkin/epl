@@ -51,8 +51,8 @@ pub struct BlockExpr {
 #[derive(Debug, Clone)]
 pub struct IfExpr {
     pub cond: Box<Expr>,
-    pub if_true: BlockExpr,
-    pub if_false: Option<BlockExpr>,
+    pub if_true: Box<BlockExpr>,
+    pub if_false: Option<Box<BlockExpr>>,
     pub if_keyword_span: lex::Span,
 }
 
@@ -707,10 +707,10 @@ impl Parser<'_> {
     fn next_if_expr(&mut self) -> Result<IfExpr, Error> {
         let if_keyword_span = self.expect_keyword(lex::Keyword::If)?;
         let cond = self.next_expr()?;
-        let if_true = self.next_block_expr()?;
+        let if_true = Box::new(self.next_block_expr()?);
         let if_false = if self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::Else)) {
             self.consume_token()?;
-            Some(self.next_block_expr()?)
+            Some(Box::new(self.next_block_expr()?))
         } else {
             None
         };
