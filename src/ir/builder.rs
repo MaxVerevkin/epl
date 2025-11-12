@@ -745,10 +745,9 @@ impl<'a> FunctionBuilder<'a> {
                 let if_false_id = BasicBlockId::new();
 
                 let cond = self.eval_expr(&if_expr.cond, Some(Type::Bool))?;
-                let cond_diverges = match cond.value {
+                match cond.value {
                     MaybeValue::Diverges => {
                         self.finalize_block(Terminator::Unreachable);
-                        true
                     }
                     MaybeValue::Value(cond) => {
                         self.finalize_block(Terminator::CondJump {
@@ -758,40 +757,35 @@ impl<'a> FunctionBuilder<'a> {
                             if_false: if_false_id,
                             if_false_args: Vec::new(),
                         });
-                        false
                     }
-                };
+                }
 
                 self.current_block_id = if_true_id;
                 let if_true_eval = self.eval_block_expr(&if_expr.if_true, expect_type)?;
-                let if_true_diverges = match if_true_eval.value {
+                match if_true_eval.value {
                     MaybeValue::Diverges => {
                         self.finalize_block(Terminator::Unreachable);
-                        true
                     }
                     MaybeValue::Value(value) => {
                         self.finalize_block(Terminator::Jump {
                             to: continuation_id,
                             args: vec![value],
                         });
-                        false
                     }
-                };
+                }
                 self.current_block_id = if_false_id;
                 let if_false_eval = self.eval_block_expr(if_false_expr, expect_type)?;
-                let if_false_diverges = match if_false_eval.value {
+                match if_false_eval.value {
                     MaybeValue::Diverges => {
                         self.finalize_block(Terminator::Unreachable);
-                        true
                     }
                     MaybeValue::Value(value) => {
                         self.finalize_block(Terminator::Jump {
                             to: continuation_id,
                             args: vec![value],
                         });
-                        false
                     }
-                };
+                }
                 self.current_block_id = continuation_id;
 
                 let Some(result_ty) = if_true_eval.ty.comine_ignoring_never(if_false_eval.ty)
@@ -803,19 +797,12 @@ impl<'a> FunctionBuilder<'a> {
                     .with_span(if_expr.if_keyword_span));
                 };
 
-                if cond_diverges || (if_true_diverges && if_false_diverges) {
-                    Ok(EvalResult {
-                        ty: result_ty,
-                        value: MaybeValue::Diverges,
-                    })
-                } else {
-                    let value = DefinitionId::new(result_ty);
-                    self.current_block_args.push(value);
-                    Ok(EvalResult {
-                        ty: result_ty,
-                        value: MaybeValue::Value(Value::Definition(value)),
-                    })
-                }
+                let value = DefinitionId::new(result_ty);
+                self.current_block_args.push(value);
+                Ok(EvalResult {
+                    ty: result_ty,
+                    value: MaybeValue::Value(Value::Definition(value)),
+                })
             }
             ast::ExprWithBlock::Loop(loop_expr) => {
                 let body_id = BasicBlockId::new();
