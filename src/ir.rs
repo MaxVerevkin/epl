@@ -2,6 +2,7 @@ mod builder;
 pub mod graphviz;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -215,24 +216,28 @@ impl Function {
     pub fn postorder(&self) -> Vec<BasicBlockId> {
         fn visit(
             order: &mut Vec<BasicBlockId>,
+            visited: &mut HashSet<BasicBlockId>,
             basic_blocks: &HashMap<BasicBlockId, BasicBlock>,
             cur: BasicBlockId,
         ) {
-            if order.contains(&cur) {
+            if !visited.insert(cur) {
                 return;
             }
 
             for succ in basic_blocks[&cur].terminator.successors() {
-                visit(order, basic_blocks, succ);
+                visit(order, visited, basic_blocks, succ);
             }
 
-            if !order.contains(&cur) {
-                order.push(cur);
-            }
+            order.push(cur);
         }
 
         let mut order = Vec::new();
-        visit(&mut order, &self.basic_blokcs, self.entry);
+        visit(
+            &mut order,
+            &mut HashSet::new(),
+            &self.basic_blokcs,
+            self.entry,
+        );
         order
     }
 }
