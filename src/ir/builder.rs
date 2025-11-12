@@ -56,6 +56,7 @@ struct FunctionBuilder<'a> {
 #[derive(Default)]
 struct Scope {
     variables: HashMap<String, (DefinitionId, Type)>,
+    loop_break_to: Option<(BasicBlockId, bool)>,
     parent: Option<Box<Self>>,
 }
 
@@ -78,6 +79,18 @@ impl Scope {
         }
         if let Some(parent) = &self.parent {
             return parent.lookup_variable(name);
+        }
+        None
+    }
+
+    /// Lookup a variable by its name, recursively traversind the list of scopes
+    fn lookup_and_use_break_target(&mut self) -> Option<BasicBlockId> {
+        if let Some((target, used)) = &mut self.loop_break_to {
+            *used = true;
+            return Some(*target);
+        }
+        if let Some(parent) = &mut self.parent {
+            return parent.lookup_and_use_break_target();
         }
         None
     }
@@ -293,6 +306,42 @@ impl<'a> FunctionBuilder<'a> {
                     value: MaybeValue::Diverges,
                 })
             }
+            ast::ExprWithNoBlock::Break(break_expr) => match &break_expr.value {
+                Some(value) => {
+                    let value_eval = self.eval_expr(value, Some(Type::Void))?;
+                    match value_eval.value {
+                        MaybeValue::Diverges => (),
+                        MaybeValue::Value(_value) => {
+                            let to = self.scope.lookup_and_use_break_target().ok_or_else(|| {
+                                Error::new("break expressions are only allowed inside loops")
+                                    .with_span(break_expr.break_keyword_span)
+                            })?;
+                            self.finalize_block(Terminator::Jump {
+                                to,
+                                args: Vec::new(),
+                            });
+                        }
+                    }
+                    Ok(EvalResult {
+                        ty: Type::Never,
+                        value: MaybeValue::Diverges,
+                    })
+                }
+                None => {
+                    let to = self.scope.lookup_and_use_break_target().ok_or_else(|| {
+                        Error::new("break expressions are only allowed inside loops")
+                            .with_span(break_expr.break_keyword_span)
+                    })?;
+                    self.finalize_block(Terminator::Jump {
+                        to,
+                        args: Vec::new(),
+                    });
+                    Ok(EvalResult {
+                        ty: Type::Never,
+                        value: MaybeValue::Diverges,
+                    })
+                }
+            },
             ast::ExprWithNoBlock::Literal(literal_expr) => match &literal_expr.value {
                 ast::LiteralExprValue::Number(number) => {
                     if let Some(expect_type) = expect_type
@@ -755,23 +804,44 @@ impl<'a> FunctionBuilder<'a> {
             }
             ast::ExprWithBlock::Loop(loop_expr) => {
                 let body_id = BasicBlockId::new();
+                let continuation_id = BasicBlockId::new();
+
                 self.finalize_block(Terminator::Jump {
                     to: body_id,
                     args: Vec::new(),
                 });
+
                 self.current_block_id = body_id;
-
+                self.scope.push();
+                self.scope.loop_break_to = Some((continuation_id, false));
                 let _body_eval = self.eval_block_expr(&loop_expr.body, Some(Type::Void))?;
+                let (_, break_used) = self.scope.loop_break_to.unwrap();
+                self.scope.pop();
                 self.finalize_block(Terminator::Jump {
                     to: body_id,
                     args: Vec::new(),
                 });
-                // TODO: diverges if body_eval diverges, even if breaks are inside.
 
-                Ok(EvalResult {
-                    ty: Type::Never,
-                    value: MaybeValue::Diverges,
-                })
+                self.current_block_id = continuation_id;
+
+                if break_used {
+                    if let Some(expect_type) = expect_type
+                        && expect_type != Type::Void
+                    {
+                        return Err(Error::new(format!(
+                            "loop experession expected to evalueate to type {expect_type:?}, but break is used, so it evaluates to Void"
+                        )).with_span(loop_expr.loop_keyword_span));
+                    }
+                    Ok(EvalResult {
+                        ty: Type::Void,
+                        value: MaybeValue::Value(Value::Constant(Constant::Void)),
+                    })
+                } else {
+                    Ok(EvalResult {
+                        ty: Type::Never,
+                        value: MaybeValue::Diverges,
+                    })
+                }
             }
         }
     }

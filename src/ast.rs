@@ -97,6 +97,7 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum ExprWithNoBlock {
     Return(ReturnExpr),
+    Break(BreakExpr),
     Literal(LiteralExpr),
     FunctionCallExpr(FunctionCallExpr),
     Assignment(AssignmentExpr),
@@ -130,6 +131,10 @@ impl ExprWithNoBlock {
             Self::Return(return_expr) => return_expr
                 .return_keyword_span
                 .join(return_expr.value.span()),
+            Self::Break(break_expr) => match &break_expr.value {
+                Some(val) => break_expr.break_keyword_span.join(val.span()),
+                None => break_expr.break_keyword_span,
+            },
             Self::Literal(literal_expr) => literal_expr.span,
             Self::FunctionCallExpr(function_call_expr) => function_call_expr
                 .name
@@ -174,6 +179,13 @@ impl BlockExpr {
 pub struct ReturnExpr {
     pub return_keyword_span: lex::Span,
     pub value: Box<Expr>,
+}
+
+/// A break expression
+#[derive(Debug, Clone)]
+pub struct BreakExpr {
+    pub break_keyword_span: lex::Span,
+    pub value: Option<Box<Expr>>,
 }
 
 /// A literal expression with its span
@@ -511,15 +523,32 @@ impl Parser<'_> {
 
     /// Parse an experission
     fn next_expr(&mut self) -> Result<Expr, Error> {
-        if self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::Return)) {
-            let (return_keyword_span, _) = self.consume_token()?.unwrap();
-            let value = self.next_expr()?;
-            Ok(Expr::WithNoBlock(ExprWithNoBlock::Return(ReturnExpr {
-                return_keyword_span,
-                value: Box::new(value),
-            })))
-        } else {
-            self.next_assigning_expr()
+        match self.peek_token()? {
+            Some(lex::Token::Keyword(lex::Keyword::Return)) => {
+                let (return_keyword_span, _) = self.consume_token()?.unwrap();
+                let value = self.next_expr()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Return(ReturnExpr {
+                    return_keyword_span,
+                    value: Box::new(value),
+                })))
+            }
+            Some(lex::Token::Keyword(lex::Keyword::Break)) => {
+                let (break_keyword_span, _) = self.consume_token()?.unwrap();
+                let value = match self.peek_token()? {
+                    Some(lex::Token::Punct(
+                        lex::Punct::Semicolon
+                        | lex::Punct::Comma
+                        | lex::Punct::RightParen
+                        | lex::Punct::RightBrace,
+                    )) => None,
+                    _ => Some(Box::new(self.next_expr()?)),
+                };
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Break(BreakExpr {
+                    break_keyword_span,
+                    value,
+                })))
+            }
+            _ => self.next_assigning_expr(),
         }
     }
 

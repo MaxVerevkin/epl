@@ -11,6 +11,7 @@ Everything after `#` is treated as a comment.
 
 - `fn`
 - `return`
+- `break`
 - `if`
 - `else`
 - `loop`
@@ -29,7 +30,7 @@ Everything after `#` is treated as a comment.
 
 ## Expressions
 
-- expr = `return` expr | assigning_expr
+- expr = `return` expr | `break` expr? | assigning_expr
 - assigning_expr = comp_expr ( `=` comp_expr )?
 - comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*

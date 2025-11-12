@@ -40,6 +40,7 @@ fn is_valid_ident_char(ch: char) -> bool {
 pub enum Keyword {
     Fn,
     Return,
+    Break,
     If,
     Else,
     Loop,
@@ -52,6 +53,7 @@ pub enum Keyword {
 const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("fn", Keyword::Fn),
     ("return", Keyword::Return),
+    ("break", Keyword::Break),
     ("if", Keyword::If),
     ("else", Keyword::Else),
     ("loop", Keyword::Loop),
