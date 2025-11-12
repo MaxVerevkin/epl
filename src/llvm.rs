@@ -55,7 +55,7 @@ impl LlvmModule {
                 );
             }
 
-            for &basic_block_id in fn_ir.basic_blokcs.keys() {
+            for &basic_block_id in &postorder {
                 if basic_block_id != fn_ir.entry {
                     builder.position_at_end(basic_blocks_map[&basic_block_id]);
                     for &arg in &fn_ir.basic_blokcs[&basic_block_id].args {
