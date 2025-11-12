@@ -422,7 +422,7 @@ fn build_function_type(decl: &ir::FunctionDecl) -> LLVMTypeRef {
             build_type(decl.return_ty),
             args_ty.as_mut_ptr(),
             args_ty.len() as u32,
-            0,
+            decl.is_variadic as i32,
         )
     }
 }

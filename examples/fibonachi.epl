@@ -5,3 +5,36 @@ fn fib(n: u32) -> u32 {
 		fib(n - 2) + fib(n - 1)
 	}
 }
+
+fn fib_it(n: u32) -> u32 {
+	let a: u32 = 0;
+	let b: u32 = 1;
+	let i: u32 = 0;
+	loop {
+		if i < n {
+			let tmp = a;
+			a = b;
+			b = b + tmp;
+			i = i + 1;
+		} else {
+			break;
+		}
+	}
+	a
+}
+
+fn main() -> i32 {
+	let n: u32 = 0;
+	loop {
+		if n < 10 {
+			printf("fib(%i) = %i\n", n, fib(n));
+			printf("fib_id(%i) = %i\n", n, fib_it(n));
+		} else {
+			break;
+		}
+		n = n + 1;
+	}
+	0
+}
+
+fn printf(fmt: cstr, ...) -> void;

@@ -72,6 +72,8 @@ pub enum Literal {
 /// A punctuation token
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Punct {
+    /// ...
+    TrippleDot,
     /// ==
     CmpEq,
     /// !=
@@ -116,6 +118,7 @@ pub enum Punct {
 
 /// A mapping from strings to punct tokens
 const PUNCT_MAP: &[(&str, Punct)] = &[
+    ("...", Punct::TrippleDot),
     ("==", Punct::CmpEq),
     ("!=", Punct::CmpNeq),
     ("<=", Punct::CmpLe),

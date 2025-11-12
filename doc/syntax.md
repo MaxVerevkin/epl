@@ -42,7 +42,7 @@ Everything after `#` is treated as a comment.
 - block_expr = `{` statement* expr_with_no_block? `}`
 - if_expr = `if` expr block_expr (`else` block_expr)?
 - loop_expr = `loop` block_expr
-- function_call_expr = ident `(` expr? (, expr)* `)`
+- function_call_expr = ident `(` expr? (, expr)*, `...` `)` | ident `(` `...` `)`
 - let_statement =  `let` ident `:` ident `;` | `let` ident (`:` ident)? `=` expr `;`
 
 ## Literals

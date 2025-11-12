@@ -91,6 +91,7 @@ impl Ir {
 pub struct FunctionDecl {
     pub name: ast::Ident,
     pub args: Vec<FunctionArg>,
+    pub is_variadic: bool,
     pub return_ty: Type,
 }
 
@@ -111,6 +112,7 @@ impl FunctionDecl {
                 .iter()
                 .map(FunctionArg::from_ast)
                 .collect::<Result<_, _>>()?,
+            is_variadic: ast.is_variadic,
             return_ty: Type::from_ast(&ast.return_ty)?,
         })
     }

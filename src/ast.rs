@@ -20,6 +20,7 @@ pub enum Item {
 pub struct Function {
     pub name: Ident,
     pub args: Vec<FunctionArg>,
+    pub is_variadic: bool,
     pub return_ty: Ident,
     pub body: Option<BlockExpr>,
 }
@@ -279,6 +280,7 @@ pub enum ErrorKind {
         got: Option<lex::Token>,
     },
     LetNoValueNoType,
+    VariadicIsNotLast,
 }
 
 impl<'a> Parser<'a> {
@@ -395,10 +397,23 @@ impl Parser<'_> {
         let name = self.next_ident()?;
         self.expect_punct(lex::Punct::LeftParen)?;
         let mut args = Vec::new();
+        let mut is_variadic = false;
         loop {
             match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::RightParen)) => {
                     self.consume_token()?;
+                    break;
+                }
+                Some(lex::Token::Punct(lex::Punct::TrippleDot)) => {
+                    let (span, _) = self.consume_token()?.unwrap();
+                    is_variadic = true;
+                    if self.peek_token()? != Some(&lex::Token::Punct(lex::Punct::RightParen)) {
+                        return Err(Error {
+                            span: Some(span),
+                            kind: ErrorKind::VariadicIsNotLast,
+                        });
+                    }
+                    self.expect_punct(lex::Punct::RightParen)?;
                     break;
                 }
                 Some(lex::Token::Ident(_)) => {
@@ -439,6 +454,7 @@ impl Parser<'_> {
         Ok(Item::Function(Function {
             name,
             args,
+            is_variadic,
             return_ty,
             body,
         }))

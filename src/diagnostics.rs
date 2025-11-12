@@ -30,6 +30,9 @@ impl SpanError for ast::Error {
             ast::ErrorKind::LetNoValueNoType => {
                 String::from("let statement with no value requires type to be specified")
             }
+            ast::ErrorKind::VariadicIsNotLast => {
+                String::from("variadic specifier (...) must be the last argument")
+            }
         }
     }
 

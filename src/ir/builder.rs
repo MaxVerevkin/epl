@@ -9,6 +9,12 @@ pub fn build_function(
     body: &ast::BlockExpr,
     function_decls: &HashMap<String, FunctionDecl>,
 ) -> Result<Function, Error> {
+    if decl.is_variadic {
+        return Err(
+            Error::new("defining variadic functions is not supported").with_span(decl.name.span)
+        );
+    }
+
     let mut builder = FunctionBuilder::new(decl.return_ty, function_decls);
 
     let mut entry_block_args = Vec::new();
@@ -423,17 +429,26 @@ impl<'a> FunctionBuilder<'a> {
                     })?;
                 let mut args_diverges = false;
                 let mut args_values = Vec::new();
-                if decl.args.len() != function_call_expr.args.len() {
+                if decl.is_variadic {
+                    if decl.args.len() > function_call_expr.args.len() {
+                        return Err(Error::new(format!(
+                            "expected at least {} argument(s), found {}",
+                            decl.args.len(),
+                            function_call_expr.args.len()
+                        ))
+                        .with_span(function_call_expr.args_span));
+                    }
+                } else if decl.args.len() != function_call_expr.args.len() {
                     return Err(Error::new(format!(
-                        "expected {} arguments, found {}",
+                        "expected {} argument(s), found {}",
                         decl.args.len(),
                         function_call_expr.args.len()
                     ))
                     .with_span(function_call_expr.args_span));
                 }
                 for (arg_i, arg_expr) in function_call_expr.args.iter().enumerate() {
-                    let expect_arg_type = decl.args[arg_i].ty;
-                    let arg_eval = self.eval_expr(arg_expr, Some(expect_arg_type))?;
+                    let expect_arg_type = decl.args.get(arg_i).map(|a| a.ty);
+                    let arg_eval = self.eval_expr(arg_expr, expect_arg_type)?;
                     if !args_diverges {
                         match arg_eval.value {
                             MaybeValue::Diverges => args_diverges = true,
