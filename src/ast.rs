@@ -64,6 +64,14 @@ pub struct LoopExpr {
     pub loop_keyword_span: lex::Span,
 }
 
+/// A `while` expression
+#[derive(Debug, Clone)]
+pub struct WhileExpr {
+    pub cond: Box<Expr>,
+    pub body: BlockExpr,
+    pub while_keyword_span: lex::Span,
+}
+
 /// A statement
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -113,6 +121,7 @@ pub enum ExprWithBlock {
     Block(BlockExpr),
     If(IfExpr),
     Loop(LoopExpr),
+    While(WhileExpr),
 }
 
 impl Expr {
@@ -164,6 +173,7 @@ impl ExprWithBlock {
                     .map_or_else(|| if_expr.if_true.span(), |e| e.span()),
             ),
             Self::Loop(loop_expr) => loop_expr.loop_keyword_span.join(loop_expr.body.span()),
+            Self::While(while_expr) => while_expr.while_keyword_span.join(while_expr.body.span()),
         }
     }
 }
@@ -708,6 +718,9 @@ impl Parser<'_> {
             Some(lex::Token::Keyword(lex::Keyword::Loop)) => self
                 .next_loop_expr()
                 .map(|expr| Expr::WithBlock(ExprWithBlock::Loop(expr))),
+            Some(lex::Token::Keyword(lex::Keyword::While)) => self
+                .next_while_expr()
+                .map(|expr| Expr::WithBlock(ExprWithBlock::While(expr))),
             _ => self.consume_unexpected_token("expression"),
         }
     }
@@ -774,6 +787,18 @@ impl Parser<'_> {
         Ok(LoopExpr {
             body,
             loop_keyword_span,
+        })
+    }
+
+    /// Parse while expression
+    fn next_while_expr(&mut self) -> Result<WhileExpr, Error> {
+        let while_keyword_span = self.expect_keyword(lex::Keyword::While)?;
+        let cond = self.next_expr()?;
+        let body = self.next_block_expr()?;
+        Ok(WhileExpr {
+            cond: Box::new(cond),
+            body,
+            while_keyword_span,
         })
     }
 }

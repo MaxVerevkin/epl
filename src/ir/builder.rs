@@ -858,6 +858,60 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
             }
+            ast::ExprWithBlock::While(while_expr) => {
+                let header_id = BasicBlockId::new();
+                let body_id = BasicBlockId::new();
+                let continuation_id = BasicBlockId::new();
+
+                self.finalize_block(Terminator::Jump {
+                    to: header_id,
+                    args: Vec::new(),
+                });
+
+                self.current_block_id = header_id;
+                let cond_eval = self.eval_expr(&while_expr.cond, Some(Type::Bool))?;
+                match cond_eval.value {
+                    MaybeValue::Diverges => {
+                        self.finalize_block(Terminator::Unreachable);
+                    }
+                    MaybeValue::Value(cond) => {
+                        self.finalize_block(Terminator::CondJump {
+                            cond,
+                            if_true: body_id,
+                            if_true_args: Vec::new(),
+                            if_false: continuation_id,
+                            if_false_args: Vec::new(),
+                        });
+                    }
+                }
+
+                self.current_block_id = body_id;
+                self.scope.push();
+                self.scope.loop_break_to = Some((continuation_id, false));
+                let _body_eval = self.eval_block_expr(&while_expr.body, Some(Type::Void))?;
+                self.scope.pop();
+                self.finalize_block(Terminator::Jump {
+                    to: header_id,
+                    args: Vec::new(),
+                });
+
+                self.current_block_id = continuation_id;
+
+                if let Some(expect_type) = expect_type
+                    && expect_type != Type::Void
+                {
+                    return Err(Error::expr_type_missmatch(
+                        expect_type,
+                        Type::Void,
+                        while_expr.while_keyword_span,
+                    ));
+                }
+
+                Ok(EvalResult {
+                    ty: Type::Void,
+                    value: MaybeValue::Value(Value::Constant(Constant::Void)),
+                })
+            }
         }
     }
 }
