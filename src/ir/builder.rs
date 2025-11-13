@@ -62,8 +62,14 @@ struct FunctionBuilder<'a> {
 #[derive(Default)]
 struct Scope {
     variables: HashMap<String, (DefinitionId, Type)>,
-    loop_break_to: Option<(BasicBlockId, bool)>,
+    loop_context: Option<LoopContext>,
     parent: Option<Box<Self>>,
+}
+
+#[derive(Clone, Copy)]
+struct LoopContext {
+    break_to: BasicBlockId,
+    break_used: bool,
 }
 
 impl Scope {
@@ -89,14 +95,13 @@ impl Scope {
         None
     }
 
-    /// Lookup a variable by its name, recursively traversind the list of scopes
-    fn lookup_and_use_break_target(&mut self) -> Option<BasicBlockId> {
-        if let Some((target, used)) = &mut self.loop_break_to {
-            *used = true;
-            return Some(*target);
+    /// Recursively lookup a loop context
+    fn loop_context(&mut self) -> Option<&mut LoopContext> {
+        if let Some(ctx) = &mut self.loop_context {
+            return Some(ctx);
         }
         if let Some(parent) = &mut self.parent {
-            return parent.lookup_and_use_break_target();
+            return parent.loop_context();
         }
         None
     }
@@ -295,10 +300,12 @@ impl<'a> FunctionBuilder<'a> {
                     match value_eval.value {
                         MaybeValue::Diverges => (),
                         MaybeValue::Value(_value) => {
-                            let to = self.scope.lookup_and_use_break_target().ok_or_else(|| {
+                            let loop_ctx = self.scope.loop_context().ok_or_else(|| {
                                 Error::new("break expressions are only allowed inside loops")
                                     .with_span(break_expr.break_keyword_span)
                             })?;
+                            loop_ctx.break_used = true;
+                            let to = loop_ctx.break_to;
                             self.finalize_block(Terminator::Jump {
                                 to,
                                 args: Vec::new(),
@@ -311,10 +318,12 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
                 None => {
-                    let to = self.scope.lookup_and_use_break_target().ok_or_else(|| {
+                    let loop_ctx = self.scope.loop_context().ok_or_else(|| {
                         Error::new("break expressions are only allowed inside loops")
                             .with_span(break_expr.break_keyword_span)
                     })?;
+                    loop_ctx.break_used = true;
+                    let to = loop_ctx.break_to;
                     self.finalize_block(Terminator::Jump {
                         to,
                         args: Vec::new(),
@@ -782,9 +791,12 @@ impl<'a> FunctionBuilder<'a> {
 
                 self.current_block_id = body_id;
                 self.scope.push();
-                self.scope.loop_break_to = Some((continuation_id, false));
+                self.scope.loop_context = Some(LoopContext {
+                    break_to: continuation_id,
+                    break_used: false,
+                });
                 let _body_eval = self.eval_block_expr(&loop_expr.body, Some(Type::Void))?;
-                let (_, break_used) = self.scope.loop_break_to.unwrap();
+                let loop_ctx = self.scope.loop_context.unwrap();
                 self.scope.pop();
                 self.finalize_block(Terminator::Jump {
                     to: body_id,
@@ -793,7 +805,7 @@ impl<'a> FunctionBuilder<'a> {
 
                 self.current_block_id = continuation_id;
 
-                if break_used {
+                if loop_ctx.break_used {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Void
                     {
@@ -834,7 +846,10 @@ impl<'a> FunctionBuilder<'a> {
 
                 self.current_block_id = body_id;
                 self.scope.push();
-                self.scope.loop_break_to = Some((continuation_id, false));
+                self.scope.loop_context = Some(LoopContext {
+                    break_to: continuation_id,
+                    break_used: false,
+                });
                 let _body_eval = self.eval_block_expr(&while_expr.body, Some(Type::Void))?;
                 self.scope.pop();
                 self.finalize_block(Terminator::Jump {
