@@ -115,11 +115,6 @@ impl EvalResult {
         ty: Type::Void,
         value: MaybeValue::Value(Value::Constant(Constant::Void)),
     };
-
-    /// Returns `true` if the expression deverges
-    fn diverges(&self) -> bool {
-        matches!(self.value, MaybeValue::Diverges)
-    }
 }
 
 /// The value of an exprission, possibly missing due to the expression being diverging
@@ -444,7 +439,7 @@ impl<'a> FunctionBuilder<'a> {
                     return Err(Error::expr_type_missmatch(
                         expect_type,
                         decl.return_ty,
-                        function_call_expr.expr_span,
+                        function_call_expr.span(),
                     ));
                 }
                 if args_diverges {

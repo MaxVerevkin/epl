@@ -146,10 +146,7 @@ impl ExprWithNoBlock {
                 None => break_expr.break_keyword_span,
             },
             Self::Literal(literal_expr) => literal_expr.span,
-            Self::FunctionCallExpr(function_call_expr) => function_call_expr
-                .name
-                .span
-                .join(function_call_expr.args_span),
+            Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
             Self::Assignment(assignment_expr) => assignment_expr
                 .place
                 .span()
@@ -175,6 +172,13 @@ impl ExprWithBlock {
             Self::Loop(loop_expr) => loop_expr.loop_keyword_span.join(loop_expr.body.span()),
             Self::While(while_expr) => while_expr.while_keyword_span.join(while_expr.body.span()),
         }
+    }
+}
+
+impl FunctionCallExpr {
+    /// Get the span of this expression
+    pub fn span(&self) -> lex::Span {
+        self.name.span.join(self.args_span)
     }
 }
 
@@ -220,7 +224,6 @@ pub struct FunctionCallExpr {
     pub name: Ident,
     pub args: Vec<Expr>,
     pub args_span: lex::Span,
-    pub expr_span: lex::Span,
 }
 
 /// An assignment expression
@@ -752,12 +755,10 @@ impl Parser<'_> {
             }
         }
         let right_paren_span = self.expect_punct(lex::Punct::RightParen)?;
-        let name_span = name.span;
         Ok(FunctionCallExpr {
             name,
             args,
             args_span: left_paren_span.join(right_paren_span),
-            expr_span: name_span.join(right_paren_span),
         })
     }
 
