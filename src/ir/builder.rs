@@ -213,7 +213,6 @@ impl<'a> FunctionBuilder<'a> {
         expect_type: Option<Type>,
     ) -> Result<EvalResult, Error> {
         self.scope.push();
-        let mut diverges = false;
         let mut value = None;
 
         for (i, stmt) in expr.statements.iter().enumerate() {
@@ -228,7 +227,7 @@ impl<'a> FunctionBuilder<'a> {
                             .variables
                             .insert(name.value.clone(), (alloca, value_eval.ty));
                         match value_eval.value {
-                            MaybeValue::Diverges => diverges = true,
+                            MaybeValue::Diverges => (),
                             MaybeValue::Value(value) => {
                                 self.cursor().store(Value::Definition(alloca), value);
                             }
@@ -243,17 +242,13 @@ impl<'a> FunctionBuilder<'a> {
                     }
                 },
                 ast::Statement::ExprWithNoBlock(expr_with_no_block) => {
-                    diverges |= self
-                        .eval_expr_with_no_block(expr_with_no_block, None)?
-                        .diverges();
+                    self.eval_expr_with_no_block(expr_with_no_block, None)?;
                 }
                 ast::Statement::ExprWithBlock(expr_with_block) => {
                     if i + 1 == expr.statements.len() && expr.final_expr.is_none() {
                         value = Some(self.eval_expr_with_block(expr_with_block, expect_type)?);
                     } else {
-                        diverges |= self
-                            .eval_expr_with_block(expr_with_block, Some(Type::Void))?
-                            .diverges();
+                        self.eval_expr_with_block(expr_with_block, Some(Type::Void))?;
                     }
                 }
             }
@@ -266,29 +261,17 @@ impl<'a> FunctionBuilder<'a> {
         self.scope.pop();
 
         Ok(match value {
-            Some(mut value) => {
-                if diverges {
-                    value.value = MaybeValue::Diverges;
-                }
-                value
-            }
+            Some(value) => value,
             None => {
-                if diverges {
-                    EvalResult {
-                        ty: expect_type.unwrap_or(Type::Never),
-                        value: MaybeValue::Diverges,
-                    }
-                } else {
-                    if let Some(expect_type) = expect_type
-                        && expect_type != Type::Void
-                    {
-                        return Err(Error::new(format!(
-                            "expectd expr of type {expect_type:?}, found end-of-block"
-                        ))
-                        .with_span(expr.closing_brace_span));
-                    }
-                    EvalResult::VOID
+                if let Some(expect_type) = expect_type
+                    && expect_type != Type::Void
+                {
+                    return Err(Error::new(format!(
+                        "expectd expr of type {expect_type:?}, found end-of-block"
+                    ))
+                    .with_span(expr.closing_brace_span));
                 }
+                EvalResult::VOID
             }
         })
     }
