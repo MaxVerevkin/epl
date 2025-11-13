@@ -85,14 +85,30 @@ impl LlvmModule {
                                 .collect();
                             builder.function_call(fn_type_map[name], &fn_map[name], &args)
                         }
-                        ir::InstructionKind::CmpSL { lhs, rhs } => builder.cmp_sl(
-                            build_value(lhs, &value_map, &module),
-                            build_value(rhs, &value_map, &module),
-                        ),
-                        ir::InstructionKind::CmpUL { lhs, rhs } => builder.cmp_ul(
-                            build_value(lhs, &value_map, &module),
-                            build_value(rhs, &value_map, &module),
-                        ),
+                        ir::InstructionKind::CmpL { lhs, rhs } => match lhs.ty().is_signed_int() {
+                            true => builder.cmp(
+                                build_value(lhs, &value_map, &module),
+                                build_value(rhs, &value_map, &module),
+                                llvm_sys::LLVMIntPredicate::LLVMIntSLT,
+                            ),
+                            false => builder.cmp(
+                                build_value(lhs, &value_map, &module),
+                                build_value(rhs, &value_map, &module),
+                                llvm_sys::LLVMIntPredicate::LLVMIntULT,
+                            ),
+                        },
+                        ir::InstructionKind::CmpG { lhs, rhs } => match lhs.ty().is_signed_int() {
+                            true => builder.cmp(
+                                build_value(lhs, &value_map, &module),
+                                build_value(rhs, &value_map, &module),
+                                llvm_sys::LLVMIntPredicate::LLVMIntSGT,
+                            ),
+                            false => builder.cmp(
+                                build_value(lhs, &value_map, &module),
+                                build_value(rhs, &value_map, &module),
+                                llvm_sys::LLVMIntPredicate::LLVMIntUGT,
+                            ),
+                        },
                         ir::InstructionKind::Add { lhs, rhs } => builder.add(
                             build_value(lhs, &value_map, &module),
                             build_value(rhs, &value_map, &module),
@@ -346,30 +362,14 @@ impl LlvmBuilder {
         }
     }
 
-    /// Build the `cmp` "signed less than" instruction
-    fn cmp_sl(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildICmp(
-                self.raw,
-                llvm_sys::LLVMIntPredicate::LLVMIntSLT,
-                lhs,
-                rhs,
-                c"".as_ptr(),
-            )
-        }
-    }
-
-    /// Build the `cmp` "unsigned less than" instruction
-    fn cmp_ul(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            LLVMBuildICmp(
-                self.raw,
-                llvm_sys::LLVMIntPredicate::LLVMIntULT,
-                lhs,
-                rhs,
-                c"".as_ptr(),
-            )
-        }
+    /// Build the `cmp` instruction
+    fn cmp(
+        &self,
+        lhs: LLVMValueRef,
+        rhs: LLVMValueRef,
+        kind: llvm_sys::LLVMIntPredicate,
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildICmp(self.raw, kind, lhs, rhs, c"".as_ptr()) }
     }
 
     /// Build the `add` instruction

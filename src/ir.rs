@@ -156,7 +156,7 @@ impl Type {
     }
 
     /// The byte size of this type
-    fn size(self) -> u64 {
+    pub fn size(self) -> u64 {
         match self {
             Type::Never | Type::Void => 0,
             Type::Bool => 1,
@@ -166,7 +166,7 @@ impl Type {
     }
 
     /// The byte alignment of this type
-    fn align(self) -> u64 {
+    pub fn align(self) -> u64 {
         match self {
             Type::Never | Type::Void | Type::Bool => 1,
             Type::I32 | Type::U32 => 4,
@@ -175,17 +175,17 @@ impl Type {
     }
 
     /// Returns `true` if this data type is an integer
-    fn is_int(self) -> bool {
+    pub fn is_int(self) -> bool {
         self.is_signed_int() || self.is_unsigned_int()
     }
 
     /// Returns `true` if this data type is a signed integer
-    fn is_signed_int(self) -> bool {
+    pub fn is_signed_int(self) -> bool {
         matches!(self, Self::I32)
     }
 
     /// Returns `true` if this data type is an unsigned integer
-    fn is_unsigned_int(self) -> bool {
+    pub fn is_unsigned_int(self) -> bool {
         matches!(self, Self::U32)
     }
 
@@ -302,8 +302,8 @@ pub enum InstructionKind {
     Load { ptr: Value },
     Store { ptr: Value, value: Value },
     FunctionCall { name: String, args: Vec<Value> },
-    CmpSL { lhs: Value, rhs: Value },
-    CmpUL { lhs: Value, rhs: Value },
+    CmpL { lhs: Value, rhs: Value },
+    CmpG { lhs: Value, rhs: Value },
     Add { lhs: Value, rhs: Value },
     Sub { lhs: Value, rhs: Value },
     Mul { lhs: Value, rhs: Value },

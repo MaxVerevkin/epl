@@ -512,18 +512,40 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(
-                                match lhs_eval.ty.is_signed_int() {
-                                    true => self.cursor().cmp_sl(lhs, rhs),
-                                    false => self.cursor().cmp_ul(lhs, rhs),
-                                },
-                            ))
+                            MaybeValue::Value(Value::Definition(self.cursor().cmp_l(lhs, rhs)))
                         } else {
                             MaybeValue::Diverges
                         },
                     })
                 }
-                ast::BinaryOp::Greater => todo!(),
+                ast::BinaryOp::Greater => {
+                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
+                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
+                    if lhs_eval.ty != rhs_eval.ty {
+                        return Err(Error::new(format!(
+                            "cannot comparet different types: {:?} and {:?}",
+                            lhs_eval.ty, rhs_eval.ty
+                        ))
+                        .with_span(binary_expr.op_span));
+                    }
+                    if !lhs_eval.ty.is_int() {
+                        return Err(Error::new(format!(
+                            "only integer types can be compared, not {:?}",
+                            lhs_eval.ty
+                        ))
+                        .with_span(binary_expr.op_span));
+                    }
+                    Ok(EvalResult {
+                        ty: Type::Bool,
+                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
+                            && let MaybeValue::Value(rhs) = rhs_eval.value
+                        {
+                            MaybeValue::Value(Value::Definition(self.cursor().cmp_g(lhs, rhs)))
+                        } else {
+                            MaybeValue::Diverges
+                        },
+                    })
+                }
                 ast::BinaryOp::Add => {
                     let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
                     let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
@@ -872,22 +894,24 @@ impl InstructionCursor<'_> {
         definition_id
     }
 
-    /// Generate a `CmpSL` instruction
-    fn cmp_sl(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+    /// Generate a `CmpL` instruction
+    fn cmp_l(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+        assert_eq!(lhs.ty(), rhs.ty());
         let definition_id = DefinitionId::new(Type::Bool);
         self.buf.push(Instruction {
             definition_id,
-            kind: InstructionKind::CmpSL { lhs, rhs },
+            kind: InstructionKind::CmpL { lhs, rhs },
         });
         definition_id
     }
 
-    /// Generate a `CmpUL` instruction
-    fn cmp_ul(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+    /// Generate a `CmpG` instruction
+    fn cmp_g(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+        assert_eq!(lhs.ty(), rhs.ty());
         let definition_id = DefinitionId::new(Type::Bool);
         self.buf.push(Instruction {
             definition_id,
-            kind: InstructionKind::CmpUL { lhs, rhs },
+            kind: InstructionKind::CmpG { lhs, rhs },
         });
         definition_id
     }
