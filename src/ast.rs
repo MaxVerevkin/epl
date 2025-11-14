@@ -298,6 +298,7 @@ pub enum BinaryOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
     Negate,
+    Not,
 }
 
 /// A parser for the source code
@@ -729,7 +730,7 @@ impl Parser<'_> {
     }
 
     fn next_multiplicative_expr(&mut self) -> Result<Expr, Error> {
-        let mut expr = self.next_base_expr()?;
+        let mut expr = self.next_unary_expr()?;
         loop {
             let op = match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Mul,
@@ -740,11 +741,35 @@ impl Parser<'_> {
             expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
-                rhs: Box::new(self.next_base_expr()?),
+                rhs: Box::new(self.next_unary_expr()?),
                 op_span,
             }));
         }
         Ok(expr)
+    }
+
+    fn next_unary_expr(&mut self) -> Result<Expr, Error> {
+        match self.peek_token()? {
+            Some(lex::Token::Punct(lex::Punct::Minus)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                let rhs = self.next_unary_expr()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                    op: UnaryOp::Negate,
+                    rhs: Box::new(rhs),
+                    op_span,
+                })))
+            }
+            Some(lex::Token::Punct(lex::Punct::Exclam)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                let rhs = self.next_unary_expr()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                    op: UnaryOp::Not,
+                    rhs: Box::new(rhs),
+                    op_span,
+                })))
+            }
+            _ => self.next_base_expr(),
+        }
     }
 
     /// Parse a base experission
@@ -790,15 +815,6 @@ impl Parser<'_> {
                 let expr = self.next_expr()?;
                 self.expect_punct(lex::Punct::RightParen)?;
                 Ok(expr)
-            }
-            Some(lex::Token::Punct(lex::Punct::Minus)) => {
-                let (op_span, _) = self.consume_token()?.unwrap();
-                let rhs = self.next_base_expr()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
-                    op: UnaryOp::Negate,
-                    rhs: Box::new(rhs),
-                    op_span,
-                })))
             }
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()

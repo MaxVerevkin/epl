@@ -42,10 +42,11 @@ Everything after `#` is treated as a comment.
 - assigning_expr = comp_expr ( `=` comp_expr )?
 - comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
-- multiplicative_expr = base_expr ( (`*` | `/`) base_expr )*
+- multiplicative_expr = unary_expr ( (`*` | `/`) unary_expr )*
+- unary_expr = (`-` | `!`)? unary_expr | base_expr
+- base_expr = literal | function_call_expr | ident | `(` expr `)` |expr_with_block
 - expr_with_block = block_expr | if_expr | loop_expr | while_expr
 - expr_with_no_block = expr _except exrp_with_block_
-- base_expr = literal | function_call_expr | ident | `(` expr `)` | `-` base_expr | expr_with_block
 - statement = `;` | let_statement | expr_with_no_block `;` | expr_with_block
 - block_expr = `{` statement* expr_with_no_block? `}`
 - if_expr = `if` expr block_expr (`else` block_expr)?

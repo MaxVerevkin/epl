@@ -352,6 +352,7 @@ pub enum InstructionKind {
     Add { lhs: Value, rhs: Value },
     Sub { lhs: Value, rhs: Value },
     Mul { lhs: Value, rhs: Value },
+    Not { value: Value },
 }
 
 /// The terminator of a basic block

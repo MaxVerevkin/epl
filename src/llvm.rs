@@ -121,6 +121,14 @@ impl LlvmModule {
                             build_value(lhs, &value_map, &module),
                             build_value(rhs, &value_map, &module),
                         ),
+                        ir::InstructionKind::Not { value } => builder.xor(
+                            build_value(value, &value_map, &module),
+                            build_value(
+                                &ir::Value::Constant(ir::Constant::Bool(true)),
+                                &value_map,
+                                &module,
+                            ),
+                        ),
                     };
                     value_map.insert(instruction.definition_id, value);
                 }
@@ -387,6 +395,11 @@ impl LlvmBuilder {
     /// Build the `mul` instruction
     fn mul(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
         unsafe { LLVMBuildMul(self.raw, lhs, rhs, c"".as_ptr()) }
+    }
+
+    /// Build the `xor` instruction
+    fn xor(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+        unsafe { LLVMBuildXor(self.raw, lhs, rhs, c"".as_ptr()) }
     }
 
     /// Build the `br` instruction

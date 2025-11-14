@@ -687,6 +687,17 @@ impl<'a> FunctionBuilder<'a> {
                         },
                     })
                 }
+                ast::UnaryOp::Not => {
+                    let rhs_eval = self.eval_expr(&unary_expr.rhs, Some(Type::Bool))?;
+                    Ok(EvalResult {
+                        ty: rhs_eval.ty,
+                        value: if let MaybeValue::Value(rhs) = rhs_eval.value {
+                            MaybeValue::Value(Value::Definition(self.cursor().not(rhs)))
+                        } else {
+                            MaybeValue::Diverges
+                        },
+                    })
+                }
             },
         }
     }
@@ -969,6 +980,17 @@ impl InstructionCursor<'_> {
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::Mul { lhs, rhs },
+        });
+        definition_id
+    }
+
+    /// Generate a `Not` instruction
+    fn not(&mut self, value: Value) -> DefinitionId {
+        assert_eq!(value.ty(), Type::Bool);
+        let definition_id = DefinitionId::new(Type::Bool);
+        self.buf.push(Instruction {
+            definition_id,
+            kind: InstructionKind::Not { value },
         });
         definition_id
     }
