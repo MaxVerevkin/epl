@@ -444,6 +444,7 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 if let Some(expect_type) = expect_type
                     && expect_type != decl.return_ty
+                    && decl.return_ty != Type::Never
                 {
                     return Err(Error::expr_type_missmatch(
                         expect_type,
@@ -462,10 +463,18 @@ impl<'a> FunctionBuilder<'a> {
                         args_values,
                         decl.return_ty,
                     );
-                    Ok(EvalResult {
-                        ty: decl.return_ty,
-                        value: MaybeValue::Value(Value::Definition(definition_id)),
-                    })
+                    if decl.return_ty == Type::Never {
+                        self.finalize_block(Terminator::Unreachable);
+                        Ok(EvalResult {
+                            ty: decl.return_ty,
+                            value: MaybeValue::Diverges,
+                        })
+                    } else {
+                        Ok(EvalResult {
+                            ty: decl.return_ty,
+                            value: MaybeValue::Value(Value::Definition(definition_id)),
+                        })
+                    }
                 }
             }
             ast::ExprWithNoBlock::Assignment(assignment_expr) => {

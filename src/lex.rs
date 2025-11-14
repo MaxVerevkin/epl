@@ -116,6 +116,8 @@ pub enum Punct {
     Star,
     /// /
     Slash,
+    /// !
+    Exclam,
 }
 
 /// A mapping from strings to punct tokens
@@ -141,6 +143,7 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     (">", Punct::CmpG),
     ("*", Punct::Star),
     ("/", Punct::Slash),
+    ("!", Punct::Exclam),
 ];
 
 /// An error during lexing

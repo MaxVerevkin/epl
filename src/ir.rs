@@ -142,16 +142,18 @@ pub enum Type {
 
 impl Type {
     /// Construct a data type from its AST
-    fn from_ast(ast: &ast::Ident) -> Result<Self, Error> {
-        match &*ast.value {
-            "!" => Ok(Self::Never),
-            "void" => Ok(Self::Void),
-            "bool" => Ok(Self::Bool),
-            "i32" => Ok(Self::I32),
-            "u32" => Ok(Self::U32),
-            "cstr" => Ok(Self::CStr),
-            "ptr" => Ok(Self::OpaquePointer),
-            other => Err(Error::new(format!("unknown type {other:?}")).with_span(ast.span)),
+    fn from_ast(ast: &ast::Type) -> Result<Self, Error> {
+        match &ast.value {
+            ast::TypeValue::Never => Ok(Self::Never),
+            ast::TypeValue::Ident(ident) => match &**ident {
+                "void" => Ok(Self::Void),
+                "bool" => Ok(Self::Bool),
+                "i32" => Ok(Self::I32),
+                "u32" => Ok(Self::U32),
+                "cstr" => Ok(Self::CStr),
+                "ptr" => Ok(Self::OpaquePointer),
+                other => Err(Error::new(format!("unknown type {other:?}")).with_span(ast.span)),
+            },
         }
     }
 

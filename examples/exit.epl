@@ -1,0 +1,5 @@
+fn main() -> i32 {
+	exit(1)
+}
+
+fn exit(code: i32) -> !;

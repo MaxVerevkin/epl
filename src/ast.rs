@@ -21,7 +21,7 @@ pub struct Function {
     pub name: Ident,
     pub args: Vec<FunctionArg>,
     pub is_variadic: bool,
-    pub return_ty: Ident,
+    pub return_ty: Type,
     pub body: Option<BlockExpr>,
 }
 
@@ -29,7 +29,7 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct FunctionArg {
     pub name: Ident,
-    pub ty: Ident,
+    pub ty: Type,
 }
 
 /// An identifier with its span
@@ -37,6 +37,20 @@ pub struct FunctionArg {
 pub struct Ident {
     pub span: lex::Span,
     pub value: String,
+}
+
+/// A type with its span
+#[derive(Clone, Debug)]
+pub struct Type {
+    pub span: lex::Span,
+    pub value: TypeValue,
+}
+
+/// The value of the type
+#[derive(Clone, Debug)]
+pub enum TypeValue {
+    Never,
+    Ident(String),
 }
 
 /// A block expression
@@ -86,12 +100,12 @@ pub enum Statement {
 pub enum LetStatement {
     WithValue {
         name: Ident,
-        ty: Option<Ident>,
+        ty: Option<Type>,
         value: Box<Expr>,
     },
     WithoutValue {
         name: Ident,
-        ty: Ident,
+        ty: Type,
     },
 }
 
@@ -395,6 +409,27 @@ impl Parser<'_> {
         }
     }
 
+    /// Parse type
+    fn next_type(&mut self) -> Result<Type, Error> {
+        match self.consume_token()? {
+            Some((span, lex::Token::Ident(value))) => Ok(Type {
+                span,
+                value: TypeValue::Ident(value),
+            }),
+            Some((span, lex::Token::Punct(lex::Punct::Exclam))) => Ok(Type {
+                span,
+                value: TypeValue::Never,
+            }),
+            got => Err(Error {
+                span: got.as_ref().map(|t| t.0),
+                kind: ErrorKind::UnexpectedToken {
+                    expected: String::from("type"),
+                    got: got.map(|t| t.1),
+                },
+            }),
+        }
+    }
+
     /// Parse item
     fn next_item(&mut self) -> Result<Option<Item>, Error> {
         match self.peek_token()? {
@@ -432,7 +467,7 @@ impl Parser<'_> {
                 Some(lex::Token::Ident(_)) => {
                     let name = self.next_ident()?;
                     self.expect_punct(lex::Punct::Colon)?;
-                    let ty = self.next_ident()?;
+                    let ty = self.next_type()?;
                     args.push(FunctionArg { name, ty });
                     match self.peek_token()? {
                         Some(lex::Token::Punct(lex::Punct::Comma)) => {
@@ -453,7 +488,7 @@ impl Parser<'_> {
             }
         }
         self.expect_punct(lex::Punct::Arrow)?;
-        let return_ty = self.next_ident()?;
+        let return_ty = self.next_type()?;
         let body = match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => Some(self.next_block_expr()?),
             Some(lex::Token::Punct(lex::Punct::Semicolon)) => {
@@ -528,7 +563,7 @@ impl Parser<'_> {
 
         if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Colon)) {
             self.consume_token()?;
-            ty = Some(self.next_ident()?);
+            ty = Some(self.next_type()?);
         }
 
         if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Assign)) {

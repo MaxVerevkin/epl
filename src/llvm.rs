@@ -169,7 +169,9 @@ impl LlvmModule {
                     ir::Terminator::Return { value } => {
                         builder.ret(build_value(value, &value_map, &module));
                     }
-                    ir::Terminator::Unreachable => todo!(),
+                    ir::Terminator::Unreachable => {
+                        builder.unreachable();
+                    }
                 }
             }
         }
@@ -405,6 +407,11 @@ impl LlvmBuilder {
     /// Build the `ret` instruction
     fn ret(&self, value: LLVMValueRef) -> LLVMValueRef {
         unsafe { LLVMBuildRet(self.raw, value) }
+    }
+
+    /// Build the `unreachable` instruction
+    fn unreachable(&self) -> LLVMValueRef {
+        unsafe { LLVMBuildUnreachable(self.raw) }
     }
 }
 
