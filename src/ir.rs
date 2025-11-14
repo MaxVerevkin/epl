@@ -54,6 +54,7 @@ impl Ir {
     /// Construct an IR from AST
     pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
         let mut function_decls = HashMap::new();
+        let mut structs = HashMap::new();
 
         for item in &ast.items {
             match item {
@@ -62,6 +63,9 @@ impl Ir {
                         function.name.value.clone(),
                         FunctionDecl::from_ast(function)?,
                     );
+                }
+                ast::Item::Struct(s) => {
+                    structs.insert(s.name.value.clone(), Struct::from_ast(s)?);
                 }
             }
         }
@@ -76,6 +80,7 @@ impl Ir {
                         functions.insert(function.name.value.clone(), ir_function);
                     }
                 }
+                ast::Item::Struct(_) => (),
             }
         }
 
@@ -121,6 +126,44 @@ impl FunctionDecl {
 impl FunctionArg {
     /// Create a function argument representation from its AST
     fn from_ast(ast: &ast::FunctionArg) -> Result<Self, Error> {
+        Ok(Self {
+            name: ast.name.clone(),
+            ty: Type::from_ast(&ast.ty)?,
+        })
+    }
+}
+
+/// A struct definition
+#[derive(Debug)]
+pub struct Struct {
+    pub name: ast::Ident,
+    pub fields: Vec<StructField>,
+}
+
+/// A field of a struct definition
+#[derive(Debug)]
+pub struct StructField {
+    pub name: ast::Ident,
+    pub ty: Type,
+}
+
+impl Struct {
+    /// Construct a struct definition from its AST
+    fn from_ast(ast: &ast::Struct) -> Result<Self, Error> {
+        Ok(Self {
+            name: ast.name.clone(),
+            fields: ast
+                .fields
+                .iter()
+                .map(StructField::from_ast)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl StructField {
+    /// Create a struct field representation from its AST
+    fn from_ast(ast: &ast::StructField) -> Result<Self, Error> {
         Ok(Self {
             name: ast.name.clone(),
             ty: Type::from_ast(&ast.ty)?,

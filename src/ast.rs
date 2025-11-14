@@ -13,6 +13,7 @@ pub struct Ast {
 #[derive(Clone)]
 pub enum Item {
     Function(Function),
+    Struct(Struct),
 }
 
 /// A function definition or declaration
@@ -28,6 +29,20 @@ pub struct Function {
 /// An argument in function definition or declaration
 #[derive(Debug, Clone)]
 pub struct FunctionArg {
+    pub name: Ident,
+    pub ty: Type,
+}
+
+/// A struct definition
+#[derive(Debug, Clone)]
+pub struct Struct {
+    pub name: Ident,
+    pub fields: Vec<StructField>,
+}
+
+/// A field of a struct definition
+#[derive(Debug, Clone)]
+pub struct StructField {
     pub name: Ident,
     pub ty: Type,
 }
@@ -434,8 +449,9 @@ impl Parser<'_> {
     fn next_item(&mut self) -> Result<Option<Item>, Error> {
         match self.peek_token()? {
             Some(lex::Token::Keyword(lex::Keyword::Fn)) => self.next_function().map(Some),
+            Some(lex::Token::Keyword(lex::Keyword::Struct)) => self.next_struct().map(Some),
             None => Ok(None),
-            _ => self.consume_unexpected_token("an item (function)"),
+            _ => self.consume_unexpected_token("an item (function or struct)"),
         }
     }
 
@@ -506,6 +522,43 @@ impl Parser<'_> {
             return_ty,
             body,
         }))
+    }
+
+    /// Parse struct
+    fn next_struct(&mut self) -> Result<Item, Error> {
+        self.expect_keyword(lex::Keyword::Struct)?;
+        let name = self.next_ident()?;
+        self.expect_punct(lex::Punct::LeftBrace)?;
+        let mut fields = Vec::new();
+        loop {
+            match self.peek_token()? {
+                Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
+                    break;
+                }
+                Some(lex::Token::Ident(_)) => {
+                    let name = self.next_ident()?;
+                    self.expect_punct(lex::Punct::Colon)?;
+                    let ty = self.next_type()?;
+                    fields.push(StructField { name, ty });
+                    match self.peek_token()? {
+                        Some(lex::Token::Punct(lex::Punct::Comma)) => {
+                            self.consume_token()?;
+                        }
+                        Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
+                            break;
+                        }
+                        _ => {
+                            return self.consume_unexpected_token("struct field, ',' or '}'");
+                        }
+                    }
+                }
+                _ => {
+                    return self.consume_unexpected_token("struct field or '}'");
+                }
+            }
+        }
+        self.expect_punct(lex::Punct::RightBrace)?;
+        Ok(Item::Struct(Struct { name, fields }))
     }
 
     /// Parse block expression
@@ -845,6 +898,10 @@ impl fmt::Debug for Item {
             Self::Function(function) => {
                 f.write_str("Item::")?;
                 function.fmt(f)
+            }
+            Self::Struct(r#struct) => {
+                f.write_str("Item::")?;
+                r#struct.fmt(f)
             }
         }
     }

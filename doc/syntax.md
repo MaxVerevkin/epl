@@ -19,15 +19,22 @@ Everything after `#` is treated as a comment.
 - `let`
 - `true`
 - `false`
+- `struct`
 
 ## Items
 
-- item = function
+- item = function | struct_def
 
 ## Fuctions
 
 - function = `fn` ident `(` fn_arg? (, fn_arg)* `)` `->` type (block_expr | `;`)
 - fn_arg = ident `:` type
+
+## Struct Definitions
+
+- struct = `struct` ident `{` struct_fields `}`
+- struct_fields = (struct_field, (,?))? | struct_field (, struct_field)* ,?
+- struct_field = ident `:` type
 
 ## Expressions
 
