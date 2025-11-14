@@ -26,8 +26,8 @@ Everything after `#` is treated as a comment.
 
 ## Fuctions
 
-- function = `fn` ident `(` fn_arg? (, fn_arg)* `)` `->` ident (block_expr | `;`)
-- fn_arg = ident `:` ident
+- function = `fn` ident `(` fn_arg? (, fn_arg)* `)` `->` type (block_expr | `;`)
+- fn_arg = ident `:` type
 
 ## Expressions
 
@@ -45,7 +45,8 @@ Everything after `#` is treated as a comment.
 - loop_expr = `loop` block_expr
 - while_expr = `while` expr block_expr
 - function_call_expr = ident `(` expr? (, expr)*, `...` `)` | ident `(` `...` `)`
-- let_statement =  `let` ident `:` ident `;` | `let` ident (`:` ident)? `=` expr `;`
+- let_statement =  `let` ident `:` type `;` | `let` ident (`:` type)? `=` expr `;`
+- type = `!` | ident
 
 ## Literals
 
