@@ -39,7 +39,7 @@ Everything after `#` is treated as a comment.
 ## Expressions
 
 - expr = `return` expr | `break` expr? | assigning_expr
-- assigning_expr = comp_expr ( `=` comp_expr )?
+- assigning_expr = comp_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` ) comp_expr )?
 - comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
 - multiplicative_expr = unary_expr ( (`*` | `/`) unary_expr )*

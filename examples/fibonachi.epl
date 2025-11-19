@@ -13,8 +13,8 @@ fn fib_it(n: u32) -> u32 {
 	while i < n {
 		let tmp = a;
 		a = b;
-		b = b + tmp;
-		i = i + 1;
+		b += tmp;
+		i += 1;
 	}
 	a
 }
@@ -24,6 +24,7 @@ fn main() -> i32 {
 	while n < 10 {
 		printf("fib(%i) = %i\n", n, fib(n));
 		printf("fib_id(%i) = %i\n", n, fib_it(n));
+		n += 1;
 	}
 	0
 }

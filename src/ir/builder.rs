@@ -544,6 +544,28 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 Ok(EvalResult::VOID)
             }
+            ast::ExprWithNoBlock::AddAssignment(assignment_expr) => {
+                let place_eval = self.eval_place_expr(&assignment_expr.place)?;
+                if !place_eval.ty.is_int() {
+                    return Err(Error::new(format!(
+                        "only integer types can be added, not {:?}",
+                        place_eval.ty
+                    ))
+                    .with_span(assignment_expr.op_span));
+                }
+                let value_eval = self.eval_expr(&assignment_expr.value, Some(place_eval.ty))?;
+                if let MaybeValue::Value(ptr) = place_eval.value
+                    && let MaybeValue::Value(value) = value_eval.value
+                {
+                    let lhs = self.cursor().load(ptr.clone(), place_eval.ty);
+                    let result = self.cursor().add(Value::Definition(lhs), value);
+                    self.cursor().store(ptr, Value::Definition(result));
+                }
+                Ok(EvalResult::VOID)
+            }
+            ast::ExprWithNoBlock::SubAssignment(_) => todo!(),
+            ast::ExprWithNoBlock::MulAssignment(_) => todo!(),
+            ast::ExprWithNoBlock::DivAssignment(_) => todo!(),
             ast::ExprWithNoBlock::Binary(binary_expr) => match binary_expr.op {
                 ast::BinaryOp::Equal => todo!(),
                 ast::BinaryOp::NotEqual => todo!(),

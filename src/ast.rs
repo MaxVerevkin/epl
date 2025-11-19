@@ -139,6 +139,10 @@ pub enum ExprWithNoBlock {
     Literal(LiteralExpr),
     FunctionCallExpr(FunctionCallExpr),
     Assignment(AssignmentExpr),
+    AddAssignment(AddAssignmentExpr),
+    SubAssignment(SubAssignmentExpr),
+    MulAssignment(MulAssignmentExpr),
+    DivAssignment(DivAssignmentExpr),
     Ident(Ident),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
@@ -177,10 +181,11 @@ impl ExprWithNoBlock {
             },
             Self::Literal(literal_expr) => literal_expr.span,
             Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
-            Self::Assignment(assignment_expr) => assignment_expr
-                .place
-                .span()
-                .join(assignment_expr.value.span()),
+            Self::Assignment(e) => e.place.span().join(e.value.span()),
+            Self::AddAssignment(e) => e.place.span().join(e.value.span()),
+            Self::SubAssignment(e) => e.place.span().join(e.value.span()),
+            Self::MulAssignment(e) => e.place.span().join(e.value.span()),
+            Self::DivAssignment(e) => e.place.span().join(e.value.span()),
             Self::Ident(ident) => ident.span,
             Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
@@ -264,6 +269,38 @@ pub struct FunctionCallExpr {
 pub struct AssignmentExpr {
     pub place: Box<Expr>,
     pub value: Box<Expr>,
+}
+
+/// An add-assignment expression
+#[derive(Debug, Clone)]
+pub struct AddAssignmentExpr {
+    pub place: Box<Expr>,
+    pub value: Box<Expr>,
+    pub op_span: lex::Span,
+}
+
+/// An sub-assignment expression
+#[derive(Debug, Clone)]
+pub struct SubAssignmentExpr {
+    pub place: Box<Expr>,
+    pub value: Box<Expr>,
+    pub op_span: lex::Span,
+}
+
+/// An mul-assignment expression
+#[derive(Debug, Clone)]
+pub struct MulAssignmentExpr {
+    pub place: Box<Expr>,
+    pub value: Box<Expr>,
+    pub op_span: lex::Span,
+}
+
+/// An div-assignment expression
+#[derive(Debug, Clone)]
+pub struct DivAssignmentExpr {
+    pub place: Box<Expr>,
+    pub value: Box<Expr>,
+    pub op_span: lex::Span,
 }
 
 /// A binary expression
@@ -684,16 +721,57 @@ impl Parser<'_> {
 
     fn next_assigning_expr(&mut self) -> Result<Expr, Error> {
         let expr = self.next_comp_expr()?;
-        if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Assign)) {
-            self.consume_token()?;
-            Ok(Expr::WithNoBlock(ExprWithNoBlock::Assignment(
-                AssignmentExpr {
-                    place: Box::new(expr),
-                    value: Box::new(self.next_comp_expr()?),
-                },
-            )))
-        } else {
-            Ok(expr)
+        match self.peek_token()? {
+            Some(lex::Token::Punct(lex::Punct::Assign)) => {
+                self.consume_token()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Assignment(
+                    AssignmentExpr {
+                        place: Box::new(expr),
+                        value: Box::new(self.next_comp_expr()?),
+                    },
+                )))
+            }
+            Some(lex::Token::Punct(lex::Punct::AddAssign)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::AddAssignment(
+                    AddAssignmentExpr {
+                        place: Box::new(expr),
+                        value: Box::new(self.next_comp_expr()?),
+                        op_span,
+                    },
+                )))
+            }
+            Some(lex::Token::Punct(lex::Punct::SubAssign)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::SubAssignment(
+                    SubAssignmentExpr {
+                        place: Box::new(expr),
+                        value: Box::new(self.next_comp_expr()?),
+                        op_span,
+                    },
+                )))
+            }
+            Some(lex::Token::Punct(lex::Punct::MulAssign)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::MulAssignment(
+                    MulAssignmentExpr {
+                        place: Box::new(expr),
+                        value: Box::new(self.next_comp_expr()?),
+                        op_span,
+                    },
+                )))
+            }
+            Some(lex::Token::Punct(lex::Punct::DivAssign)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::DivAssignment(
+                    DivAssignmentExpr {
+                        place: Box::new(expr),
+                        value: Box::new(self.next_comp_expr()?),
+                        op_span,
+                    },
+                )))
+            }
+            _ => Ok(expr),
         }
     }
 

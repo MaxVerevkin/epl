@@ -336,6 +336,7 @@ impl Terminator {
 }
 
 /// An abstract value
+#[derive(Clone)]
 pub enum Value {
     Definition(DefinitionId),
     Constant(Constant),
@@ -352,7 +353,7 @@ impl Value {
 }
 
 /// A primitive constant
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Constant {
     Void,
     Bool(bool),
