@@ -46,7 +46,10 @@ Everything after `#` is treated as a comment.
 - unary_expr = (`-` | `!`)? unary_expr | field_access_expr
 - field_access_expr = base_expr (`.` ident)*
 - base_expr = literal | function_call_expr | ident | `(` expr `)` | expr_with_block
-- expr_with_block = block_expr | if_expr | loop_expr | while_expr
+- expr_with_block = block_expr | if_expr | loop_expr | while_expr | struct_initializer
+- struct_initializer = ident `{` struct_initializer_fields `}`
+- struct_initializer_fields = (struct_initializer_field, (,?))? | struct_initializer_field (, struct_initializer_field)* ,?
+- struct_initializer_field = ident `:` expr
 - expr_with_no_block = expr _except exrp_with_block_
 - statement = `;` | let_statement | expr_with_no_block `;` | expr_with_block
 - block_expr = `{` statement* expr_with_no_block? `}`

@@ -101,6 +101,22 @@ pub struct WhileExpr {
     pub while_keyword_span: lex::Span,
 }
 
+/// A struct initializer expression
+#[derive(Debug, Clone)]
+pub struct StructInitializerExpr {
+    pub name: Ident,
+    pub fields: Vec<StructInitializerField>,
+    pub opening_brace_span: lex::Span,
+    pub closing_brace_span: lex::Span,
+}
+
+/// A struct initializer field
+#[derive(Debug, Clone)]
+pub struct StructInitializerField {
+    pub name: Ident,
+    pub value: Expr,
+}
+
 /// A statement
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -156,6 +172,7 @@ pub enum ExprWithBlock {
     If(IfExpr),
     Loop(LoopExpr),
     While(WhileExpr),
+    StructInitializer(StructInitializerExpr),
 }
 
 impl Expr {
@@ -209,6 +226,7 @@ impl ExprWithBlock {
             ),
             Self::Loop(loop_expr) => loop_expr.loop_keyword_span.join(loop_expr.body.span()),
             Self::While(while_expr) => while_expr.while_keyword_span.join(while_expr.body.span()),
+            Self::StructInitializer(e) => e.name.span.join(e.closing_brace_span),
         }
     }
 }
@@ -884,6 +902,9 @@ impl Parser<'_> {
                 if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
                     self.next_function_call_expr()
                         .map(|expr| Expr::WithNoBlock(ExprWithNoBlock::FunctionCallExpr(expr)))
+                } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftBrace)) {
+                    self.next_struct_initializer_expr()
+                        .map(|expr| Expr::WithBlock(ExprWithBlock::StructInitializer(expr)))
                 } else {
                     self.next_ident()
                         .map(|ident| Expr::WithNoBlock(ExprWithNoBlock::Ident(ident)))
@@ -968,6 +989,47 @@ impl Parser<'_> {
             name,
             args,
             args_span: left_paren_span.join(right_paren_span),
+        })
+    }
+
+    /// Parse struct initializer
+    fn next_struct_initializer_expr(&mut self) -> Result<StructInitializerExpr, Error> {
+        let name = self.next_ident()?;
+        let opening_brace_span = self.expect_punct(lex::Punct::LeftBrace)?;
+        let mut fields = Vec::new();
+        loop {
+            match self.peek_token()? {
+                Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
+                    break;
+                }
+                Some(lex::Token::Ident(_)) => {
+                    let name = self.next_ident()?;
+                    self.expect_punct(lex::Punct::Colon)?;
+                    let value = self.next_expr()?;
+                    fields.push(StructInitializerField { name, value });
+                    match self.peek_token()? {
+                        Some(lex::Token::Punct(lex::Punct::Comma)) => {
+                            self.consume_token()?;
+                        }
+                        Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
+                            break;
+                        }
+                        _ => {
+                            return self.consume_unexpected_token("struct field, ',' or '}'");
+                        }
+                    }
+                }
+                _ => {
+                    return self.consume_unexpected_token("struct field or '}'");
+                }
+            }
+        }
+        let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
+        Ok(StructInitializerExpr {
+            name,
+            fields,
+            opening_brace_span,
+            closing_brace_span,
         })
     }
 

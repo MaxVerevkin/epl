@@ -980,6 +980,57 @@ impl<'a> FunctionBuilder<'a> {
 
                 Ok(EvalResult::VOID)
             }
+            ast::ExprWithBlock::StructInitializer(e) => {
+                let ty = self
+                    .type_namespace
+                    .get(&e.name.value)
+                    .copied()
+                    .ok_or_else(|| {
+                        Error::new(format!("unknown type {:?}", e.name.value))
+                            .with_span(e.name.span)
+                    })?;
+                let sid = match ty {
+                    Type::Struct(sid) => sid,
+                    other => {
+                        return Err(Error::new(format!(
+                            "{} is not a struct type, but {other:?}",
+                            e.name.value
+                        ))
+                        .with_span(e.name.span));
+                    }
+                };
+                let struct_def = self.typesystem.get_struct(sid);
+                if let Some(missing_field) = struct_def.fields.iter().find(|f| {
+                    e.fields
+                        .iter()
+                        .find(|ef| ef.name.value == f.name.value)
+                        .is_none()
+                }) {
+                    return Err(
+                        Error::new(format!("missing field: {}", missing_field.name.value))
+                            .with_span(e.opening_brace_span.join(e.closing_brace_span)),
+                    );
+                }
+                let place = self.alloca(ty);
+                for ef in &e.fields {
+                    let (offset, f_ty) = self.typesystem.get_struct_field(sid, &ef.name)?;
+                    match self.eval_expr(&ef.value, Some(f_ty))?.value {
+                        MaybeValue::Diverges => (),
+                        MaybeValue::Value(value) => {
+                            let ptr = self
+                                .cursor()
+                                .offset_ptr(Value::Definition(place), offset.try_into().unwrap());
+                            self.cursor().store(Value::Definition(ptr), value);
+                        }
+                    }
+                }
+                Ok(EvalResult {
+                    ty,
+                    value: MaybeValue::Value(Value::Definition(
+                        self.cursor().load(Value::Definition(place), ty),
+                    )),
+                })
+            }
         }
     }
 }

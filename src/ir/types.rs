@@ -144,9 +144,9 @@ impl TypeSystem {
         .with_span(field.span))
     }
 
-    /// Get an iterator over struct field's types
-    pub fn get_struct_field_types(&self, sid: StructId) -> impl Iterator<Item = Type> {
-        self.structs[sid.0].fields.iter().map(|f| f.ty)
+    /// Get a referencse to the struct declaration
+    pub fn get_struct(&self, sid: StructId) -> &Struct {
+        &self.structs[sid.0]
     }
 }
 

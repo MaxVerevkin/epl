@@ -8,6 +8,9 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
+use llvm_sys::transforms::pass_builder::LLVMCreatePassBuilderOptions;
+use llvm_sys::transforms::pass_builder::LLVMDisposePassBuilderOptions;
+use llvm_sys::transforms::pass_builder::LLVMRunPasses;
 
 use crate::ir;
 
@@ -192,6 +195,33 @@ impl LlvmModule {
         }
 
         module.verify()?;
+
+        // unsafe {
+        //     let target_tripple = LLVMGetDefaultTargetTriple();
+
+        //     let mut target = std::ptr::null_mut();
+        //     let mut error_ptr = std::ptr::null_mut();
+        //     if LLVMGetTargetFromTriple(target_tripple, &mut target, &mut error_ptr) != 0 {
+        //         let error = cstring_from_ptr(error_ptr);
+        //         LLVMDisposeMessage(error_ptr);
+        //         return Err(error);
+        //     }
+
+        //     let target_machine = LLVMCreateTargetMachine(
+        //         target,
+        //         target_tripple,
+        //         c"generic".as_ptr(),
+        //         c"".as_ptr(),
+        //         LLVMCodeGenOptLevel::LLVMCodeGenLevelNone,
+        //         LLVMRelocMode::LLVMRelocDefault,
+        //         LLVMCodeModel::LLVMCodeModelDefault,
+        //     );
+
+        //     let opts = LLVMCreatePassBuilderOptions();
+        //     LLVMRunPasses(module.raw, c"default<O1>".as_ptr(), target_machine, opts);
+        //     LLVMDisposePassBuilderOptions(opts);
+        // }
+
         Ok(module)
     }
 
@@ -199,12 +229,6 @@ impl LlvmModule {
     pub fn compile(&self) -> Result<(), CString> {
         unsafe {
             let target_tripple = LLVMGetDefaultTargetTriple();
-
-            LLVM_InitializeAllTargetInfos();
-            LLVM_InitializeAllTargets();
-            LLVM_InitializeAllTargetMCs();
-            LLVM_InitializeAllAsmParsers();
-            LLVM_InitializeAllAsmPrinters();
 
             let mut target = std::ptr::null_mut();
             let mut error_ptr = std::ptr::null_mut();
@@ -246,6 +270,14 @@ impl LlvmModule {
 
     /// Create a new module with a given name
     fn new(name: &CStr) -> Self {
+        unsafe {
+            LLVM_InitializeAllTargetInfos();
+            LLVM_InitializeAllTargets();
+            LLVM_InitializeAllTargetMCs();
+            LLVM_InitializeAllAsmParsers();
+            LLVM_InitializeAllAsmPrinters();
+        }
+
         Self {
             raw: unsafe { LLVMModuleCreateWithName(name.as_ptr()) },
         }
@@ -473,8 +505,10 @@ fn build_type(ty: ir::Type, typesystem: &ir::TypeSystem) -> LLVMTypeRef {
             }
             ir::Type::Struct(sid) => {
                 let mut tys: Vec<_> = typesystem
-                    .get_struct_field_types(sid)
-                    .map(|ty| build_type(ty, typesystem))
+                    .get_struct(sid)
+                    .fields
+                    .iter()
+                    .map(|f| build_type(f.ty, typesystem))
                     .collect();
                 LLVMStructType(tys.as_mut_ptr(), tys.len() as u32, 0)
             }
