@@ -25,7 +25,7 @@ impl LlvmModule {
         let mut fn_map = HashMap::new();
 
         for (fn_name, fn_decl) in &ir.function_decls {
-            let fn_type = build_function_type(fn_decl);
+            let fn_type = build_function_type(fn_decl, &ir.typesystem);
             fn_type_map.insert(fn_name.clone(), fn_type);
             fn_map.insert(
                 fn_name.clone(),
@@ -56,7 +56,7 @@ impl LlvmModule {
                 if basic_block_id != fn_ir.entry {
                     builder.position_at_end(basic_blocks_map[&basic_block_id]);
                     for &arg in &fn_ir.basic_blokcs[&basic_block_id].args {
-                        value_map.insert(arg, builder.phi(build_type(arg.ty())));
+                        value_map.insert(arg, builder.phi(build_type(arg.ty(), &ir.typesystem)));
                     }
                 }
             }
@@ -66,7 +66,7 @@ impl LlvmModule {
                 builder.position_at_end(basic_blocks_map[&basic_block_id]);
 
                 for instruction in &basic_block_ir.instructions {
-                    let ty = build_type(instruction.definition_id.ty());
+                    let ty = build_type(instruction.definition_id.ty(), &ir.typesystem);
                     let value = match &instruction.kind {
                         ir::InstructionKind::Load { ptr } => {
                             builder.load(build_value(ptr, &value_map, &module), ty)
@@ -126,7 +126,16 @@ impl LlvmModule {
                                 &module,
                             ),
                         ),
-                        ir::InstructionKind::OffsetPtr { ptr, offset } => todo!(),
+                        ir::InstructionKind::OffsetPtr { ptr, offset } => unsafe {
+                            LLVMBuildGEP2(
+                                builder.raw,
+                                LLVMInt8Type(),
+                                build_value(ptr, &value_map, &module),
+                                [LLVMConstInt(LLVMInt64Type(), *offset as u64, 1)].as_mut_ptr(),
+                                1,
+                                c"".as_ptr(),
+                            )
+                        },
                     };
                     value_map.insert(instruction.definition_id, value);
                 }
@@ -436,11 +445,15 @@ impl Drop for LlvmBuilder {
 }
 
 /// Construct an LLVM function type for the given declaration
-fn build_function_type(decl: &ir::FunctionDecl) -> LLVMTypeRef {
-    let mut args_ty: Vec<_> = decl.args.iter().map(|arg| build_type(arg.ty)).collect();
+fn build_function_type(decl: &ir::FunctionDecl, typesystem: &ir::TypeSystem) -> LLVMTypeRef {
+    let mut args_ty: Vec<_> = decl
+        .args
+        .iter()
+        .map(|arg| build_type(arg.ty, typesystem))
+        .collect();
     unsafe {
         LLVMFunctionType(
-            build_type(decl.return_ty),
+            build_type(decl.return_ty, typesystem),
             args_ty.as_mut_ptr(),
             args_ty.len() as u32,
             decl.is_variadic as i32,
@@ -449,7 +462,7 @@ fn build_function_type(decl: &ir::FunctionDecl) -> LLVMTypeRef {
 }
 
 /// Construct an LLVM type for the given IR type
-fn build_type(ty: ir::Type) -> LLVMTypeRef {
+fn build_type(ty: ir::Type, typesystem: &ir::TypeSystem) -> LLVMTypeRef {
     unsafe {
         match ty {
             ir::Type::Never | ir::Type::Void => LLVMStructType([].as_mut_ptr(), 0, 0),
@@ -458,7 +471,13 @@ fn build_type(ty: ir::Type) -> LLVMTypeRef {
             ir::Type::CStr | ir::Type::OpaquePointer => {
                 LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0)
             }
-            ir::Type::Struct(sid) => todo!(),
+            ir::Type::Struct(sid) => {
+                let mut tys: Vec<_> = typesystem
+                    .get_struct_field_types(sid)
+                    .map(|ty| build_type(ty, typesystem))
+                    .collect();
+                LLVMStructType(tys.as_mut_ptr(), tys.len() as u32, 0)
+            }
         }
     }
 }
