@@ -142,6 +142,7 @@ pub enum ExprWithNoBlock {
     Ident(Ident),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
+    FieldAccess(FieldAccessExpr),
 }
 
 /// An expression which can be a statement on its own
@@ -183,6 +184,9 @@ impl ExprWithNoBlock {
             Self::Ident(ident) => ident.span,
             Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
+            Self::FieldAccess(field_access) => {
+                field_access.lhs.span().join(field_access.field.span)
+            }
         }
     }
 }
@@ -277,6 +281,14 @@ pub struct UnaryExpr {
     pub op: UnaryOp,
     pub rhs: Box<Expr>,
     pub op_span: lex::Span,
+}
+
+/// A field-access expression
+#[derive(Debug, Clone)]
+pub struct FieldAccessExpr {
+    pub lhs: Box<Expr>,
+    pub field: Ident,
+    pub dot_span: lex::Span,
 }
 
 /// A binary operation
@@ -768,8 +780,23 @@ impl Parser<'_> {
                     op_span,
                 })))
             }
-            _ => self.next_base_expr(),
+            _ => self.next_field_access_expr(),
         }
+    }
+
+    /// Parse a field-access expr
+    fn next_field_access_expr(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.next_base_expr()?;
+        while let Some(lex::Token::Punct(lex::Punct::Dot)) = self.peek_token()? {
+            let (dot_span, _) = self.consume_token()?.unwrap();
+            let name = self.next_ident()?;
+            expr = Expr::WithNoBlock(ExprWithNoBlock::FieldAccess(FieldAccessExpr {
+                lhs: Box::new(expr),
+                field: name,
+                dot_span,
+            }));
+        }
+        Ok(expr)
     }
 
     /// Parse a base experission

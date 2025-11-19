@@ -8,6 +8,8 @@ pub fn build_function(
     decl: &FunctionDecl,
     body: &ast::BlockExpr,
     function_decls: &HashMap<String, FunctionDecl>,
+    typesystem: &TypeSystem,
+    type_namespace: &HashMap<String, Type>,
 ) -> Result<Function, Error> {
     if decl.is_variadic {
         return Err(
@@ -15,7 +17,8 @@ pub fn build_function(
         );
     }
 
-    let mut builder = FunctionBuilder::new(decl.return_ty, function_decls);
+    let mut builder =
+        FunctionBuilder::new(decl.return_ty, function_decls, typesystem, type_namespace);
 
     let mut entry_block_args = Vec::new();
     for arg in &decl.args {
@@ -50,6 +53,8 @@ pub fn build_function(
 struct FunctionBuilder<'a> {
     return_ty: Type,
     function_decls: &'a HashMap<String, FunctionDecl>,
+    typesystem: &'a TypeSystem,
+    type_namespace: &'a HashMap<String, Type>,
     allocas: Vec<Alloca>,
     basic_blocks: HashMap<BasicBlockId, BasicBlock>,
     current_block_id: BasicBlockId,
@@ -131,10 +136,17 @@ enum MaybeValue {
 
 impl<'a> FunctionBuilder<'a> {
     /// Create a new builder context
-    fn new(return_ty: Type, function_decls: &'a HashMap<String, FunctionDecl>) -> Self {
+    fn new(
+        return_ty: Type,
+        function_decls: &'a HashMap<String, FunctionDecl>,
+        typesystem: &'a TypeSystem,
+        type_namespace: &'a HashMap<String, Type>,
+    ) -> Self {
         Self {
             return_ty,
             function_decls,
+            typesystem,
+            type_namespace,
             allocas: Vec::new(),
             basic_blocks: HashMap::new(),
             current_block_id: BasicBlockId::new(),
@@ -171,8 +183,7 @@ impl<'a> FunctionBuilder<'a> {
         let alloca = DefinitionId::new(Type::OpaquePointer);
         self.allocas.push(Alloca {
             definition_id: alloca,
-            size: ty.size(),
-            align: ty.align(),
+            layout: self.typesystem.layout_of(ty),
         });
         alloca
     }
@@ -192,14 +203,56 @@ impl<'a> FunctionBuilder<'a> {
     /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
     fn eval_place_expr(&mut self, expr: &ast::Expr) -> Result<EvalResult, Error> {
         match expr {
-            ast::Expr::WithNoBlock(ast::ExprWithNoBlock::Ident(ident)) => {
-                match self.scope.lookup_variable(&ident.value) {
-                    Some((alloca, ty)) => Ok(EvalResult {
-                        ty,
-                        value: MaybeValue::Value(Value::Definition(alloca)),
+            ast::Expr::WithNoBlock(expr) => self.eval_place_expr_with_no_block(expr),
+            _ => Err(Error::new("expected a place expression (ident)").with_span(expr.span())),
+        }
+    }
+
+    /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
+    fn eval_place_expr_with_no_block(
+        &mut self,
+        expr: &ast::ExprWithNoBlock,
+    ) -> Result<EvalResult, Error> {
+        match expr {
+            ast::ExprWithNoBlock::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
+                Some((alloca, ty)) => Ok(EvalResult {
+                    ty,
+                    value: MaybeValue::Value(Value::Definition(alloca)),
+                }),
+                None => Err(Error::new(format!("variable {:?} not found", ident.value))
+                    .with_span(ident.span)),
+            },
+            ast::ExprWithNoBlock::FieldAccess(field_access_expr) => {
+                let lhs_place = self.eval_place_expr(&field_access_expr.lhs)?;
+                let sid = match lhs_place.ty {
+                    Type::Struct(sid) => sid,
+                    other => {
+                        return Err(Error::new(format!(
+                            "only structs can be field-accessed, not {other:?}"
+                        ))
+                        .with_span(field_access_expr.dot_span));
+                    }
+                };
+                let (offset, field_ty) = self
+                    .typesystem
+                    .get_struct_field(sid, &field_access_expr.field)?;
+                match lhs_place.value {
+                    MaybeValue::Diverges => Ok(EvalResult {
+                        ty: field_ty,
+                        value: MaybeValue::Diverges,
                     }),
-                    None => Err(Error::new(format!("variable {:?} not found", ident.value))
-                        .with_span(ident.span)),
+                    MaybeValue::Value(value) => {
+                        let ptr = match offset {
+                            0 => value,
+                            _ => Value::Definition(
+                                self.cursor().offset_ptr(value, offset.try_into().unwrap()),
+                            ),
+                        };
+                        Ok(EvalResult {
+                            ty: field_ty,
+                            value: MaybeValue::Value(ptr),
+                        })
+                    }
                 }
             }
             _ => Err(Error::new("expected a place expression (ident)").with_span(expr.span())),
@@ -220,7 +273,10 @@ impl<'a> FunctionBuilder<'a> {
                 ast::Statement::Empty => (),
                 ast::Statement::Let(let_statement) => match let_statement {
                     ast::LetStatement::WithValue { name, ty, value } => {
-                        let ty = ty.as_ref().map(Type::from_ast).transpose()?;
+                        let ty = ty
+                            .as_ref()
+                            .map(|ty| self.typesystem.type_from_ast(self.type_namespace, ty))
+                            .transpose()?;
                         let value_eval = self.eval_expr(value, ty)?;
                         let alloca = self.alloca(value_eval.ty);
                         self.scope
@@ -234,7 +290,7 @@ impl<'a> FunctionBuilder<'a> {
                         }
                     }
                     ast::LetStatement::WithoutValue { name, ty } => {
-                        let ty = Type::from_ast(ty)?;
+                        let ty = self.typesystem.type_from_ast(self.type_namespace, ty)?;
                         let alloca = self.alloca(ty);
                         self.scope
                             .variables
@@ -353,7 +409,8 @@ impl<'a> FunctionBuilder<'a> {
                             | Type::Void
                             | Type::Bool
                             | Type::CStr
-                            | Type::OpaquePointer => {
+                            | Type::OpaquePointer
+                            | Type::Struct(_) => {
                                 unreachable!()
                             }
                         };
@@ -487,22 +544,6 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 Ok(EvalResult::VOID)
             }
-            ast::ExprWithNoBlock::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
-                Some((alloca, ty)) => {
-                    if let Some(expect_type) = expect_type
-                        && expect_type != ty
-                    {
-                        return Err(Error::expr_type_missmatch(expect_type, ty, ident.span));
-                    }
-                    let definition_id = self.cursor().load(Value::Definition(alloca), ty);
-                    Ok(EvalResult {
-                        ty,
-                        value: MaybeValue::Value(Value::Definition(definition_id)),
-                    })
-                }
-                None => Err(Error::new(format!("variable {:?} not found", ident.value))
-                    .with_span(ident.span)),
-            },
             ast::ExprWithNoBlock::Binary(binary_expr) => match binary_expr.op {
                 ast::BinaryOp::Equal => todo!(),
                 ast::BinaryOp::NotEqual => todo!(),
@@ -667,7 +708,8 @@ impl<'a> FunctionBuilder<'a> {
                         | Type::Bool
                         | Type::U32
                         | Type::CStr
-                        | Type::OpaquePointer => {
+                        | Type::OpaquePointer
+                        | Type::Struct(_) => {
                             unreachable!()
                         }
                     };
@@ -699,6 +741,31 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
             },
+            ast::ExprWithNoBlock::Ident(_) | ast::ExprWithNoBlock::FieldAccess(_) => {
+                let place = self.eval_place_expr_with_no_block(expr)?;
+                if let Some(expect_type) = expect_type
+                    && expect_type != place.ty
+                {
+                    return Err(Error::expr_type_missmatch(
+                        expect_type,
+                        place.ty,
+                        expr.span(),
+                    ));
+                }
+                match place.value {
+                    MaybeValue::Diverges => Ok(EvalResult {
+                        ty: place.ty,
+                        value: MaybeValue::Diverges,
+                    }),
+                    MaybeValue::Value(value) => {
+                        let definition_id = self.cursor().load(value, place.ty);
+                        Ok(EvalResult {
+                            ty: place.ty,
+                            value: MaybeValue::Value(Value::Definition(definition_id)),
+                        })
+                    }
+                }
+            }
         }
     }
 
@@ -991,6 +1058,16 @@ impl InstructionCursor<'_> {
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::Not { value },
+        });
+        definition_id
+    }
+
+    /// Generate a `OffsetPtr` instruction
+    fn offset_ptr(&mut self, ptr: Value, offset: i64) -> DefinitionId {
+        let definition_id = DefinitionId::new(Type::OpaquePointer);
+        self.buf.push(Instruction {
+            definition_id,
+            kind: InstructionKind::OffsetPtr { ptr, offset },
         });
         definition_id
     }

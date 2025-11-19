@@ -1,5 +1,6 @@
 mod builder;
 pub mod graphviz;
+mod types;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -11,10 +12,12 @@ use std::num::NonZeroU64;
 use crate::ast;
 use crate::lex;
 use crate::make_entity_id;
+pub use types::{Layout, Type, TypeSystem};
 
 /// An intermediate representation of a program
 #[derive(Debug)]
 pub struct Ir {
+    pub typesystem: TypeSystem,
     pub function_decls: HashMap<String, FunctionDecl>,
     pub functions: HashMap<String, Function>,
 }
@@ -53,19 +56,29 @@ impl Error {
 impl Ir {
     /// Construct an IR from AST
     pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
+        let mut typesystem = TypeSystem::new(8); // TODO: use target arch ptr size!
         let mut function_decls = HashMap::new();
-        let mut structs = HashMap::new();
+
+        let mut type_namespace = HashMap::new();
+        type_namespace.insert(String::from("void"), Type::Void);
+        type_namespace.insert(String::from("bool"), Type::Bool);
+        type_namespace.insert(String::from("i32"), Type::I32);
+        type_namespace.insert(String::from("u32"), Type::U32);
+        type_namespace.insert(String::from("cstr"), Type::CStr);
+        type_namespace.insert(String::from("ptr"), Type::OpaquePointer);
 
         for item in &ast.items {
             match item {
                 ast::Item::Function(function) => {
                     function_decls.insert(
                         function.name.value.clone(),
-                        FunctionDecl::from_ast(function)?,
+                        FunctionDecl::from_ast(&typesystem, &type_namespace, function)?,
                     );
                 }
                 ast::Item::Struct(s) => {
-                    structs.insert(s.name.value.clone(), Struct::from_ast(s)?);
+                    let name = s.name.value.clone();
+                    let s = typesystem.struct_from_ast(&type_namespace, s)?;
+                    type_namespace.insert(name, s);
                 }
             }
         }
@@ -76,7 +89,13 @@ impl Ir {
                 ast::Item::Function(function) => {
                     if let Some(body) = &function.body {
                         let decl = &function_decls[&function.name.value];
-                        let ir_function = builder::build_function(decl, body, &function_decls)?;
+                        let ir_function = builder::build_function(
+                            decl,
+                            body,
+                            &function_decls,
+                            &typesystem,
+                            &type_namespace,
+                        )?;
                         functions.insert(function.name.value.clone(), ir_function);
                     }
                 }
@@ -85,6 +104,7 @@ impl Ir {
         }
 
         Ok(Self {
+            typesystem,
             function_decls,
             functions,
         })
@@ -109,144 +129,35 @@ pub struct FunctionArg {
 
 impl FunctionDecl {
     /// Construct a function declaration from its AST
-    fn from_ast(ast: &ast::Function) -> Result<Self, Error> {
+    fn from_ast(
+        typesystem: &TypeSystem,
+        type_namespace: &HashMap<String, Type>,
+        ast: &ast::Function,
+    ) -> Result<Self, Error> {
         Ok(Self {
             name: ast.name.clone(),
             args: ast
                 .args
                 .iter()
-                .map(FunctionArg::from_ast)
+                .map(|a| FunctionArg::from_ast(typesystem, type_namespace, a))
                 .collect::<Result<_, _>>()?,
             is_variadic: ast.is_variadic,
-            return_ty: Type::from_ast(&ast.return_ty)?,
+            return_ty: typesystem.type_from_ast(type_namespace, &ast.return_ty)?,
         })
     }
 }
 
 impl FunctionArg {
     /// Create a function argument representation from its AST
-    fn from_ast(ast: &ast::FunctionArg) -> Result<Self, Error> {
+    fn from_ast(
+        typesystem: &TypeSystem,
+        type_namespace: &HashMap<String, Type>,
+        ast: &ast::FunctionArg,
+    ) -> Result<Self, Error> {
         Ok(Self {
             name: ast.name.clone(),
-            ty: Type::from_ast(&ast.ty)?,
+            ty: typesystem.type_from_ast(type_namespace, &ast.ty)?,
         })
-    }
-}
-
-/// A struct definition
-#[derive(Debug)]
-pub struct Struct {
-    pub name: ast::Ident,
-    pub fields: Vec<StructField>,
-}
-
-/// A field of a struct definition
-#[derive(Debug)]
-pub struct StructField {
-    pub name: ast::Ident,
-    pub ty: Type,
-}
-
-impl Struct {
-    /// Construct a struct definition from its AST
-    fn from_ast(ast: &ast::Struct) -> Result<Self, Error> {
-        Ok(Self {
-            name: ast.name.clone(),
-            fields: ast
-                .fields
-                .iter()
-                .map(StructField::from_ast)
-                .collect::<Result<_, _>>()?,
-        })
-    }
-}
-
-impl StructField {
-    /// Create a struct field representation from its AST
-    fn from_ast(ast: &ast::StructField) -> Result<Self, Error> {
-        Ok(Self {
-            name: ast.name.clone(),
-            ty: Type::from_ast(&ast.ty)?,
-        })
-    }
-}
-
-/// The set of data types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Type {
-    Never,
-    Void,
-    Bool,
-    I32,
-    U32,
-    CStr,
-    OpaquePointer,
-}
-
-impl Type {
-    /// Construct a data type from its AST
-    fn from_ast(ast: &ast::Type) -> Result<Self, Error> {
-        match &ast.value {
-            ast::TypeValue::Never => Ok(Self::Never),
-            ast::TypeValue::Ident(ident) => match &**ident {
-                "void" => Ok(Self::Void),
-                "bool" => Ok(Self::Bool),
-                "i32" => Ok(Self::I32),
-                "u32" => Ok(Self::U32),
-                "cstr" => Ok(Self::CStr),
-                "ptr" => Ok(Self::OpaquePointer),
-                other => Err(Error::new(format!("unknown type {other:?}")).with_span(ast.span)),
-            },
-        }
-    }
-
-    /// The byte size of this type
-    pub fn size(self) -> u64 {
-        match self {
-            Type::Never | Type::Void => 0,
-            Type::Bool => 1,
-            Type::I32 | Type::U32 => 4,
-            Type::CStr | Type::OpaquePointer => 8, // TODO: use target platforms pointer size
-        }
-    }
-
-    /// The byte alignment of this type
-    pub fn align(self) -> u64 {
-        match self {
-            Type::Never | Type::Void | Type::Bool => 1,
-            Type::I32 | Type::U32 => 4,
-            Type::CStr | Type::OpaquePointer => 8, // TODO: use target platforms pointer size
-        }
-    }
-
-    /// Returns `true` if this data type is an integer
-    pub fn is_int(self) -> bool {
-        self.is_signed_int() || self.is_unsigned_int()
-    }
-
-    /// Returns `true` if this data type is a signed integer
-    pub fn is_signed_int(self) -> bool {
-        matches!(self, Self::I32)
-    }
-
-    /// Returns `true` if this data type is an unsigned integer
-    pub fn is_unsigned_int(self) -> bool {
-        matches!(self, Self::U32)
-    }
-
-    /// Combines two types into one, handling the Never type
-    ///
-    /// 1. If `self` or `other` is Never, the other type is returned.
-    /// 2. If both are Never, Never is returned.
-    /// 3. Ohterwise require types to be equal, and return the type.
-    fn comine_ignoring_never(self, other: Self) -> Option<Self> {
-        if self == Self::Never {
-            Some(other)
-        } else if other == Self::Never {
-            Some(self)
-        } else {
-            (self == other).then_some(self)
-        }
     }
 }
 
@@ -323,8 +234,7 @@ impl fmt::Debug for DefinitionId {
 #[derive(Debug, Clone, Copy)]
 pub struct Alloca {
     pub definition_id: DefinitionId,
-    pub size: u64,
-    pub align: u64,
+    pub layout: Layout,
 }
 
 /// A basic block
@@ -353,6 +263,7 @@ pub enum InstructionKind {
     Sub { lhs: Value, rhs: Value },
     Mul { lhs: Value, rhs: Value },
     Not { value: Value },
+    OffsetPtr { ptr: Value, offset: i64 },
 }
 
 /// The terminator of a basic block

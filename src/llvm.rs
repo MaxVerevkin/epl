@@ -49,10 +49,7 @@ impl LlvmModule {
 
             builder.position_at_end(basic_blocks_map[&fn_ir.entry]);
             for alloca in &fn_ir.allocas {
-                value_map.insert(
-                    alloca.definition_id,
-                    builder.alloca(alloca.size, alloca.align),
-                );
+                value_map.insert(alloca.definition_id, builder.alloca(alloca.layout));
             }
 
             for &basic_block_id in &postorder {
@@ -129,6 +126,7 @@ impl LlvmModule {
                                 &module,
                             ),
                         ),
+                        ir::InstructionKind::OffsetPtr { ptr, offset } => todo!(),
                     };
                     value_map.insert(instruction.definition_id, value);
                 }
@@ -329,11 +327,14 @@ impl LlvmBuilder {
     }
 
     /// Build the `alloca` instruction
-    fn alloca(&self, size: u64, align: u64) -> LLVMValueRef {
+    fn alloca(&self, layout: ir::Layout) -> LLVMValueRef {
         unsafe {
-            let alloca =
-                LLVMBuildAlloca(self.raw, LLVMArrayType2(LLVMInt8Type(), size), c"".as_ptr());
-            LLVMSetAlignment(alloca, align as u32);
+            let alloca = LLVMBuildAlloca(
+                self.raw,
+                LLVMArrayType2(LLVMInt8Type(), layout.size),
+                c"".as_ptr(),
+            );
+            LLVMSetAlignment(alloca, layout.align as u32);
             alloca
         }
     }
@@ -457,6 +458,7 @@ fn build_type(ty: ir::Type) -> LLVMTypeRef {
             ir::Type::CStr | ir::Type::OpaquePointer => {
                 LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0)
             }
+            ir::Type::Struct(sid) => todo!(),
         }
     }
 }
