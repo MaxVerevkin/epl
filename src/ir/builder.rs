@@ -242,12 +242,7 @@ impl<'a> FunctionBuilder<'a> {
                         value: MaybeValue::Diverges,
                     }),
                     MaybeValue::Value(value) => {
-                        let ptr = match offset {
-                            0 => value,
-                            _ => Value::Definition(
-                                self.cursor().offset_ptr(value, offset.try_into().unwrap()),
-                            ),
-                        };
+                        let ptr = self.cursor().offset_ptr(value, offset.try_into().unwrap());
                         Ok(EvalResult {
                             ty: field_ty,
                             value: MaybeValue::Value(ptr),
@@ -1020,7 +1015,7 @@ impl<'a> FunctionBuilder<'a> {
                             let ptr = self
                                 .cursor()
                                 .offset_ptr(Value::Definition(place), offset.try_into().unwrap());
-                            self.cursor().store(Value::Definition(ptr), value);
+                            self.cursor().store(ptr, value);
                         }
                     }
                 }
@@ -1136,12 +1131,16 @@ impl InstructionCursor<'_> {
     }
 
     /// Generate a `OffsetPtr` instruction
-    fn offset_ptr(&mut self, ptr: Value, offset: i64) -> DefinitionId {
-        let definition_id = DefinitionId::new(Type::OpaquePointer);
-        self.buf.push(Instruction {
-            definition_id,
-            kind: InstructionKind::OffsetPtr { ptr, offset },
-        });
-        definition_id
+    fn offset_ptr(&mut self, ptr: Value, offset: i64) -> Value {
+        if offset == 0 {
+            ptr
+        } else {
+            let definition_id = DefinitionId::new(Type::OpaquePointer);
+            self.buf.push(Instruction {
+                definition_id,
+                kind: InstructionKind::OffsetPtr { ptr, offset },
+            });
+            Value::Definition(definition_id)
+        }
     }
 }
