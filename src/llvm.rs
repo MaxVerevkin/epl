@@ -3,15 +3,15 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::fmt;
 
+use llvm_sys::LLVMIntPredicate;
 use llvm_sys::analysis::LLVMVerifyModule;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
-use llvm_sys::transforms::pass_builder::LLVMCreatePassBuilderOptions;
-use llvm_sys::transforms::pass_builder::LLVMDisposePassBuilderOptions;
-use llvm_sys::transforms::pass_builder::LLVMRunPasses;
 
+use crate::common::ArithmeticOp;
+use crate::common::CmpOp;
 use crate::ir;
 
 /// An LLVM module
@@ -71,62 +71,45 @@ impl LlvmModule {
                 for instruction in &basic_block_ir.instructions {
                     let ty = build_type(instruction.definition_id.ty(), &ir.typesystem);
                     let value = match &instruction.kind {
-                        ir::InstructionKind::Load { ptr } => {
-                            builder.load(build_value(ptr, &value_map, &module), ty)
-                        }
+                        ir::InstructionKind::Load { ptr } => builder.load(build_value(ptr, &value_map, &module), ty),
                         ir::InstructionKind::Store { ptr, value } => builder.store(
                             build_value(ptr, &value_map, &module),
                             build_value(value, &value_map, &module),
                         ),
                         ir::InstructionKind::FunctionCall { name, args } => {
-                            let args: Vec<_> = args
-                                .iter()
-                                .map(|arg| build_value(arg, &value_map, &module))
-                                .collect();
+                            let args: Vec<_> = args.iter().map(|arg| build_value(arg, &value_map, &module)).collect();
                             builder.function_call(fn_type_map[name], &fn_map[name], &args)
                         }
-                        ir::InstructionKind::CmpL { lhs, rhs } => match lhs.ty().is_signed_int() {
-                            true => builder.cmp(
-                                build_value(lhs, &value_map, &module),
-                                build_value(rhs, &value_map, &module),
-                                llvm_sys::LLVMIntPredicate::LLVMIntSLT,
-                            ),
-                            false => builder.cmp(
-                                build_value(lhs, &value_map, &module),
-                                build_value(rhs, &value_map, &module),
-                                llvm_sys::LLVMIntPredicate::LLVMIntULT,
-                            ),
-                        },
-                        ir::InstructionKind::CmpG { lhs, rhs } => match lhs.ty().is_signed_int() {
-                            true => builder.cmp(
-                                build_value(lhs, &value_map, &module),
-                                build_value(rhs, &value_map, &module),
-                                llvm_sys::LLVMIntPredicate::LLVMIntSGT,
-                            ),
-                            false => builder.cmp(
-                                build_value(lhs, &value_map, &module),
-                                build_value(rhs, &value_map, &module),
-                                llvm_sys::LLVMIntPredicate::LLVMIntUGT,
-                            ),
-                        },
+                        ir::InstructionKind::Cmp { op, lhs, rhs } => builder.cmp(
+                            build_value(lhs, &value_map, &module),
+                            build_value(rhs, &value_map, &module),
+                            match (op, lhs.ty().is_signed_int()) {
+                                (CmpOp::Less, true) => LLVMIntPredicate::LLVMIntSLT,
+                                (CmpOp::Less, false) => LLVMIntPredicate::LLVMIntULT,
+                                (CmpOp::LessOrEqual, true) => LLVMIntPredicate::LLVMIntSLE,
+                                (CmpOp::LessOrEqual, false) => LLVMIntPredicate::LLVMIntULE,
+                                (CmpOp::Greater, true) => LLVMIntPredicate::LLVMIntSGT,
+                                (CmpOp::Greater, false) => LLVMIntPredicate::LLVMIntUGT,
+                                (CmpOp::GreaterOrEqual, true) => LLVMIntPredicate::LLVMIntSGE,
+                                (CmpOp::GreaterOrEqual, false) => LLVMIntPredicate::LLVMIntUGE,
+                                (CmpOp::Equal, _) => LLVMIntPredicate::LLVMIntEQ,
+                                (CmpOp::NotEqual, _) => LLVMIntPredicate::LLVMIntNE,
+                            },
+                        ),
                         ir::InstructionKind::Arithmetic { op, lhs, rhs } => {
                             let signed = lhs.ty().is_signed_int();
                             let lhs = build_value(lhs, &value_map, &module);
                             let rhs = build_value(rhs, &value_map, &module);
                             match op {
-                                ir::ArithmeticOp::Add => builder.add(lhs, rhs),
-                                ir::ArithmeticOp::Sub => builder.add(lhs, rhs),
-                                ir::ArithmeticOp::Mul => builder.mul(lhs, rhs),
-                                ir::ArithmeticOp::Div => builder.div(signed, lhs, rhs),
+                                ArithmeticOp::Add => builder.add(lhs, rhs),
+                                ArithmeticOp::Sub => builder.sub(lhs, rhs),
+                                ArithmeticOp::Mul => builder.mul(lhs, rhs),
+                                ArithmeticOp::Div => builder.div(signed, lhs, rhs),
                             }
                         }
                         ir::InstructionKind::Not { value } => builder.xor(
                             build_value(value, &value_map, &module),
-                            build_value(
-                                &ir::Value::Constant(ir::Constant::Bool(true)),
-                                &value_map,
-                                &module,
-                            ),
+                            build_value(&ir::Value::Constant(ir::Constant::Bool(true)), &value_map, &module),
                         ),
                         ir::InstructionKind::OffsetPtr { ptr, offset } => unsafe {
                             LLVMBuildGEP2(
@@ -164,18 +147,14 @@ impl LlvmModule {
                             basic_blocks_map[if_true],
                             basic_blocks_map[if_false],
                         );
-                        for (&arg, arg_value) in
-                            fn_ir.basic_blokcs[if_true].args.iter().zip(if_true_args)
-                        {
+                        for (&arg, arg_value) in fn_ir.basic_blokcs[if_true].args.iter().zip(if_true_args) {
                             phi_add_incoming(
                                 value_map[&arg],
                                 basic_blocks_map[&basic_block_id],
                                 build_value(arg_value, &value_map, &module),
                             );
                         }
-                        for (&arg, arg_value) in
-                            fn_ir.basic_blokcs[if_false].args.iter().zip(if_false_args)
-                        {
+                        for (&arg, arg_value) in fn_ir.basic_blokcs[if_false].args.iter().zip(if_false_args) {
                             phi_add_incoming(
                                 value_map[&arg],
                                 basic_blocks_map[&basic_block_id],
@@ -369,11 +348,7 @@ impl LlvmBuilder {
     /// Build the `alloca` instruction
     fn alloca(&self, layout: ir::Layout) -> LLVMValueRef {
         unsafe {
-            let alloca = LLVMBuildAlloca(
-                self.raw,
-                LLVMArrayType2(LLVMInt8Type(), layout.size),
-                c"".as_ptr(),
-            );
+            let alloca = LLVMBuildAlloca(self.raw, LLVMArrayType2(LLVMInt8Type(), layout.size), c"".as_ptr());
             LLVMSetAlignment(alloca, layout.align as u32);
             alloca
         }
@@ -395,12 +370,7 @@ impl LlvmBuilder {
     }
 
     /// Build the `call` instruction
-    fn function_call(
-        &self,
-        fn_ty: LLVMTypeRef,
-        fn_value: &LlvmFunction,
-        args: &[LLVMValueRef],
-    ) -> LLVMValueRef {
+    fn function_call(&self, fn_ty: LLVMTypeRef, fn_value: &LlvmFunction, args: &[LLVMValueRef]) -> LLVMValueRef {
         unsafe {
             LLVMBuildCall2(
                 self.raw,
@@ -414,12 +384,7 @@ impl LlvmBuilder {
     }
 
     /// Build the `cmp` instruction
-    fn cmp(
-        &self,
-        lhs: LLVMValueRef,
-        rhs: LLVMValueRef,
-        kind: llvm_sys::LLVMIntPredicate,
-    ) -> LLVMValueRef {
+    fn cmp(&self, lhs: LLVMValueRef, rhs: LLVMValueRef, kind: LLVMIntPredicate) -> LLVMValueRef {
         unsafe { LLVMBuildICmp(self.raw, kind, lhs, rhs, c"".as_ptr()) }
     }
 
@@ -459,12 +424,7 @@ impl LlvmBuilder {
     }
 
     /// Build the `condbr` instruction
-    fn cond_jump(
-        &self,
-        cond: LLVMValueRef,
-        if_true: LLVMBasicBlockRef,
-        if_false: LLVMBasicBlockRef,
-    ) -> LLVMValueRef {
+    fn cond_jump(&self, cond: LLVMValueRef, if_true: LLVMBasicBlockRef, if_false: LLVMBasicBlockRef) -> LLVMValueRef {
         unsafe { LLVMBuildCondBr(self.raw, cond, if_true, if_false) }
     }
 
@@ -487,11 +447,7 @@ impl Drop for LlvmBuilder {
 
 /// Construct an LLVM function type for the given declaration
 fn build_function_type(decl: &ir::FunctionDecl, typesystem: &ir::TypeSystem) -> LLVMTypeRef {
-    let mut args_ty: Vec<_> = decl
-        .args
-        .iter()
-        .map(|arg| build_type(arg.ty, typesystem))
-        .collect();
+    let mut args_ty: Vec<_> = decl.args.iter().map(|arg| build_type(arg.ty, typesystem)).collect();
     unsafe {
         LLVMFunctionType(
             build_type(decl.return_ty, typesystem),
@@ -509,9 +465,7 @@ fn build_type(ty: ir::Type, typesystem: &ir::TypeSystem) -> LLVMTypeRef {
             ir::Type::Never | ir::Type::Void => LLVMStructType([].as_mut_ptr(), 0, 0),
             ir::Type::Bool => LLVMInt1Type(),
             ir::Type::I32 | ir::Type::U32 => LLVMInt32Type(),
-            ir::Type::CStr | ir::Type::OpaquePointer => {
-                LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0)
-            }
+            ir::Type::CStr | ir::Type::OpaquePointer => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
             ir::Type::Struct(sid) => {
                 let mut tys: Vec<_> = typesystem
                     .get_struct(sid)
@@ -539,12 +493,8 @@ fn build_value(
                 ir::Constant::Bool(bool) => LLVMConstInt(LLVMInt1Type(), *bool as u64, 0),
                 ir::Constant::String(string) => {
                     let data = CString::new(string.clone()).unwrap();
-                    let global = module
-                        .add_global(LLVMArrayType2(LLVMInt8Type(), (string.len() + 1) as u64));
-                    LLVMSetInitializer(
-                        global,
-                        LLVMConstString(data.as_ptr(), string.len() as u32, 0),
-                    );
+                    let global = module.add_global(LLVMArrayType2(LLVMInt8Type(), (string.len() + 1) as u64));
+                    LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), string.len() as u32, 0));
                     global
                 }
                 ir::Constant::Number { data, bits, signed } => {

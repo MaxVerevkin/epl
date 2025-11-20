@@ -10,6 +10,8 @@ use std::hash::Hasher;
 use std::num::NonZeroU64;
 
 use crate::ast;
+use crate::common::ArithmeticOp;
+use crate::common::CmpOp;
 use crate::lex;
 use crate::make_entity_id;
 pub use types::{Layout, Type, TypeSystem};
@@ -257,20 +259,10 @@ pub enum InstructionKind {
     Load { ptr: Value },
     Store { ptr: Value, value: Value },
     FunctionCall { name: String, args: Vec<Value> },
-    CmpL { lhs: Value, rhs: Value },
-    CmpG { lhs: Value, rhs: Value },
+    Cmp { op: CmpOp, lhs: Value, rhs: Value },
     Arithmetic { op: ArithmeticOp, lhs: Value, rhs: Value },
     Not { value: Value },
     OffsetPtr { ptr: Value, offset: i64 },
-}
-
-/// A basic arithmetic operation
-#[derive(Debug, Clone, Copy)]
-pub enum ArithmeticOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
 }
 
 /// The terminator of a basic block

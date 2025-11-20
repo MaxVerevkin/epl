@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt;
 
+use crate::common::{ArithmeticOp, CmpOp};
 use crate::lex;
 
 /// The abstract sytax tree representation of a source code file
@@ -148,10 +149,7 @@ pub enum ExprWithNoBlock {
     Literal(LiteralExpr),
     FunctionCallExpr(FunctionCallExpr),
     Assignment(AssignmentExpr),
-    AddAssignment(AddAssignmentExpr),
-    SubAssignment(SubAssignmentExpr),
-    MulAssignment(MulAssignmentExpr),
-    DivAssignment(DivAssignmentExpr),
+    CompoundAssignment(CompoundAssignmentExpr),
     Ident(Ident),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
@@ -182,9 +180,7 @@ impl ExprWithNoBlock {
     /// Get the span of this expression
     pub fn span(&self) -> lex::Span {
         match self {
-            Self::Return(return_expr) => return_expr
-                .return_keyword_span
-                .join(return_expr.value.span()),
+            Self::Return(return_expr) => return_expr.return_keyword_span.join(return_expr.value.span()),
             Self::Break(break_expr) => match &break_expr.value {
                 Some(val) => break_expr.break_keyword_span.join(val.span()),
                 None => break_expr.break_keyword_span,
@@ -192,16 +188,11 @@ impl ExprWithNoBlock {
             Self::Literal(literal_expr) => literal_expr.span,
             Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
             Self::Assignment(e) => e.place.span().join(e.value.span()),
-            Self::AddAssignment(e) => e.place.span().join(e.value.span()),
-            Self::SubAssignment(e) => e.place.span().join(e.value.span()),
-            Self::MulAssignment(e) => e.place.span().join(e.value.span()),
-            Self::DivAssignment(e) => e.place.span().join(e.value.span()),
+            Self::CompoundAssignment(e) => e.place.span().join(e.value.span()),
             Self::Ident(ident) => ident.span,
             Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
-            Self::FieldAccess(field_access) => {
-                field_access.lhs.span().join(field_access.field.span)
-            }
+            Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
         }
     }
 }
@@ -282,35 +273,12 @@ pub struct AssignmentExpr {
     pub value: Box<Expr>,
 }
 
-/// An add-assignment expression
+/// A compound assignment expression, e.g. `+=`, `-=`, etc.
 #[derive(Debug, Clone)]
-pub struct AddAssignmentExpr {
+pub struct CompoundAssignmentExpr {
     pub place: Box<Expr>,
     pub value: Box<Expr>,
-    pub op_span: lex::Span,
-}
-
-/// An sub-assignment expression
-#[derive(Debug, Clone)]
-pub struct SubAssignmentExpr {
-    pub place: Box<Expr>,
-    pub value: Box<Expr>,
-    pub op_span: lex::Span,
-}
-
-/// An mul-assignment expression
-#[derive(Debug, Clone)]
-pub struct MulAssignmentExpr {
-    pub place: Box<Expr>,
-    pub value: Box<Expr>,
-    pub op_span: lex::Span,
-}
-
-/// An div-assignment expression
-#[derive(Debug, Clone)]
-pub struct DivAssignmentExpr {
-    pub place: Box<Expr>,
-    pub value: Box<Expr>,
+    pub op: ArithmeticOp,
     pub op_span: lex::Span,
 }
 
@@ -342,16 +310,8 @@ pub struct FieldAccessExpr {
 /// A binary operation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    Equal,
-    NotEqual,
-    LessOrEqual,
-    GreaterOrEqual,
-    Less,
-    Greater,
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Cmp(CmpOp),
+    Arithmetic(ArithmeticOp),
 }
 
 /// A unary operation
@@ -711,10 +671,7 @@ impl Parser<'_> {
                 let (break_keyword_span, _) = self.consume_token()?.unwrap();
                 let value = match self.peek_token()? {
                     Some(lex::Token::Punct(
-                        lex::Punct::Semicolon
-                        | lex::Punct::Comma
-                        | lex::Punct::RightParen
-                        | lex::Punct::RightBrace,
+                        lex::Punct::Semicolon | lex::Punct::Comma | lex::Punct::RightParen | lex::Punct::RightBrace,
                     )) => None,
                     _ => Some(Box::new(self.next_expr()?)),
                 };
@@ -732,49 +689,27 @@ impl Parser<'_> {
         match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::Assign)) => {
                 self.consume_token()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Assignment(
-                    AssignmentExpr {
-                        place: Box::new(expr),
-                        value: Box::new(self.next_comp_expr()?),
-                    },
-                )))
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Assignment(AssignmentExpr {
+                    place: Box::new(expr),
+                    value: Box::new(self.next_comp_expr()?),
+                })))
             }
-            Some(lex::Token::Punct(lex::Punct::AddAssign)) => {
+            Some(lex::Token::Punct(
+                op @ (lex::Punct::AddAssign | lex::Punct::SubAssign | lex::Punct::MulAssign | lex::Punct::DivAssign),
+            )) => {
+                let op = match *op {
+                    lex::Punct::AddAssign => ArithmeticOp::Add,
+                    lex::Punct::SubAssign => ArithmeticOp::Sub,
+                    lex::Punct::MulAssign => ArithmeticOp::Mul,
+                    lex::Punct::DivAssign => ArithmeticOp::Div,
+                    _ => unreachable!(),
+                };
                 let (op_span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::AddAssignment(
-                    AddAssignmentExpr {
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::CompoundAssignment(
+                    CompoundAssignmentExpr {
                         place: Box::new(expr),
                         value: Box::new(self.next_comp_expr()?),
-                        op_span,
-                    },
-                )))
-            }
-            Some(lex::Token::Punct(lex::Punct::SubAssign)) => {
-                let (op_span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::SubAssignment(
-                    SubAssignmentExpr {
-                        place: Box::new(expr),
-                        value: Box::new(self.next_comp_expr()?),
-                        op_span,
-                    },
-                )))
-            }
-            Some(lex::Token::Punct(lex::Punct::MulAssign)) => {
-                let (op_span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::MulAssignment(
-                    MulAssignmentExpr {
-                        place: Box::new(expr),
-                        value: Box::new(self.next_comp_expr()?),
-                        op_span,
-                    },
-                )))
-            }
-            Some(lex::Token::Punct(lex::Punct::DivAssign)) => {
-                let (op_span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::DivAssignment(
-                    DivAssignmentExpr {
-                        place: Box::new(expr),
-                        value: Box::new(self.next_comp_expr()?),
+                        op,
                         op_span,
                     },
                 )))
@@ -786,12 +721,12 @@ impl Parser<'_> {
     fn next_comp_expr(&mut self) -> Result<Expr, Error> {
         let expr = self.next_additive_expr()?;
         let op = match self.peek_token()? {
-            Some(lex::Token::Punct(lex::Punct::CmpEq)) => Some(BinaryOp::Equal),
-            Some(lex::Token::Punct(lex::Punct::CmpNeq)) => Some(BinaryOp::NotEqual),
-            Some(lex::Token::Punct(lex::Punct::CmpLe)) => Some(BinaryOp::LessOrEqual),
-            Some(lex::Token::Punct(lex::Punct::CmpGe)) => Some(BinaryOp::GreaterOrEqual),
-            Some(lex::Token::Punct(lex::Punct::CmpL)) => Some(BinaryOp::Less),
-            Some(lex::Token::Punct(lex::Punct::CmpG)) => Some(BinaryOp::Greater),
+            Some(lex::Token::Punct(lex::Punct::CmpEq)) => Some(BinaryOp::Cmp(CmpOp::Equal)),
+            Some(lex::Token::Punct(lex::Punct::CmpNeq)) => Some(BinaryOp::Cmp(CmpOp::NotEqual)),
+            Some(lex::Token::Punct(lex::Punct::CmpLe)) => Some(BinaryOp::Cmp(CmpOp::LessOrEqual)),
+            Some(lex::Token::Punct(lex::Punct::CmpGe)) => Some(BinaryOp::Cmp(CmpOp::GreaterOrEqual)),
+            Some(lex::Token::Punct(lex::Punct::CmpL)) => Some(BinaryOp::Cmp(CmpOp::Less)),
+            Some(lex::Token::Punct(lex::Punct::CmpG)) => Some(BinaryOp::Cmp(CmpOp::Greater)),
             _ => None,
         };
         match op {
@@ -812,8 +747,8 @@ impl Parser<'_> {
         let mut expr = self.next_multiplicative_expr()?;
         loop {
             let op = match self.peek_token()? {
-                Some(lex::Token::Punct(lex::Punct::Plus)) => BinaryOp::Add,
-                Some(lex::Token::Punct(lex::Punct::Minus)) => BinaryOp::Sub,
+                Some(lex::Token::Punct(lex::Punct::Plus)) => BinaryOp::Arithmetic(ArithmeticOp::Add),
+                Some(lex::Token::Punct(lex::Punct::Minus)) => BinaryOp::Arithmetic(ArithmeticOp::Sub),
                 _ => break,
             };
             let (op_span, _) = self.consume_token()?.unwrap();
@@ -831,8 +766,8 @@ impl Parser<'_> {
         let mut expr = self.next_unary_expr()?;
         loop {
             let op = match self.peek_token()? {
-                Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Mul,
-                Some(lex::Token::Punct(lex::Punct::Slash)) => BinaryOp::Div,
+                Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Arithmetic(ArithmeticOp::Mul),
+                Some(lex::Token::Punct(lex::Punct::Slash)) => BinaryOp::Arithmetic(ArithmeticOp::Div),
                 _ => break,
             };
             let (op_span, _) = self.consume_token()?.unwrap();
@@ -935,9 +870,9 @@ impl Parser<'_> {
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()
                 .map(|expr| Expr::WithBlock(ExprWithBlock::Block(expr))),
-            Some(lex::Token::Keyword(lex::Keyword::If)) => self
-                .next_if_expr()
-                .map(|expr| Expr::WithBlock(ExprWithBlock::If(expr))),
+            Some(lex::Token::Keyword(lex::Keyword::If)) => {
+                self.next_if_expr().map(|expr| Expr::WithBlock(ExprWithBlock::If(expr)))
+            }
             Some(lex::Token::Keyword(lex::Keyword::Loop)) => self
                 .next_loop_expr()
                 .map(|expr| Expr::WithBlock(ExprWithBlock::Loop(expr))),

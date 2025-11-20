@@ -1,4 +1,5 @@
 mod ast;
+mod common;
 mod diagnostics;
 mod entity_id;
 mod ir;

@@ -12,23 +12,17 @@ pub fn build_function(
     type_namespace: &HashMap<String, Type>,
 ) -> Result<Function, Error> {
     if decl.is_variadic {
-        return Err(
-            Error::new("defining variadic functions is not supported").with_span(decl.name.span)
-        );
+        return Err(Error::new("defining variadic functions is not supported").with_span(decl.name.span));
     }
 
-    let mut builder =
-        FunctionBuilder::new(decl.return_ty, function_decls, typesystem, type_namespace);
+    let mut builder = FunctionBuilder::new(decl.return_ty, function_decls, typesystem, type_namespace);
 
     let mut entry_block_args = Vec::new();
     for arg in &decl.args {
         let alloca = builder.alloca(arg.ty);
         let block_arg = DefinitionId::new(arg.ty);
         entry_block_args.push(block_arg);
-        builder
-            .scope
-            .variables
-            .insert(arg.name.value.clone(), (alloca, arg.ty));
+        builder.scope.variables.insert(arg.name.value.clone(), (alloca, arg.ty));
         builder
             .cursor()
             .store(Value::Definition(alloca), Value::Definition(block_arg));
@@ -189,11 +183,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Evaluate an expression
-    fn eval_expr(
-        &mut self,
-        expr: &ast::Expr,
-        expect_type: Option<Type>,
-    ) -> Result<EvalResult, Error> {
+    fn eval_expr(&mut self, expr: &ast::Expr, expect_type: Option<Type>) -> Result<EvalResult, Error> {
         match expr {
             ast::Expr::WithNoBlock(expr) => self.eval_expr_with_no_block(expr, expect_type),
             ast::Expr::WithBlock(expr) => self.eval_expr_with_block(expr, expect_type),
@@ -209,33 +199,25 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
-    fn eval_place_expr_with_no_block(
-        &mut self,
-        expr: &ast::ExprWithNoBlock,
-    ) -> Result<EvalResult, Error> {
+    fn eval_place_expr_with_no_block(&mut self, expr: &ast::ExprWithNoBlock) -> Result<EvalResult, Error> {
         match expr {
             ast::ExprWithNoBlock::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
                 Some((alloca, ty)) => Ok(EvalResult {
                     ty,
                     value: MaybeValue::Value(Value::Definition(alloca)),
                 }),
-                None => Err(Error::new(format!("variable {:?} not found", ident.value))
-                    .with_span(ident.span)),
+                None => Err(Error::new(format!("variable {:?} not found", ident.value)).with_span(ident.span)),
             },
             ast::ExprWithNoBlock::FieldAccess(field_access_expr) => {
                 let lhs_place = self.eval_place_expr(&field_access_expr.lhs)?;
                 let sid = match lhs_place.ty {
                     Type::Struct(sid) => sid,
                     other => {
-                        return Err(Error::new(format!(
-                            "only structs can be field-accessed, not {other:?}"
-                        ))
-                        .with_span(field_access_expr.dot_span));
+                        return Err(Error::new(format!("only structs can be field-accessed, not {other:?}"))
+                            .with_span(field_access_expr.dot_span));
                     }
                 };
-                let (offset, field_ty) = self
-                    .typesystem
-                    .get_struct_field(sid, &field_access_expr.field)?;
+                let (offset, field_ty) = self.typesystem.get_struct_field(sid, &field_access_expr.field)?;
                 match lhs_place.value {
                     MaybeValue::Diverges => Ok(EvalResult {
                         ty: field_ty,
@@ -255,11 +237,7 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Evaluate a block expression
-    fn eval_block_expr(
-        &mut self,
-        expr: &ast::BlockExpr,
-        expect_type: Option<Type>,
-    ) -> Result<EvalResult, Error> {
+    fn eval_block_expr(&mut self, expr: &ast::BlockExpr, expect_type: Option<Type>) -> Result<EvalResult, Error> {
         self.scope.push();
         let mut value = None;
 
@@ -274,9 +252,7 @@ impl<'a> FunctionBuilder<'a> {
                             .transpose()?;
                         let value_eval = self.eval_expr(value, ty)?;
                         let alloca = self.alloca(value_eval.ty);
-                        self.scope
-                            .variables
-                            .insert(name.value.clone(), (alloca, value_eval.ty));
+                        self.scope.variables.insert(name.value.clone(), (alloca, value_eval.ty));
                         match value_eval.value {
                             MaybeValue::Diverges => (),
                             MaybeValue::Value(value) => {
@@ -287,9 +263,7 @@ impl<'a> FunctionBuilder<'a> {
                     ast::LetStatement::WithoutValue { name, ty } => {
                         let ty = self.typesystem.type_from_ast(self.type_namespace, ty)?;
                         let alloca = self.alloca(ty);
-                        self.scope
-                            .variables
-                            .insert(name.value.clone(), (alloca, ty));
+                        self.scope.variables.insert(name.value.clone(), (alloca, ty));
                     }
                 },
                 ast::Statement::ExprWithNoBlock(expr_with_no_block) => {
@@ -317,10 +291,10 @@ impl<'a> FunctionBuilder<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Void
                 {
-                    return Err(Error::new(format!(
-                        "expectd expr of type {expect_type:?}, found end-of-block"
-                    ))
-                    .with_span(expr.closing_brace_span));
+                    return Err(
+                        Error::new(format!("expectd expr of type {expect_type:?}, found end-of-block"))
+                            .with_span(expr.closing_brace_span),
+                    );
                 }
                 EvalResult::VOID
             }
@@ -357,10 +331,7 @@ impl<'a> FunctionBuilder<'a> {
                             })?;
                             loop_ctx.break_used = true;
                             let to = loop_ctx.break_to;
-                            self.finalize_block(Terminator::Jump {
-                                to,
-                                args: Vec::new(),
-                            });
+                            self.finalize_block(Terminator::Jump { to, args: Vec::new() });
                         }
                     }
                     Ok(EvalResult {
@@ -375,10 +346,7 @@ impl<'a> FunctionBuilder<'a> {
                     })?;
                     loop_ctx.break_used = true;
                     let to = loop_ctx.break_to;
-                    self.finalize_block(Terminator::Jump {
-                        to,
-                        args: Vec::new(),
-                    });
+                    self.finalize_block(Terminator::Jump { to, args: Vec::new() });
                     Ok(EvalResult {
                         ty: Type::Never,
                         value: MaybeValue::Diverges,
@@ -390,11 +358,7 @@ impl<'a> FunctionBuilder<'a> {
                     if let Some(expect_type) = expect_type
                         && !expect_type.is_int()
                     {
-                        Err(Error::expr_type_missmatch(
-                            expect_type,
-                            Type::CStr,
-                            literal_expr.span,
-                        ))
+                        Err(Error::expr_type_missmatch(expect_type, Type::CStr, literal_expr.span))
                     } else {
                         let ty = expect_type.unwrap_or(Type::I32);
                         let (bits, signed) = match ty {
@@ -423,17 +387,11 @@ impl<'a> FunctionBuilder<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::CStr
                     {
-                        Err(Error::expr_type_missmatch(
-                            expect_type,
-                            Type::CStr,
-                            literal_expr.span,
-                        ))
+                        Err(Error::expr_type_missmatch(expect_type, Type::CStr, literal_expr.span))
                     } else {
                         Ok(EvalResult {
                             ty: Type::CStr,
-                            value: MaybeValue::Value(Value::Constant(Constant::String(
-                                string.clone(),
-                            ))),
+                            value: MaybeValue::Value(Value::Constant(Constant::String(string.clone()))),
                         })
                     }
                 }
@@ -441,11 +399,7 @@ impl<'a> FunctionBuilder<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
-                        Err(Error::expr_type_missmatch(
-                            expect_type,
-                            Type::Bool,
-                            literal_expr.span,
-                        ))
+                        Err(Error::expr_type_missmatch(expect_type, Type::Bool, literal_expr.span))
                     } else {
                         Ok(EvalResult {
                             ty: Type::Bool,
@@ -455,16 +409,10 @@ impl<'a> FunctionBuilder<'a> {
                 }
             },
             ast::ExprWithNoBlock::FunctionCallExpr(function_call_expr) => {
-                let decl = self
-                    .function_decls
-                    .get(&function_call_expr.name.value)
-                    .ok_or_else(|| {
-                        Error::new(format!(
-                            "function {:?} not found",
-                            function_call_expr.name.value
-                        ))
+                let decl = self.function_decls.get(&function_call_expr.name.value).ok_or_else(|| {
+                    Error::new(format!("function {:?} not found", function_call_expr.name.value))
                         .with_span(function_call_expr.name.span)
-                    })?;
+                })?;
                 let mut args_diverges = false;
                 let mut args_values = Vec::new();
                 if decl.is_variadic {
@@ -510,11 +458,9 @@ impl<'a> FunctionBuilder<'a> {
                         value: MaybeValue::Diverges,
                     })
                 } else {
-                    let definition_id = self.cursor().function_call(
-                        function_call_expr.name.value.clone(),
-                        args_values,
-                        decl.return_ty,
-                    );
+                    let definition_id =
+                        self.cursor()
+                            .function_call(function_call_expr.name.value.clone(), args_values, decl.return_ty);
                     if decl.return_ty == Type::Never {
                         self.finalize_block(Terminator::Unreachable);
                         Ok(EvalResult {
@@ -539,104 +485,68 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 Ok(EvalResult::VOID)
             }
-            ast::ExprWithNoBlock::AddAssignment(assignment_expr) => {
-                let place_eval = self.eval_place_expr(&assignment_expr.place)?;
+            ast::ExprWithNoBlock::CompoundAssignment(compound_assignment_expr) => {
+                let place_eval = self.eval_place_expr(&compound_assignment_expr.place)?;
                 if !place_eval.ty.is_int() {
                     return Err(Error::new(format!(
-                        "only integer types can be added, not {:?}",
+                        "arithmetic is only supported for integers, not {:?}",
                         place_eval.ty
                     ))
-                    .with_span(assignment_expr.op_span));
+                    .with_span(compound_assignment_expr.op_span));
                 }
-                let value_eval = self.eval_expr(&assignment_expr.value, Some(place_eval.ty))?;
+                let value_eval = self.eval_expr(&compound_assignment_expr.value, Some(place_eval.ty))?;
                 if let MaybeValue::Value(ptr) = place_eval.value
                     && let MaybeValue::Value(value) = value_eval.value
                 {
                     let lhs = self.cursor().load(ptr.clone(), place_eval.ty);
-                    let result =
-                        self.cursor()
-                            .arithmetic(ArithmeticOp::Add, Value::Definition(lhs), value);
+                    let result = self
+                        .cursor()
+                        .arithmetic(compound_assignment_expr.op, Value::Definition(lhs), value);
                     self.cursor().store(ptr, Value::Definition(result));
                 }
                 Ok(EvalResult::VOID)
             }
-            ast::ExprWithNoBlock::SubAssignment(_) => todo!(),
-            ast::ExprWithNoBlock::MulAssignment(_) => todo!(),
-            ast::ExprWithNoBlock::DivAssignment(_) => todo!(),
             ast::ExprWithNoBlock::Binary(binary_expr) => match binary_expr.op {
-                ast::BinaryOp::Equal => todo!(),
-                ast::BinaryOp::NotEqual => todo!(),
-                ast::BinaryOp::LessOrEqual => todo!(),
-                ast::BinaryOp::GreaterOrEqual => todo!(),
-                ast::BinaryOp::Less => {
+                ast::BinaryOp::Cmp(cmp_op) => {
                     let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
                     let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
                     if lhs_eval.ty != rhs_eval.ty {
                         return Err(Error::new(format!(
-                            "cannot comparet different types: {:?} and {:?}",
+                            "cannot compare different types: {:?} and {:?}",
                             lhs_eval.ty, rhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
                     }
                     if !lhs_eval.ty.is_int() {
-                        return Err(Error::new(format!(
-                            "only integer types can be compared, not {:?}",
-                            lhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
+                        return Err(
+                            Error::new(format!("only integer types can be compared, not {:?}", lhs_eval.ty))
+                                .with_span(binary_expr.op_span),
+                        );
                     }
                     Ok(EvalResult {
                         ty: Type::Bool,
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().cmp_l(lhs, rhs)))
+                            MaybeValue::Value(Value::Definition(self.cursor().cmp(cmp_op, lhs, rhs)))
                         } else {
                             MaybeValue::Diverges
                         },
                     })
                 }
-                ast::BinaryOp::Greater => {
+                ast::BinaryOp::Arithmetic(arithmetic_op) => {
                     let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
                     let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
                     if lhs_eval.ty != rhs_eval.ty {
                         return Err(Error::new(format!(
-                            "cannot comparet different types: {:?} and {:?}",
+                            "cannot perform arithmetic on different types: {:?} and {:?}",
                             lhs_eval.ty, rhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
                     }
                     if !lhs_eval.ty.is_int() {
                         return Err(Error::new(format!(
-                            "only integer types can be compared, not {:?}",
-                            lhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    Ok(EvalResult {
-                        ty: Type::Bool,
-                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
-                            && let MaybeValue::Value(rhs) = rhs_eval.value
-                        {
-                            MaybeValue::Value(Value::Definition(self.cursor().cmp_g(lhs, rhs)))
-                        } else {
-                            MaybeValue::Diverges
-                        },
-                    })
-                }
-                ast::BinaryOp::Add => {
-                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
-                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
-                    if lhs_eval.ty != rhs_eval.ty {
-                        return Err(Error::new(format!(
-                            "cannot add different types: {:?} and {:?}",
-                            lhs_eval.ty, rhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    if !lhs_eval.ty.is_int() {
-                        return Err(Error::new(format!(
-                            "only integer types can be added, not {:?}",
+                            "arithemitc can only be performed on integers, not {:?}",
                             lhs_eval.ty
                         ))
                         .with_span(binary_expr.op_span));
@@ -646,107 +556,7 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
-                                ArithmeticOp::Add,
-                                lhs,
-                                rhs,
-                            )))
-                        } else {
-                            MaybeValue::Diverges
-                        },
-                    })
-                }
-                ast::BinaryOp::Sub => {
-                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
-                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
-                    if lhs_eval.ty != rhs_eval.ty {
-                        return Err(Error::new(format!(
-                            "cannot subtract different types: {:?} and {:?}",
-                            lhs_eval.ty, rhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    if !lhs_eval.ty.is_int() {
-                        return Err(Error::new(format!(
-                            "only integer types can be subtracted, not {:?}",
-                            lhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    Ok(EvalResult {
-                        ty: lhs_eval.ty,
-                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
-                            && let MaybeValue::Value(rhs) = rhs_eval.value
-                        {
-                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
-                                ArithmeticOp::Sub,
-                                lhs,
-                                rhs,
-                            )))
-                        } else {
-                            MaybeValue::Diverges
-                        },
-                    })
-                }
-                ast::BinaryOp::Mul => {
-                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
-                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
-                    if lhs_eval.ty != rhs_eval.ty {
-                        return Err(Error::new(format!(
-                            "cannot multipy different types: {:?} and {:?}",
-                            lhs_eval.ty, rhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    if !lhs_eval.ty.is_int() {
-                        return Err(Error::new(format!(
-                            "only integer types can be multiplied, not {:?}",
-                            lhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    Ok(EvalResult {
-                        ty: lhs_eval.ty,
-                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
-                            && let MaybeValue::Value(rhs) = rhs_eval.value
-                        {
-                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
-                                ArithmeticOp::Mul,
-                                lhs,
-                                rhs,
-                            )))
-                        } else {
-                            MaybeValue::Diverges
-                        },
-                    })
-                }
-                ast::BinaryOp::Div => {
-                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
-                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
-                    if lhs_eval.ty != rhs_eval.ty {
-                        return Err(Error::new(format!(
-                            "cannot divide different types: {:?} and {:?}",
-                            lhs_eval.ty, rhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    if !lhs_eval.ty.is_int() {
-                        return Err(Error::new(format!(
-                            "only integer types can be divided, not {:?}",
-                            lhs_eval.ty
-                        ))
-                        .with_span(binary_expr.op_span));
-                    }
-                    Ok(EvalResult {
-                        ty: lhs_eval.ty,
-                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
-                            && let MaybeValue::Value(rhs) = rhs_eval.value
-                        {
-                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
-                                ArithmeticOp::Div,
-                                lhs,
-                                rhs,
-                            )))
+                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(arithmetic_op, lhs, rhs)))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -780,11 +590,7 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(rhs) = rhs_eval.value {
                             MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
                                 ArithmeticOp::Sub,
-                                Value::Constant(Constant::Number {
-                                    data: 0,
-                                    bits,
-                                    signed,
-                                }),
+                                Value::Constant(Constant::Number { data: 0, bits, signed }),
                                 rhs,
                             )))
                         } else {
@@ -809,11 +615,7 @@ impl<'a> FunctionBuilder<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != place.ty
                 {
-                    return Err(Error::expr_type_missmatch(
-                        expect_type,
-                        place.ty,
-                        expr.span(),
-                    ));
+                    return Err(Error::expr_type_missmatch(expect_type, place.ty, expr.span()));
                 }
                 match place.value {
                     MaybeValue::Diverges => Ok(EvalResult {
@@ -914,8 +716,7 @@ impl<'a> FunctionBuilder<'a> {
                 });
                 self.current_block_id = continuation_id;
 
-                let Some(result_ty) = if_true_eval.ty.comine_ignoring_never(if_false_eval.ty)
-                else {
+                let Some(result_ty) = if_true_eval.ty.comine_ignoring_never(if_false_eval.ty) else {
                     return Err(Error::new(format!(
                         "if expression branches evaluate to different types: {:?} and {:?}",
                         if_true_eval.ty, if_false_eval.ty
@@ -1026,31 +827,24 @@ impl<'a> FunctionBuilder<'a> {
                     .type_namespace
                     .get(&e.name.value)
                     .copied()
-                    .ok_or_else(|| {
-                        Error::new(format!("unknown type {:?}", e.name.value))
-                            .with_span(e.name.span)
-                    })?;
+                    .ok_or_else(|| Error::new(format!("unknown type {:?}", e.name.value)).with_span(e.name.span))?;
                 let sid = match ty {
                     Type::Struct(sid) => sid,
                     other => {
-                        return Err(Error::new(format!(
-                            "{} is not a struct type, but {other:?}",
-                            e.name.value
-                        ))
-                        .with_span(e.name.span));
+                        return Err(
+                            Error::new(format!("{} is not a struct type, but {other:?}", e.name.value))
+                                .with_span(e.name.span),
+                        );
                     }
                 };
                 let struct_def = self.typesystem.get_struct(sid);
-                if let Some(missing_field) = struct_def.fields.iter().find(|f| {
-                    e.fields
-                        .iter()
-                        .find(|ef| ef.name.value == f.name.value)
-                        .is_none()
-                }) {
-                    return Err(
-                        Error::new(format!("missing field: {}", missing_field.name.value))
-                            .with_span(e.opening_brace_span.join(e.closing_brace_span)),
-                    );
+                if let Some(missing_field) = struct_def
+                    .fields
+                    .iter()
+                    .find(|f| e.fields.iter().find(|ef| ef.name.value == f.name.value).is_none())
+                {
+                    return Err(Error::new(format!("missing field: {}", missing_field.name.value))
+                        .with_span(e.opening_brace_span.join(e.closing_brace_span)));
                 }
                 let place = self.alloca(ty);
                 for ef in &e.fields {
@@ -1067,9 +861,7 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 Ok(EvalResult {
                     ty,
-                    value: MaybeValue::Value(Value::Definition(
-                        self.cursor().load(Value::Definition(place), ty),
-                    )),
+                    value: MaybeValue::Value(Value::Definition(self.cursor().load(Value::Definition(place), ty))),
                 })
             }
         }
@@ -1110,24 +902,13 @@ impl InstructionCursor<'_> {
         definition_id
     }
 
-    /// Generate a `CmpL` instruction
-    fn cmp_l(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+    /// Generate a `Cmp` instruction
+    fn cmp(&mut self, op: CmpOp, lhs: Value, rhs: Value) -> DefinitionId {
         assert_eq!(lhs.ty(), rhs.ty());
         let definition_id = DefinitionId::new(Type::Bool);
         self.buf.push(Instruction {
             definition_id,
-            kind: InstructionKind::CmpL { lhs, rhs },
-        });
-        definition_id
-    }
-
-    /// Generate a `CmpG` instruction
-    fn cmp_g(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
-        assert_eq!(lhs.ty(), rhs.ty());
-        let definition_id = DefinitionId::new(Type::Bool);
-        self.buf.push(Instruction {
-            definition_id,
-            kind: InstructionKind::CmpG { lhs, rhs },
+            kind: InstructionKind::Cmp { op, lhs, rhs },
         });
         definition_id
     }
