@@ -96,6 +96,8 @@ pub enum Punct {
     MulAssign,
     /// /=
     DivAssign,
+    /// .{
+    DotLeftBrace,
     /// =
     Assign,
     /// ;
@@ -142,6 +144,7 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     ("-=", Punct::SubAssign),
     ("*=", Punct::MulAssign),
     ("/=", Punct::DivAssign),
+    (".{", Punct::DotLeftBrace),
     ("=", Punct::Assign),
     (";", Punct::Semicolon),
     (":", Punct::Colon),
@@ -241,10 +244,7 @@ impl Lexer<'_> {
     ///
     /// Panics at EOF.
     fn consume_char(&mut self) -> Span {
-        let len = self
-            .peek_char()
-            .expect("consume_char called at EOF")
-            .len_utf8();
+        let len = self.peek_char().expect("consume_char called at EOF").len_utf8();
         let start = self.offset;
         self.offset += len;
         Span {
@@ -267,9 +267,7 @@ impl Lexer<'_> {
     ///
     /// Panics if the next character is not a valid ident start.
     fn next_ident_or_keyword(&mut self) -> Result<(Span, Token), Error> {
-        let ch = self
-            .peek_char()
-            .expect("next_ident_or_keyword called on EOF");
+        let ch = self.peek_char().expect("next_ident_or_keyword called on EOF");
         assert!(is_valid_ident_start(ch));
         let mut span = self.consume_char();
         let mut ident = ch.to_string();

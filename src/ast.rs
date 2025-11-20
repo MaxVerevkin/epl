@@ -105,7 +105,7 @@ pub struct WhileExpr {
 /// A struct initializer expression
 #[derive(Debug, Clone)]
 pub struct StructInitializerExpr {
-    pub name: Ident,
+    pub struct_name: Option<Ident>,
     pub fields: Vec<StructInitializerField>,
     pub opening_brace_span: lex::Span,
     pub closing_brace_span: lex::Span,
@@ -210,7 +210,11 @@ impl ExprWithBlock {
             ),
             Self::Loop(loop_expr) => loop_expr.loop_keyword_span.join(loop_expr.body.span()),
             Self::While(while_expr) => while_expr.while_keyword_span.join(while_expr.body.span()),
-            Self::StructInitializer(e) => e.name.span.join(e.closing_brace_span),
+            Self::StructInitializer(e) => e
+                .struct_name
+                .as_ref()
+                .map_or(e.opening_brace_span, |n| n.span)
+                .join(e.closing_brace_span),
         }
     }
 }
@@ -827,7 +831,7 @@ impl Parser<'_> {
                 if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
                     self.next_function_call_expr()
                         .map(|expr| Expr::WithNoBlock(ExprWithNoBlock::FunctionCallExpr(expr)))
-                } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftBrace)) {
+                } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
                     self.next_struct_initializer_expr()
                         .map(|expr| Expr::WithBlock(ExprWithBlock::StructInitializer(expr)))
                 } else {
@@ -867,6 +871,9 @@ impl Parser<'_> {
                 self.expect_punct(lex::Punct::RightParen)?;
                 Ok(expr)
             }
+            Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => self
+                .next_struct_initializer_expr()
+                .map(|expr| Expr::WithBlock(ExprWithBlock::StructInitializer(expr))),
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
                 .next_block_expr()
                 .map(|expr| Expr::WithBlock(ExprWithBlock::Block(expr))),
@@ -919,8 +926,11 @@ impl Parser<'_> {
 
     /// Parse struct initializer
     fn next_struct_initializer_expr(&mut self) -> Result<StructInitializerExpr, Error> {
-        let name = self.next_ident()?;
-        let opening_brace_span = self.expect_punct(lex::Punct::LeftBrace)?;
+        let (struct_name, opening_brace_span) = match self.peek_token()? {
+            Some(lex::Token::Ident(_)) => (Some(self.next_ident()?), self.expect_punct(lex::Punct::DotLeftBrace)?),
+            Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => (None, self.expect_punct(lex::Punct::DotLeftBrace)?),
+            _ => return self.consume_unexpected_token("struct name or .{"),
+        };
         let mut fields = Vec::new();
         loop {
             match self.peek_token()? {
@@ -951,7 +961,7 @@ impl Parser<'_> {
         }
         let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
         Ok(StructInitializerExpr {
-            name,
+            struct_name,
             fields,
             opening_brace_span,
             closing_brace_span,

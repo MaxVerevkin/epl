@@ -1,29 +1,22 @@
-struct Rect {
+struct Vec2 {
 	x: i32,
 	y: i32,
-	width: i32,
-	height: i32,
 }
 
-fn rect_move(rect: Rect, dx: i32, dy: i32) -> Rect {
-	rect.x += dx;
-	rect.y += dy;
-	rect
+fn vec2_add(lhs: Vec2, rhs: Vec2) -> Vec2 {
+	lhs.x += rhs.x;
+	lhs.y += rhs.y;
+	lhs
 }
 
-fn rect_print(rect: Rect) -> void {
-	printf("Rect { %i %i %i %i }\n", rect.x, rect.y, rect.width, rect.height);
+fn vec2_print(vec: Vec2) -> void {
+	printf("Vec2 .{ x: %i, y: %i }\n", vec.x, vec.y);
 }
 
 fn main() -> i32 {
-	let rect = Rect {
-		x: 10,
-		y: 20,
-		width: 5,
-		height: 5,
-	};
-	rect_print(rect);
-	rect_print(rect_move(rect, 5, 5));
+	let vec = Vec2 .{ x: 10, y: 20 };
+	vec2_print(vec);
+	vec2_print(vec2_add(vec, .{ x: 5, y: 5 }));
 	0
 }
 

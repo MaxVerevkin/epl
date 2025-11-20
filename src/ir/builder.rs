@@ -823,18 +823,41 @@ impl<'a> FunctionBuilder<'a> {
                 Ok(EvalResult::VOID)
             }
             ast::ExprWithBlock::StructInitializer(e) => {
-                let ty = self
-                    .type_namespace
-                    .get(&e.name.value)
-                    .copied()
-                    .ok_or_else(|| Error::new(format!("unknown type {:?}", e.name.value)).with_span(e.name.span))?;
-                let sid = match ty {
-                    Type::Struct(sid) => sid,
-                    other => {
-                        return Err(
-                            Error::new(format!("{} is not a struct type, but {other:?}", e.name.value))
-                                .with_span(e.name.span),
-                        );
+                let (ty, sid) = match &e.struct_name {
+                    Some(name) => {
+                        let ty =
+                            self.type_namespace.get(&name.value).copied().ok_or_else(|| {
+                                Error::new(format!("unknown type {:?}", name.value)).with_span(name.span)
+                            })?;
+                        let sid = match ty {
+                            Type::Struct(sid) => sid,
+                            other => {
+                                return Err(
+                                    Error::new(format!("{} is not a struct type, but {other:?}", name.value))
+                                        .with_span(name.span),
+                                );
+                            }
+                        };
+                        if let Some(expect_type) = expect_type
+                            && expect_type != ty
+                        {
+                            return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                        }
+                        (ty, sid)
+                    }
+                    None => {
+                        let expect_type =
+                            expect_type.ok_or_else(|| Error::new("type annotations needed").with_span(expr.span()))?;
+                        let sid = match expect_type {
+                            Type::Struct(sid) => sid,
+                            other => {
+                                return Err(Error::new(format!(
+                                    "expected expr of type {other:?}, got struct initializer"
+                                ))
+                                .with_span(expr.span()));
+                            }
+                        };
+                        (expect_type, sid)
                     }
                 };
                 let struct_def = self.typesystem.get_struct(sid);
