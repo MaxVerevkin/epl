@@ -1,5 +1,6 @@
-fn main() -> void {
+fn main() -> i32 {
 	printf("hello world\n");
+	0
 }
 
-fn printf(fmt: cstr, ...) -> void;
+fn printf(fmt: cstr, ...) ;

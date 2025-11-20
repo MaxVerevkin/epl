@@ -29,4 +29,4 @@ fn main() -> i32 {
 	0
 }
 
-fn printf(fmt: cstr, ...) -> void;
+fn printf(fmt: cstr, ...);

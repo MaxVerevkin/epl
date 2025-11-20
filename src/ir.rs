@@ -139,7 +139,12 @@ impl FunctionDecl {
                 .map(|a| FunctionArg::from_ast(typesystem, type_namespace, a))
                 .collect::<Result<_, _>>()?,
             is_variadic: ast.is_variadic,
-            return_ty: typesystem.type_from_ast(type_namespace, &ast.return_ty)?,
+            return_ty: ast
+                .return_ty
+                .as_ref()
+                .map(|ty| typesystem.type_from_ast(type_namespace, ty))
+                .transpose()?
+                .unwrap_or(Type::Void),
         })
     }
 }

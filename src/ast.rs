@@ -23,7 +23,7 @@ pub struct Function {
     pub name: Ident,
     pub args: Vec<FunctionArg>,
     pub is_variadic: bool,
-    pub return_ty: Type,
+    pub return_ty: Option<Type>,
     pub body: Option<BlockExpr>,
 }
 
@@ -526,8 +526,13 @@ impl Parser<'_> {
                 }
             }
         }
-        self.expect_punct(lex::Punct::Arrow)?;
-        let return_ty = self.next_type()?;
+        let return_ty = match self.peek_token()? {
+            Some(lex::Token::Punct(lex::Punct::Arrow)) => {
+                self.consume_token()?;
+                Some(self.next_type()?)
+            }
+            _ => None,
+        };
         let body = match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::LeftBrace)) => Some(self.next_block_expr()?),
             Some(lex::Token::Punct(lex::Punct::Semicolon)) => {
@@ -535,7 +540,11 @@ impl Parser<'_> {
                 None
             }
             _ => {
-                return self.consume_unexpected_token("function body or ';'");
+                if return_ty.is_none() {
+                    return self.consume_unexpected_token("function return type, function body or ';'");
+                } else {
+                    return self.consume_unexpected_token("function body or ';'");
+                }
             }
         };
         Ok(Item::Function(Function {

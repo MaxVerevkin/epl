@@ -9,7 +9,7 @@ fn vec2_add(lhs: Vec2, rhs: Vec2) -> Vec2 {
 	lhs
 }
 
-fn vec2_print(vec: Vec2) -> void {
+fn vec2_print(vec: Vec2) {
 	printf("Vec2 .{ x: %i, y: %i }\n", vec.x, vec.y);
 }
 
@@ -20,4 +20,4 @@ fn main() -> i32 {
 	0
 }
 
-fn printf(fmt: cstr, ...) -> void;
+fn printf(fmt: cstr, ...);

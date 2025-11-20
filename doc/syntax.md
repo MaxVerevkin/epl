@@ -28,7 +28,7 @@ Everything after `#` is treated as a comment.
 
 ## Fuctions
 
-- function = `fn` ident `(` fn_arg? (, fn_arg)* `)` `->` type (block_expr | `;`)
+- function = `fn` ident `(` fn_arg? (, fn_arg)* `)` (`->` type)? (block_expr | `;`)
 - fn_arg = ident `:` type
 
 ## Struct Definitions
