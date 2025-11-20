@@ -864,7 +864,7 @@ impl<'a> FunctionBuilder<'a> {
                 if let Some(missing_field) = struct_def
                     .fields
                     .iter()
-                    .find(|f| e.fields.iter().find(|ef| ef.name.value == f.name.value).is_none())
+                    .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.name.value))
                 {
                     return Err(Error::new(format!("missing field: {}", missing_field.name.value))
                         .with_span(e.opening_brace_span.join(e.closing_brace_span)));

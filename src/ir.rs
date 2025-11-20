@@ -91,13 +91,8 @@ impl Ir {
                 ast::Item::Function(function) => {
                     if let Some(body) = &function.body {
                         let decl = &function_decls[&function.name.value];
-                        let ir_function = builder::build_function(
-                            decl,
-                            body,
-                            &function_decls,
-                            &typesystem,
-                            &type_namespace,
-                        )?;
+                        let ir_function =
+                            builder::build_function(decl, body, &function_decls, &typesystem, &type_namespace)?;
                         functions.insert(function.name.value.clone(), ir_function);
                     }
                 }
@@ -192,12 +187,7 @@ impl Function {
         }
 
         let mut order = Vec::new();
-        visit(
-            &mut order,
-            &mut HashSet::new(),
-            &self.basic_blokcs,
-            self.entry,
-        );
+        visit(&mut order, &mut HashSet::new(), &self.basic_blokcs, self.entry);
         order
     }
 }
@@ -367,11 +357,7 @@ impl Constant {
             Self::Void => Type::Void,
             Self::Bool(_) => Type::Bool,
             Self::String(_) => Type::CStr,
-            Self::Number {
-                data: _,
-                bits,
-                signed,
-            } => match *bits {
+            Self::Number { data: _, bits, signed } => match *bits {
                 32 => match *signed {
                     true => Type::I32,
                     false => Type::U32,

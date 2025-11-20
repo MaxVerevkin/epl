@@ -30,9 +30,7 @@ impl SpanError for ast::Error {
             ast::ErrorKind::LetNoValueNoType => {
                 String::from("let statement with no value requires type to be specified")
             }
-            ast::ErrorKind::VariadicIsNotLast => {
-                String::from("variadic specifier (...) must be the last argument")
-            }
+            ast::ErrorKind::VariadicIsNotLast => String::from("variadic specifier (...) must be the last argument"),
         }
     }
 
@@ -56,11 +54,7 @@ pub fn print_error(path: &str, src: &str, error: impl SpanError) {
     eprint!("error: {}", error.message());
 
     if let Some(span) = error.span() {
-        let line_number = src.as_bytes()[..span.start]
-            .iter()
-            .filter(|b| **b == b'\n')
-            .count()
-            + 1;
+        let line_number = src.as_bytes()[..span.start].iter().filter(|b| **b == b'\n').count() + 1;
         let line_start = src.as_bytes()[..span.start]
             .iter()
             .rposition(|b| *b == b'\n')

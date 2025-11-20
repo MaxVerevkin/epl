@@ -18,9 +18,7 @@ fn main() {
             print_usage(&arg0, 0);
         }
         "lex" => {
-            let Some(file) = args.next() else {
-                print_usage(&arg0, 1)
-            };
+            let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
                 print_usage(&arg0, 1)
             }
@@ -33,9 +31,7 @@ fn main() {
             }
         }
         "ast" => {
-            let Some(file) = args.next() else {
-                print_usage(&arg0, 1)
-            };
+            let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
                 print_usage(&arg0, 1)
             }
@@ -50,9 +46,7 @@ fn main() {
             println!("{ast:#?}");
         }
         "ir" => {
-            let Some(file) = args.next() else {
-                print_usage(&arg0, 1)
-            };
+            let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
                 print_usage(&arg0, 1)
             }
@@ -72,9 +66,7 @@ fn main() {
             println!("{ir:#?}");
         }
         "cfg" => {
-            let Some(file) = args.next() else {
-                print_usage(&arg0, 1)
-            };
+            let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
                 print_usage(&arg0, 1)
             }
@@ -95,9 +87,7 @@ fn main() {
             print!("{graph}");
         }
         "llvm-ir" => {
-            let Some(file) = args.next() else {
-                print_usage(&arg0, 1)
-            };
+            let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
                 print_usage(&arg0, 1)
             }
@@ -122,9 +112,7 @@ fn main() {
             println!("{llvm_module}");
         }
         "llvm-obj" => {
-            let Some(file) = args.next() else {
-                print_usage(&arg0, 1)
-            };
+            let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
                 print_usage(&arg0, 1)
             }

@@ -56,11 +56,7 @@ impl TypeSystem {
     }
 
     /// Parse type from its AST representation
-    pub fn type_from_ast(
-        &self,
-        type_namespace: &HashMap<String, Type>,
-        ast: &ast::Type,
-    ) -> Result<Type, Error> {
+    pub fn type_from_ast(&self, type_namespace: &HashMap<String, Type>, ast: &ast::Type) -> Result<Type, Error> {
         match &ast.value {
             ast::TypeValue::Never => Ok(Type::Never),
             ast::TypeValue::Ident(name) => type_namespace
@@ -122,11 +118,7 @@ impl TypeSystem {
     }
 
     /// Get struct field's byte offset and type
-    pub fn get_struct_field(
-        &self,
-        sid: StructId,
-        field: &ast::Ident,
-    ) -> Result<(u64, Type), Error> {
+    pub fn get_struct_field(&self, sid: StructId, field: &ast::Ident) -> Result<(u64, Type), Error> {
         let s = &self.structs[sid.0];
         let mut offset = 0u64;
         for f in &s.fields {
@@ -137,11 +129,7 @@ impl TypeSystem {
             }
             offset += f_layout.size;
         }
-        Err(Error::new(format!(
-            "struct {} has no field {}",
-            s.name.value, field.value
-        ))
-        .with_span(field.span))
+        Err(Error::new(format!("struct {} has no field {}", s.name.value, field.value)).with_span(field.span))
     }
 
     /// Get a referencse to the struct declaration
