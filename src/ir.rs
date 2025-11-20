@@ -259,11 +259,18 @@ pub enum InstructionKind {
     FunctionCall { name: String, args: Vec<Value> },
     CmpL { lhs: Value, rhs: Value },
     CmpG { lhs: Value, rhs: Value },
-    Add { lhs: Value, rhs: Value },
-    Sub { lhs: Value, rhs: Value },
-    Mul { lhs: Value, rhs: Value },
+    Arithmetic { op: ArithmeticOp, lhs: Value, rhs: Value },
     Not { value: Value },
     OffsetPtr { ptr: Value, offset: i64 },
+}
+
+/// A basic arithmetic operation
+#[derive(Debug, Clone, Copy)]
+pub enum ArithmeticOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 /// The terminator of a basic block

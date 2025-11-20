@@ -553,7 +553,9 @@ impl<'a> FunctionBuilder<'a> {
                     && let MaybeValue::Value(value) = value_eval.value
                 {
                     let lhs = self.cursor().load(ptr.clone(), place_eval.ty);
-                    let result = self.cursor().add(Value::Definition(lhs), value);
+                    let result =
+                        self.cursor()
+                            .arithmetic(ArithmeticOp::Add, Value::Definition(lhs), value);
                     self.cursor().store(ptr, Value::Definition(result));
                 }
                 Ok(EvalResult::VOID)
@@ -644,7 +646,11 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().add(lhs, rhs)))
+                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
+                                ArithmeticOp::Add,
+                                lhs,
+                                rhs,
+                            )))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -672,7 +678,11 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().sub(lhs, rhs)))
+                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
+                                ArithmeticOp::Sub,
+                                lhs,
+                                rhs,
+                            )))
                         } else {
                             MaybeValue::Diverges
                         },
@@ -700,13 +710,48 @@ impl<'a> FunctionBuilder<'a> {
                         value: if let MaybeValue::Value(lhs) = lhs_eval.value
                             && let MaybeValue::Value(rhs) = rhs_eval.value
                         {
-                            MaybeValue::Value(Value::Definition(self.cursor().mul(lhs, rhs)))
+                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
+                                ArithmeticOp::Mul,
+                                lhs,
+                                rhs,
+                            )))
                         } else {
                             MaybeValue::Diverges
                         },
                     })
                 }
-                ast::BinaryOp::Div => todo!(),
+                ast::BinaryOp::Div => {
+                    let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
+                    let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty))?;
+                    if lhs_eval.ty != rhs_eval.ty {
+                        return Err(Error::new(format!(
+                            "cannot divide different types: {:?} and {:?}",
+                            lhs_eval.ty, rhs_eval.ty
+                        ))
+                        .with_span(binary_expr.op_span));
+                    }
+                    if !lhs_eval.ty.is_int() {
+                        return Err(Error::new(format!(
+                            "only integer types can be divided, not {:?}",
+                            lhs_eval.ty
+                        ))
+                        .with_span(binary_expr.op_span));
+                    }
+                    Ok(EvalResult {
+                        ty: lhs_eval.ty,
+                        value: if let MaybeValue::Value(lhs) = lhs_eval.value
+                            && let MaybeValue::Value(rhs) = rhs_eval.value
+                        {
+                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
+                                ArithmeticOp::Div,
+                                lhs,
+                                rhs,
+                            )))
+                        } else {
+                            MaybeValue::Diverges
+                        },
+                    })
+                }
             },
             ast::ExprWithNoBlock::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
@@ -733,7 +778,8 @@ impl<'a> FunctionBuilder<'a> {
                     Ok(EvalResult {
                         ty: rhs_eval.ty,
                         value: if let MaybeValue::Value(rhs) = rhs_eval.value {
-                            MaybeValue::Value(Value::Definition(self.cursor().sub(
+                            MaybeValue::Value(Value::Definition(self.cursor().arithmetic(
+                                ArithmeticOp::Sub,
                                 Value::Constant(Constant::Number {
                                     data: 0,
                                     bits,
@@ -1086,35 +1132,13 @@ impl InstructionCursor<'_> {
         definition_id
     }
 
-    /// Generate a `Add` instruction
-    fn add(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
+    /// Generate an `Arithmetic` instruction
+    fn arithmetic(&mut self, op: ArithmeticOp, lhs: Value, rhs: Value) -> DefinitionId {
         assert_eq!(lhs.ty(), rhs.ty());
         let definition_id = DefinitionId::new(lhs.ty());
         self.buf.push(Instruction {
             definition_id,
-            kind: InstructionKind::Add { lhs, rhs },
-        });
-        definition_id
-    }
-
-    /// Generate a `Sub` instruction
-    fn sub(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
-        assert_eq!(lhs.ty(), rhs.ty());
-        let definition_id = DefinitionId::new(lhs.ty());
-        self.buf.push(Instruction {
-            definition_id,
-            kind: InstructionKind::Sub { lhs, rhs },
-        });
-        definition_id
-    }
-
-    /// Generate a `Mul` instruction
-    fn mul(&mut self, lhs: Value, rhs: Value) -> DefinitionId {
-        assert_eq!(lhs.ty(), rhs.ty());
-        let definition_id = DefinitionId::new(lhs.ty());
-        self.buf.push(Instruction {
-            definition_id,
-            kind: InstructionKind::Mul { lhs, rhs },
+            kind: InstructionKind::Arithmetic { op, lhs, rhs },
         });
         definition_id
     }

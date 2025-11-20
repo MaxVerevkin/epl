@@ -129,15 +129,8 @@ pub enum Statement {
 /// A statement
 #[derive(Debug, Clone)]
 pub enum LetStatement {
-    WithValue {
-        name: Ident,
-        ty: Option<Type>,
-        value: Box<Expr>,
-    },
-    WithoutValue {
-        name: Ident,
-        ty: Type,
-    },
+    WithValue { name: Ident, ty: Option<Type>, value: Box<Expr> },
+    WithoutValue { name: Ident, ty: Type },
 }
 
 /// An expression
@@ -385,10 +378,7 @@ pub struct Error {
 #[derive(Debug, Clone)]
 pub enum ErrorKind {
     Lex(lex::ErrorKind),
-    UnexpectedToken {
-        expected: String,
-        got: Option<lex::Token>,
-    },
+    UnexpectedToken { expected: String, got: Option<lex::Token> },
     LetNoValueNoType,
     VariadicIsNotLast,
 }

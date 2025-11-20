@@ -109,18 +109,17 @@ impl LlvmModule {
                                 llvm_sys::LLVMIntPredicate::LLVMIntUGT,
                             ),
                         },
-                        ir::InstructionKind::Add { lhs, rhs } => builder.add(
-                            build_value(lhs, &value_map, &module),
-                            build_value(rhs, &value_map, &module),
-                        ),
-                        ir::InstructionKind::Sub { lhs, rhs } => builder.sub(
-                            build_value(lhs, &value_map, &module),
-                            build_value(rhs, &value_map, &module),
-                        ),
-                        ir::InstructionKind::Mul { lhs, rhs } => builder.mul(
-                            build_value(lhs, &value_map, &module),
-                            build_value(rhs, &value_map, &module),
-                        ),
+                        ir::InstructionKind::Arithmetic { op, lhs, rhs } => {
+                            let signed = lhs.ty().is_signed_int();
+                            let lhs = build_value(lhs, &value_map, &module);
+                            let rhs = build_value(rhs, &value_map, &module);
+                            match op {
+                                ir::ArithmeticOp::Add => builder.add(lhs, rhs),
+                                ir::ArithmeticOp::Sub => builder.add(lhs, rhs),
+                                ir::ArithmeticOp::Mul => builder.mul(lhs, rhs),
+                                ir::ArithmeticOp::Div => builder.div(signed, lhs, rhs),
+                            }
+                        }
                         ir::InstructionKind::Not { value } => builder.xor(
                             build_value(value, &value_map, &module),
                             build_value(
@@ -437,6 +436,16 @@ impl LlvmBuilder {
     /// Build the `mul` instruction
     fn mul(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
         unsafe { LLVMBuildMul(self.raw, lhs, rhs, c"".as_ptr()) }
+    }
+
+    /// Build the `div` instruction
+    fn div(&self, signed: bool, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            match signed {
+                false => LLVMBuildUDiv(self.raw, lhs, rhs, c"".as_ptr()),
+                true => LLVMBuildSDiv(self.raw, lhs, rhs, c"".as_ptr()),
+            }
+        }
     }
 
     /// Build the `xor` instruction
