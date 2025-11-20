@@ -49,6 +49,7 @@ pub enum Keyword {
     True,
     False,
     Struct,
+    Undefined,
 }
 
 /// A mapping from strings to keyword tokens
@@ -64,6 +65,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("true", Keyword::True),
     ("false", Keyword::False),
     ("struct", Keyword::Struct),
+    ("undefined", Keyword::Undefined),
 ];
 
 /// A literal token

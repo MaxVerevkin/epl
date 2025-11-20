@@ -407,6 +407,14 @@ impl<'a> FunctionBuilder<'a> {
                         })
                     }
                 }
+                ast::LiteralExprValue::Undefined => {
+                    let expect_type = expect_type
+                        .ok_or_else(|| Error::new("type annotations needed").with_span(literal_expr.span))?;
+                    Ok(EvalResult {
+                        ty: expect_type,
+                        value: MaybeValue::Value(Value::Constant(Constant::Undefined(expect_type))),
+                    })
+                }
             },
             ast::ExprWithNoBlock::FunctionCallExpr(function_call_expr) => {
                 let decl = self.function_decls.get(&function_call_expr.name.value).ok_or_else(|| {

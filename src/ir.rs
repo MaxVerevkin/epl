@@ -344,6 +344,7 @@ impl Value {
 /// A primitive constant
 #[derive(Debug, Clone)]
 pub enum Constant {
+    Undefined(Type),
     Void,
     Bool(bool),
     String(String),
@@ -354,6 +355,7 @@ impl Constant {
     /// Get the type of this constant
     pub fn ty(&self) -> Type {
         match self {
+            Self::Undefined(ty) => *ty,
             Self::Void => Type::Void,
             Self::Bool(_) => Type::Bool,
             Self::String(_) => Type::CStr,

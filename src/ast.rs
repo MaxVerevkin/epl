@@ -257,6 +257,7 @@ pub struct LiteralExpr {
 /// A literal expression value
 #[derive(Debug, Clone)]
 pub enum LiteralExprValue {
+    Undefined,
     Number(i64),
     String(String),
     Bool(bool),
@@ -863,6 +864,13 @@ impl Parser<'_> {
                 Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
                     span,
                     value: LiteralExprValue::Bool(false),
+                })))
+            }
+            Some(lex::Token::Keyword(lex::Keyword::Undefined)) => {
+                let (span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                    span,
+                    value: LiteralExprValue::Undefined,
                 })))
             }
             Some(lex::Token::Punct(lex::Punct::LeftParen)) => {

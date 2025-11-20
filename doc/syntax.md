@@ -20,6 +20,7 @@ Everything after `#` is treated as a comment.
 - `true`
 - `false`
 - `struct`
+- `undefined`
 
 ## Items
 
@@ -62,7 +63,7 @@ Everything after `#` is treated as a comment.
 
 ## Literals
 
-- literal = number_literal | string_literal | bool_literal
+- literal = number_literal | string_literal | bool_literal | `undefined`
 - number_literal = [0-9]+
 - string_literal = `"` [^"] `"`
 - bool_literal = `true` | `false`
