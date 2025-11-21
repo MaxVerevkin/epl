@@ -155,6 +155,7 @@ pub enum ExprWithNoBlock {
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     FieldAccess(FieldAccessExpr),
+    Dereference(DereferenceExpr),
 }
 
 /// An expression which can be a statement on its own
@@ -194,6 +195,7 @@ impl ExprWithNoBlock {
             Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
             Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
+            Self::Dereference(e) => e.ptr.span().join(e.op_span),
         }
     }
 }
@@ -311,6 +313,13 @@ pub struct FieldAccessExpr {
     pub lhs: Box<Expr>,
     pub field: Ident,
     pub dot_span: lex::Span,
+}
+
+/// A dereference (.*) expression
+#[derive(Debug, Clone)]
+pub struct DereferenceExpr {
+    pub ptr: Box<Expr>,
+    pub op_span: lex::Span,
 }
 
 /// A binary operation
@@ -842,12 +851,24 @@ impl Parser<'_> {
         let mut expr = self.next_base_expr()?;
         while let Some(lex::Token::Punct(lex::Punct::Dot)) = self.peek_token()? {
             let (dot_span, _) = self.consume_token()?.unwrap();
-            let name = self.next_ident()?;
-            expr = Expr::WithNoBlock(ExprWithNoBlock::FieldAccess(FieldAccessExpr {
-                lhs: Box::new(expr),
-                field: name,
-                dot_span,
-            }));
+            match self.peek_token()? {
+                Some(lex::Token::Ident(_)) => {
+                    let name = self.next_ident()?;
+                    expr = Expr::WithNoBlock(ExprWithNoBlock::FieldAccess(FieldAccessExpr {
+                        lhs: Box::new(expr),
+                        field: name,
+                        dot_span,
+                    }));
+                }
+                Some(lex::Token::Punct(lex::Punct::Star)) => {
+                    let (star_span, _) = self.consume_token()?.unwrap();
+                    expr = Expr::WithNoBlock(ExprWithNoBlock::Dereference(DereferenceExpr {
+                        ptr: Box::new(expr),
+                        op_span: dot_span.join(star_span),
+                    }));
+                }
+                _ => return self.consume_unexpected_token("ident or '*'"),
+            }
         }
         Ok(expr)
     }

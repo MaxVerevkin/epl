@@ -168,6 +168,11 @@ impl TypeSystem {
     pub fn get_struct(&self, sid: StructId) -> &Struct {
         &self.structs[sid.0]
     }
+
+    /// Get a referencse to the pointer description
+    pub fn get_ptr(&self, pid: PtrId) -> &Ptr {
+        &self.pointers[pid.0]
+    }
 }
 
 impl Type {

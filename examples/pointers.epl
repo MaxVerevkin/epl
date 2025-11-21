@@ -1,0 +1,14 @@
+fn main() -> i32 {
+	let i = 0;
+	while i < 5 {
+		inc(&i);
+		printf("%i\n", i);
+	}
+	0
+}
+
+fn inc(num: *i32) {
+	num.* += 1;
+}
+
+fn printf(fmt: cstr, ...);

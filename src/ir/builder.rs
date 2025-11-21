@@ -221,7 +221,27 @@ impl<'a> FunctionBuilder<'a> {
                     }
                 }
             }
-            _ => Err(Error::new("expected a place expression (ident)").with_span(expr.span())),
+            ast::ExprWithNoBlock::Dereference(dereference_expr) => {
+                let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
+                let pid = match ptr_eval.ty() {
+                    Type::Ptr(pid) => pid,
+                    Type::CStr => {
+                        return Err(Error::new("cannot dereference cstr").with_span(dereference_expr.op_span));
+                    }
+                    Type::OpaquePointer => {
+                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
+                    }
+                    other => {
+                        return Err(Error::new(format!("only pointers can be dereferenced, not {other:?}"))
+                            .with_span(dereference_expr.op_span));
+                    }
+                };
+                let pointee_ty = self.typesystem.get_ptr(pid).pointee;
+                Ok((ptr_eval, pointee_ty))
+            }
+            _ => Err(
+                Error::new("expected a place expression (ident, field access or dereference)").with_span(expr.span()),
+            ),
         }
     }
 
@@ -611,7 +631,9 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
             },
-            ast::ExprWithNoBlock::Ident(_) | ast::ExprWithNoBlock::FieldAccess(_) => {
+            ast::ExprWithNoBlock::Ident(_)
+            | ast::ExprWithNoBlock::FieldAccess(_)
+            | ast::ExprWithNoBlock::Dereference(_) => {
                 let (place_eval, place_ty) = self.eval_place_expr_with_no_block(expr)?;
                 if let Some(expect_type) = expect_type
                     && expect_type != place_ty
