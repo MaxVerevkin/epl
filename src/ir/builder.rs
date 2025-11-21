@@ -225,9 +225,6 @@ impl<'a> FunctionBuilder<'a> {
                 let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
                 let pid = match ptr_eval.ty() {
                     Type::Ptr(pid) => pid,
-                    Type::CStr => {
-                        return Err(Error::new("cannot dereference cstr").with_span(dereference_expr.op_span));
-                    }
                     Type::OpaquePointer => {
                         return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
                     }
@@ -352,37 +349,31 @@ impl<'a> FunctionBuilder<'a> {
             },
             ast::ExprWithNoBlock::Literal(literal_expr) => match &literal_expr.value {
                 ast::LiteralExprValue::Number(number) => {
-                    if let Some(expect_type) = expect_type
-                        && !expect_type.is_int()
-                    {
-                        Err(Error::expr_type_missmatch(expect_type, Type::CStr, literal_expr.span))
-                    } else {
-                        let ty = expect_type.unwrap_or(Type::I32);
-                        let (bits, signed) = match ty {
-                            Type::I32 => (32, true),
-                            Type::U32 => (32, false),
-                            Type::Never
-                            | Type::Void
-                            | Type::Bool
-                            | Type::CStr
-                            | Type::OpaquePointer
-                            | Type::Ptr(_)
-                            | Type::Struct(_) => {
-                                unreachable!()
-                            }
-                        };
-                        Ok(EvalResult::Value(Value::Constant(Constant::Number {
-                            data: *number,
-                            bits,
-                            signed,
-                        })))
-                    }
+                    let int_ty = match expect_type {
+                        None => IntType::I32,
+                        Some(Type::Int(i)) => i,
+                        Some(other) => {
+                            return Err(Error::expr_type_missmatch(
+                                other,
+                                Type::Int(IntType::I32),
+                                literal_expr.span,
+                            ));
+                        }
+                    };
+                    Ok(EvalResult::Value(Value::Constant(Constant::Number {
+                        data: *number,
+                        ty: int_ty,
+                    })))
                 }
                 ast::LiteralExprValue::String(string) => {
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::CStr
+                        && expect_type != Type::Ptr(PtrId::TO_I8)
                     {
-                        Err(Error::expr_type_missmatch(expect_type, Type::CStr, literal_expr.span))
+                        Err(Error::expr_type_missmatch(
+                            expect_type,
+                            Type::Ptr(PtrId::TO_I8),
+                            literal_expr.span,
+                        ))
                     } else {
                         Ok(EvalResult::Value(Value::Constant(Constant::String(string.clone()))))
                     }
@@ -566,40 +557,29 @@ impl<'a> FunctionBuilder<'a> {
             },
             ast::ExprWithNoBlock::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
-                    let rhs_eval = self.eval_expr(&unary_expr.rhs, None)?;
-                    let ty = rhs_eval.ty();
-                    if !ty.is_signed_int() {
-                        return Err(
-                            Error::new(format!("only signed integer types can be negated, not {ty:?}"))
-                                .with_span(unary_expr.op_span),
-                        );
-                    }
-                    if let Some(expect_type) = expect_type
-                        && expect_type != ty
-                    {
-                        return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
-                    }
-                    let (bits, signed) = match ty {
-                        Type::I32 => (32, true),
-                        Type::Never
-                        | Type::Void
-                        | Type::Bool
-                        | Type::U32
-                        | Type::CStr
-                        | Type::OpaquePointer
-                        | Type::Ptr(_)
-                        | Type::Struct(_) => {
-                            unreachable!()
+                    let rhs_eval = self.eval_expr(&unary_expr.rhs, None)?; // TODO: pass expect type to eval_expr?
+                    let int_ty = match rhs_eval.ty() {
+                        Type::Int(i) if i.is_signed() => i,
+                        other => {
+                            return Err(
+                                Error::new(format!("only signed integer types can be negated, not {other:?}"))
+                                    .with_span(unary_expr.op_span),
+                            );
                         }
                     };
+                    if let Some(expect_type) = expect_type
+                        && expect_type != Type::Int(int_ty)
+                    {
+                        return Err(Error::expr_type_missmatch(expect_type, Type::Int(int_ty), expr.span()));
+                    }
                     Ok(if let EvalResult::Value(rhs) = rhs_eval {
                         EvalResult::Value(Value::Definition(self.cursor().arithmetic(
                             ArithmeticOp::Sub,
-                            Value::Constant(Constant::Number { data: 0, bits, signed }),
+                            Value::Constant(Constant::Number { data: 0, ty: int_ty }),
                             rhs,
                         )))
                     } else {
-                        EvalResult::Diverges(ty)
+                        EvalResult::Diverges(Type::Int(int_ty))
                     })
                 }
                 ast::UnaryOp::Not => {

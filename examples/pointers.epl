@@ -11,4 +11,4 @@ fn inc(num: *i32) {
 	num.* += 1;
 }
 
-fn printf(fmt: cstr, ...);
+fn printf(fmt: *i8, ...);

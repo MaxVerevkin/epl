@@ -14,12 +14,45 @@ pub enum Type {
     Never,
     Void,
     Bool,
-    I32,
-    U32,
-    CStr,
+    Int(IntType),
     OpaquePointer,
     Struct(StructId),
     Ptr(PtrId),
+}
+
+/// Interegre data type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IntType {
+    I8,
+    U8,
+    I32,
+    U32,
+}
+
+impl IntType {
+    /// Returns the number of bits used to store this int
+    pub fn bits(self) -> u64 {
+        match self {
+            Self::I8 | Self::U8 => 8,
+            Self::I32 | Self::U32 => 32,
+        }
+    }
+
+    /// Returns the number of bytes used to store this int
+    pub fn bytes(self) -> u64 {
+        match self {
+            Self::I8 | Self::U8 => 1,
+            Self::I32 | Self::U32 => 4,
+        }
+    }
+
+    /// Returns `true` if this data type is a signed integer
+    pub fn is_signed(self) -> bool {
+        match self {
+            Self::I8 | Self::I32 => true,
+            Self::U8 | Self::U32 => false,
+        }
+    }
 }
 
 /// The ID of a structure type
@@ -44,6 +77,11 @@ pub struct StructField {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PtrId(usize);
 
+impl PtrId {
+    /// A well-known pointer `*i8`
+    pub const TO_I8: Self = Self(0);
+}
+
 /// A description of a pointer
 #[derive(Debug)]
 pub struct Ptr {
@@ -65,8 +103,10 @@ impl TypeSystem {
         Self {
             ptr_size,
             structs: Vec::new(),
-            pointers: Vec::new(),
-            pointer_lut: HashMap::new(),
+            pointers: vec![Ptr {
+                pointee: Type::Int(IntType::I8),
+            }],
+            pointer_lut: [(Type::Int(IntType::I8), PtrId::TO_I8)].into_iter().collect(),
         }
     }
 
@@ -127,8 +167,11 @@ impl TypeSystem {
         match ty {
             Type::Never | Type::Void => Layout { size: 0, align: 1 },
             Type::Bool => Layout { size: 1, align: 1 },
-            Type::I32 | Type::U32 => Layout { size: 4, align: 4 },
-            Type::CStr | Type::OpaquePointer | Type::Ptr(_) => Layout {
+            Type::Int(i) => Layout {
+                size: i.bytes(),
+                align: i.bytes(),
+            },
+            Type::OpaquePointer | Type::Ptr(_) => Layout {
                 size: self.ptr_size,
                 align: self.ptr_size,
             },
@@ -178,17 +221,15 @@ impl TypeSystem {
 impl Type {
     /// Returns `true` if this data type is an integer
     pub fn is_int(self) -> bool {
-        self.is_signed_int() || self.is_unsigned_int()
+        matches!(self, Self::Int(_))
     }
 
     /// Returns `true` if this data type is a signed integer
     pub fn is_signed_int(self) -> bool {
-        matches!(self, Self::I32)
-    }
-
-    /// Returns `true` if this data type is an unsigned integer
-    pub fn is_unsigned_int(self) -> bool {
-        matches!(self, Self::U32)
+        match self {
+            Self::Int(i) => i.is_signed(),
+            _ => false,
+        }
     }
 
     /// Combines two types into one, handling the Never type

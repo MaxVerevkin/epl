@@ -14,7 +14,7 @@ use crate::common::ArithmeticOp;
 use crate::common::CmpOp;
 use crate::lex;
 use crate::make_entity_id;
-pub use types::{Layout, PtrId, Type, TypeSystem};
+pub use types::{IntType, Layout, PtrId, Type, TypeSystem};
 
 /// An intermediate representation of a program
 #[derive(Debug)]
@@ -64,9 +64,10 @@ impl Ir {
         let mut type_namespace = HashMap::new();
         type_namespace.insert(String::from("void"), Type::Void);
         type_namespace.insert(String::from("bool"), Type::Bool);
-        type_namespace.insert(String::from("i32"), Type::I32);
-        type_namespace.insert(String::from("u32"), Type::U32);
-        type_namespace.insert(String::from("cstr"), Type::CStr);
+        type_namespace.insert(String::from("i8"), Type::Int(IntType::I8));
+        type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
+        type_namespace.insert(String::from("i32"), Type::Int(IntType::I32));
+        type_namespace.insert(String::from("u32"), Type::Int(IntType::U32));
         type_namespace.insert(String::from("ptr"), Type::OpaquePointer);
 
         for item in &ast.items {
@@ -354,7 +355,7 @@ pub enum Constant {
     Void,
     Bool(bool),
     String(String),
-    Number { data: i64, bits: u8, signed: bool },
+    Number { data: i64, ty: IntType },
 }
 
 impl Constant {
@@ -364,14 +365,8 @@ impl Constant {
             Self::Undefined(ty) => *ty,
             Self::Void => Type::Void,
             Self::Bool(_) => Type::Bool,
-            Self::String(_) => Type::CStr,
-            Self::Number { data: _, bits, signed } => match *bits {
-                32 => match *signed {
-                    true => Type::I32,
-                    false => Type::U32,
-                },
-                _ => unreachable!(),
-            },
+            Self::String(_) => Type::Ptr(PtrId::TO_I8),
+            Self::Number { data: _, ty } => Type::Int(*ty),
         }
     }
 }

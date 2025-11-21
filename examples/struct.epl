@@ -20,4 +20,4 @@ fn main() -> i32 {
 	0
 }
 
-fn printf(fmt: cstr, ...);
+fn printf(fmt: *i8, ...);

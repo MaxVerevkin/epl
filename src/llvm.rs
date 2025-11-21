@@ -478,10 +478,8 @@ impl BuildCtx<'_> {
             match ty {
                 ir::Type::Never | ir::Type::Void => LLVMStructType([].as_mut_ptr(), 0, 0),
                 ir::Type::Bool => LLVMInt1Type(),
-                ir::Type::I32 | ir::Type::U32 => LLVMInt32Type(),
-                ir::Type::CStr | ir::Type::OpaquePointer | ir::Type::Ptr(_) => {
-                    LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0)
-                }
+                ir::Type::Int(i) => LLVMIntType(i.bits() as u32),
+                ir::Type::OpaquePointer | ir::Type::Ptr(_) => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
                 ir::Type::Struct(sid) => {
                     let mut tys: Vec<_> = self
                         .typesystem
@@ -513,8 +511,8 @@ impl BuildCtx<'_> {
                         LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), string.len() as u32, 0));
                         global
                     }
-                    ir::Constant::Number { data, bits, signed } => {
-                        LLVMConstInt(LLVMIntType(*bits as u32), *data as u64, *signed as i32)
+                    ir::Constant::Number { data, ty } => {
+                        LLVMConstInt(LLVMIntType(ty.bits() as u32), *data as u64, ty.is_signed() as i32)
                     }
                 }
             },
