@@ -74,7 +74,7 @@ impl Ir {
                 ast::Item::Function(function) => {
                     function_decls.insert(
                         function.name.value.clone(),
-                        FunctionDecl::from_ast(&typesystem, &type_namespace, function)?,
+                        FunctionDecl::from_ast(&mut typesystem, &type_namespace, function)?,
                     );
                 }
                 ast::Item::Struct(s) => {
@@ -92,7 +92,7 @@ impl Ir {
                     if let Some(body) = &function.body {
                         let decl = &function_decls[&function.name.value];
                         let ir_function =
-                            builder::build_function(decl, body, &function_decls, &typesystem, &type_namespace)?;
+                            builder::build_function(decl, body, &function_decls, &mut typesystem, &type_namespace)?;
                         functions.insert(function.name.value.clone(), ir_function);
                     }
                 }
@@ -127,7 +127,7 @@ pub struct FunctionArg {
 impl FunctionDecl {
     /// Construct a function declaration from its AST
     fn from_ast(
-        typesystem: &TypeSystem,
+        typesystem: &mut TypeSystem,
         type_namespace: &HashMap<String, Type>,
         ast: &ast::Function,
     ) -> Result<Self, Error> {
@@ -152,7 +152,7 @@ impl FunctionDecl {
 impl FunctionArg {
     /// Create a function argument representation from its AST
     fn from_ast(
-        typesystem: &TypeSystem,
+        typesystem: &mut TypeSystem,
         type_namespace: &HashMap<String, Type>,
         ast: &ast::FunctionArg,
     ) -> Result<Self, Error> {

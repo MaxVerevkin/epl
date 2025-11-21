@@ -67,6 +67,7 @@ pub struct Type {
 pub enum TypeValue {
     Never,
     Ident(String),
+    Ptr(Box<Type>),
 }
 
 /// A block expression
@@ -458,6 +459,13 @@ impl Parser<'_> {
                 span,
                 value: TypeValue::Never,
             }),
+            Some((star_span, lex::Token::Punct(lex::Punct::Star))) => {
+                let pointee = self.next_type()?;
+                Ok(Type {
+                    span: star_span.join(pointee.span),
+                    value: TypeValue::Ptr(Box::new(pointee)),
+                })
+            }
             got => Err(Error {
                 span: got.as_ref().map(|t| t.0),
                 kind: ErrorKind::UnexpectedToken {

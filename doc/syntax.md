@@ -59,7 +59,7 @@ Everything after `#` is treated as a comment.
 - while_expr = `while` expr block_expr
 - function_call_expr = ident `(` expr? (, expr)*, `...` `)` | ident `(` `...` `)`
 - let_statement =  `let` ident `:` type `;` | `let` ident (`:` type)? `=` expr `;`
-- type = `!` | ident
+- type = `!` | ident | `*` type
 
 ## Literals
 

@@ -8,7 +8,7 @@ pub fn build_function(
     decl: &FunctionDecl,
     body: &ast::BlockExpr,
     function_decls: &HashMap<String, FunctionDecl>,
-    typesystem: &TypeSystem,
+    typesystem: &mut TypeSystem,
     type_namespace: &HashMap<String, Type>,
 ) -> Result<Function, Error> {
     if decl.is_variadic {
@@ -47,7 +47,7 @@ pub fn build_function(
 struct FunctionBuilder<'a> {
     return_ty: Type,
     function_decls: &'a HashMap<String, FunctionDecl>,
-    typesystem: &'a TypeSystem,
+    typesystem: &'a mut TypeSystem,
     type_namespace: &'a HashMap<String, Type>,
     allocas: Vec<Alloca>,
     basic_blocks: HashMap<BasicBlockId, BasicBlock>,
@@ -131,7 +131,7 @@ impl<'a> FunctionBuilder<'a> {
     fn new(
         return_ty: Type,
         function_decls: &'a HashMap<String, FunctionDecl>,
-        typesystem: &'a TypeSystem,
+        typesystem: &'a mut TypeSystem,
         type_namespace: &'a HashMap<String, Type>,
     ) -> Self {
         Self {
@@ -346,6 +346,7 @@ impl<'a> FunctionBuilder<'a> {
                             | Type::Bool
                             | Type::CStr
                             | Type::OpaquePointer
+                            | Type::Ptr(_)
                             | Type::Struct(_) => {
                                 unreachable!()
                             }
@@ -566,6 +567,7 @@ impl<'a> FunctionBuilder<'a> {
                         | Type::U32
                         | Type::CStr
                         | Type::OpaquePointer
+                        | Type::Ptr(_)
                         | Type::Struct(_) => {
                             unreachable!()
                         }

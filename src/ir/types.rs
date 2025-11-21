@@ -9,7 +9,7 @@ pub struct Layout {
 }
 
 /// The set of data types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
     Never,
     Void,
@@ -19,6 +19,7 @@ pub enum Type {
     CStr,
     OpaquePointer,
     Struct(StructId),
+    Ptr(PtrId),
 }
 
 /// The ID of a structure type
@@ -39,11 +40,23 @@ pub struct StructField {
     pub ty: Type,
 }
 
+/// The ID of a pointer type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PtrId(usize);
+
+/// A description of a pointer
+#[derive(Debug)]
+pub struct Ptr {
+    pub pointee: Type,
+}
+
 /// Store the state of the type system
 #[derive(Debug)]
 pub struct TypeSystem {
     ptr_size: u64,
     structs: Vec<Struct>,
+    pointers: Vec<Ptr>,
+    pointer_lut: HashMap<Type, PtrId>, // pointee -> poniter id
 }
 
 impl TypeSystem {
@@ -52,17 +65,36 @@ impl TypeSystem {
         Self {
             ptr_size,
             structs: Vec::new(),
+            pointers: Vec::new(),
+            pointer_lut: HashMap::new(),
+        }
+    }
+
+    /// Get a pointer ID given the pointee, or allocate and cache a new one
+    pub fn get_or_create_pointer_type(&mut self, pointee: Type) -> PtrId {
+        if let Some(pid) = self.pointer_lut.get(&pointee).copied() {
+            pid
+        } else {
+            let pid = PtrId(self.pointers.len());
+            self.pointers.push(Ptr { pointee });
+            self.pointer_lut.insert(pointee, pid);
+            pid
         }
     }
 
     /// Parse type from its AST representation
-    pub fn type_from_ast(&self, type_namespace: &HashMap<String, Type>, ast: &ast::Type) -> Result<Type, Error> {
+    pub fn type_from_ast(&mut self, type_namespace: &HashMap<String, Type>, ast: &ast::Type) -> Result<Type, Error> {
         match &ast.value {
             ast::TypeValue::Never => Ok(Type::Never),
             ast::TypeValue::Ident(name) => type_namespace
                 .get(name)
                 .copied()
                 .ok_or_else(|| Error::new(format!("unknown type {name:?}")).with_span(ast.span)),
+            ast::TypeValue::Ptr(pointee) => {
+                let pointee = self.type_from_ast(type_namespace, pointee)?;
+                let pid = self.get_or_create_pointer_type(pointee);
+                Ok(Type::Ptr(pid))
+            }
         }
     }
 
@@ -96,7 +128,7 @@ impl TypeSystem {
             Type::Never | Type::Void => Layout { size: 0, align: 1 },
             Type::Bool => Layout { size: 1, align: 1 },
             Type::I32 | Type::U32 => Layout { size: 4, align: 4 },
-            Type::CStr | Type::OpaquePointer => Layout {
+            Type::CStr | Type::OpaquePointer | Type::Ptr(_) => Layout {
                 size: self.ptr_size,
                 align: self.ptr_size,
             },
