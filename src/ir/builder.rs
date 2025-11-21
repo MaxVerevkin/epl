@@ -595,6 +595,21 @@ impl<'a> FunctionBuilder<'a> {
                         EvalResult::Diverges(Type::Bool)
                     })
                 }
+                ast::UnaryOp::AddressOf => {
+                    let (place_eval, place_ty) = self.eval_place_expr(&unary_expr.rhs)?;
+                    let pid = self.typesystem.get_or_create_pointer_type(place_ty);
+                    let ptr_ty = Type::Ptr(pid);
+                    if let Some(expect_type) = expect_type
+                        && expect_type != ptr_ty
+                    {
+                        return Err(Error::expr_type_missmatch(expect_type, ptr_ty, expr.span()));
+                    }
+                    Ok(if let EvalResult::Value(place) = place_eval {
+                        EvalResult::Value(Value::Definition(self.cursor().cast_ptr(place, pid)))
+                    } else {
+                        EvalResult::Diverges(ptr_ty)
+                    })
+                }
             },
             ast::ExprWithNoBlock::Ident(_) | ast::ExprWithNoBlock::FieldAccess(_) => {
                 let (place_eval, place_ty) = self.eval_place_expr_with_no_block(expr)?;
@@ -942,5 +957,15 @@ impl InstructionCursor<'_> {
             });
             Value::Definition(definition_id)
         }
+    }
+
+    /// Generate a `CastPtr` instruction
+    fn cast_ptr(&mut self, ptr: Value, target_pid: PtrId) -> DefinitionId {
+        let definition_id = DefinitionId::new(Type::Ptr(target_pid));
+        self.buf.push(Instruction {
+            definition_id,
+            kind: InstructionKind::CastPtr { ptr },
+        });
+        definition_id
     }
 }

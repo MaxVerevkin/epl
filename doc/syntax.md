@@ -44,7 +44,7 @@ Everything after `#` is treated as a comment.
 - comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
 - multiplicative_expr = unary_expr ( (`*` | `/`) unary_expr )*
-- unary_expr = (`-` | `!`)? unary_expr | field_access_expr
+- unary_expr = (`-` | `!` | `&`)? unary_expr | field_access_expr
 - field_access_expr = base_expr (`.` ident)*
 - base_expr = literal | function_call_expr | ident | `(` expr `)` | expr_with_block
 - expr_with_block = block_expr | if_expr | loop_expr | while_expr | struct_initializer

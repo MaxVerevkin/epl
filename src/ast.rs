@@ -325,6 +325,7 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     Negate,
     Not,
+    AddressOf,
 }
 
 /// A parser for the source code
@@ -819,6 +820,15 @@ impl Parser<'_> {
                 let rhs = self.next_unary_expr()?;
                 Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
                     op: UnaryOp::Not,
+                    rhs: Box::new(rhs),
+                    op_span,
+                })))
+            }
+            Some(lex::Token::Punct(lex::Punct::Ampersand)) => {
+                let (op_span, _) = self.consume_token()?.unwrap();
+                let rhs = self.next_unary_expr()?;
+                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                    op: UnaryOp::AddressOf,
                     rhs: Box::new(rhs),
                     op_span,
                 })))

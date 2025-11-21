@@ -127,6 +127,7 @@ impl LlvmModule {
                                 c"".as_ptr(),
                             )
                         },
+                        ir::InstructionKind::CastPtr { ptr } => ctx.build_value(ptr),
                     };
                     ctx.value_map.insert(instruction.definition_id, value);
                 }

@@ -14,7 +14,7 @@ use crate::common::ArithmeticOp;
 use crate::common::CmpOp;
 use crate::lex;
 use crate::make_entity_id;
-pub use types::{Layout, Type, TypeSystem};
+pub use types::{Layout, PtrId, Type, TypeSystem};
 
 /// An intermediate representation of a program
 #[derive(Debug)]
@@ -258,6 +258,7 @@ pub enum InstructionKind {
     Arithmetic { op: ArithmeticOp, lhs: Value, rhs: Value },
     Not { value: Value },
     OffsetPtr { ptr: Value, offset: i64 },
+    CastPtr { ptr: Value },
 }
 
 /// The terminator of a basic block
