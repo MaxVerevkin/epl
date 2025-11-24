@@ -128,6 +128,9 @@ impl LlvmModule {
                             )
                         },
                         ir::InstructionKind::CastPtr { ptr } => ctx.build_value(ptr),
+                        ir::InstructionKind::CastInt { int } => {
+                            builder.int_cast(ctx.build_value(int), ctx.build_type(instruction.definition_id.ty()))
+                        }
                     };
                     ctx.value_map.insert(instruction.definition_id, value);
                 }
@@ -423,6 +426,11 @@ impl LlvmBuilder {
     /// Build the `xor` instruction
     fn xor(&self, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
         unsafe { LLVMBuildXor(self.raw, lhs, rhs, c"".as_ptr()) }
+    }
+
+    /// Build the `intcast` instruction
+    fn int_cast(&self, int: LLVMValueRef, target_ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMBuildIntCast(self.raw, int, target_ty, c"".as_ptr()) }
     }
 
     /// Build the `br` instruction

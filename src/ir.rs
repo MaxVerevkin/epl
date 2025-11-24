@@ -260,6 +260,7 @@ pub enum InstructionKind {
     Not { value: Value },
     OffsetPtr { ptr: Value, offset: i64 },
     CastPtr { ptr: Value },
+    CastInt { int: Value },
 }
 
 /// The terminator of a basic block

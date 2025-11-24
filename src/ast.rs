@@ -156,6 +156,7 @@ pub enum ExprWithNoBlock {
     Unary(UnaryExpr),
     FieldAccess(FieldAccessExpr),
     Dereference(DereferenceExpr),
+    AsCast(AsCastExpr),
 }
 
 /// An expression which can be a statement on its own
@@ -196,6 +197,7 @@ impl ExprWithNoBlock {
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
             Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
             Self::Dereference(e) => e.ptr.span().join(e.op_span),
+            Self::AsCast(e) => e.expr.span().join(e.ty.span),
         }
     }
 }
@@ -320,6 +322,14 @@ pub struct FieldAccessExpr {
 pub struct DereferenceExpr {
     pub ptr: Box<Expr>,
     pub op_span: lex::Span,
+}
+
+/// A `as` cast expression
+#[derive(Debug, Clone)]
+pub struct AsCastExpr {
+    pub expr: Box<Expr>,
+    pub ty: Type,
+    pub as_span: lex::Span,
 }
 
 /// A binary operation
@@ -825,7 +835,7 @@ impl Parser<'_> {
     }
 
     fn next_multiplicative_expr(&mut self) -> Result<Expr, Error> {
-        let mut expr = self.next_unary_expr()?;
+        let mut expr = self.next_as_expr()?;
         loop {
             let op = match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Arithmetic(ArithmeticOp::Mul),
@@ -836,11 +846,26 @@ impl Parser<'_> {
             expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
-                rhs: Box::new(self.next_unary_expr()?),
+                rhs: Box::new(self.next_as_expr()?),
                 op_span,
             }));
         }
         Ok(expr)
+    }
+
+    fn next_as_expr(&mut self) -> Result<Expr, Error> {
+        let expr = self.next_unary_expr()?;
+        if self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::As)) {
+            let (as_span, _) = self.consume_token()?.unwrap();
+            let ty = self.next_type()?;
+            Ok(Expr::WithNoBlock(ExprWithNoBlock::AsCast(AsCastExpr {
+                expr: Box::new(expr),
+                ty,
+                as_span,
+            })))
+        } else {
+            Ok(expr)
+        }
     }
 
     fn next_unary_expr(&mut self) -> Result<Expr, Error> {

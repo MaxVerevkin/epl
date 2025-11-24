@@ -21,6 +21,7 @@ Everything after `#` is treated as a comment.
 - `false`
 - `struct`
 - `undefined`
+- `as`
 
 ## Items
 
@@ -45,7 +46,8 @@ Everything after `#` is treated as a comment.
 - and_expr = comp_expr ( `&&` comp_expr )*
 - comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
-- multiplicative_expr = unary_expr ( (`*` | `/`) unary_expr )*
+- multiplicative_expr = as_expr ( (`*` | `/`) as_expr )*
+- as_expr = unary_expr ( `as` type )?
 - unary_expr = (`-` | `!` | `&`)? unary_expr | field_access_expr
 - field_access_expr = base_expr ( `.` (ident | `*`) )*
 - base_expr = literal | function_call_expr | ident | `(` expr `)` | expr_with_block

@@ -669,6 +669,39 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
             },
+            ast::ExprWithNoBlock::AsCast(as_cast_expr) => {
+                let ty = self.typesystem.type_from_ast(&self.type_namespace, &as_cast_expr.ty)?;
+                if let Some(expect_type) = expect_type
+                    && expect_type != ty
+                {
+                    return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                }
+                let expr_eval = self.eval_expr(&as_cast_expr.expr, None)?; // TODO: pass ty as a hint (but not a requirement!)
+                let expr_eval_ty = expr_eval.ty();
+                if expr_eval_ty == Type::Never || expr_eval_ty == ty {
+                    return Ok(expr_eval);
+                }
+                match ty {
+                    Type::Int(int_ty) => {
+                        if !matches!(expr_eval_ty, Type::Int(_)) {
+                            Err(Error::new(format!("cannot cast {expr_eval_ty:?} to an integer"))
+                                .with_span(as_cast_expr.as_span))
+                        } else if let EvalResult::Value(value) = expr_eval {
+                            Ok(EvalResult::Value(Value::Definition(
+                                self.cursor().cast_int(value, int_ty),
+                            )))
+                        } else {
+                            Ok(EvalResult::Diverges(ty))
+                        }
+                    }
+                    Type::OpaquePointer => todo!(),
+                    Type::Ptr(pid) => todo!(),
+                    _ => {
+                        Err(Error::new("only casting to integers and pointers is allowed")
+                            .with_span(as_cast_expr.as_span))
+                    }
+                }
+            }
             ast::ExprWithNoBlock::Ident(_)
             | ast::ExprWithNoBlock::FieldAccess(_)
             | ast::ExprWithNoBlock::Dereference(_) => {
@@ -1025,6 +1058,16 @@ impl InstructionCursor<'_> {
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::CastPtr { ptr },
+        });
+        definition_id
+    }
+
+    /// Generate a `CastInt` instruction
+    fn cast_int(&mut self, int: Value, target_int_ty: IntType) -> DefinitionId {
+        let definition_id = DefinitionId::new(Type::Int(target_int_ty));
+        self.buf.push(Instruction {
+            definition_id,
+            kind: InstructionKind::CastInt { int },
         });
         definition_id
     }
