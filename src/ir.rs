@@ -68,7 +68,7 @@ impl Ir {
         type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
         type_namespace.insert(String::from("i32"), Type::Int(IntType::I32));
         type_namespace.insert(String::from("u32"), Type::Int(IntType::U32));
-        type_namespace.insert(String::from("ptr"), Type::OpaquePointer);
+        type_namespace.insert(String::from("ptr"), Type::Ptr(PtrId::OPAQUE));
 
         for item in &ast.items {
             match item {

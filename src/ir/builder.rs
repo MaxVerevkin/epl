@@ -172,7 +172,7 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Returns a new static allocation slot
     fn alloca(&mut self, ty: Type) -> DefinitionId {
-        let alloca = DefinitionId::new(Type::OpaquePointer);
+        let alloca = DefinitionId::new(Type::Ptr(PtrId::OPAQUE));
         self.allocas.push(Alloca {
             definition_id: alloca,
             layout: self.typesystem.layout_of(ty),
@@ -225,15 +225,17 @@ impl<'a> FunctionBuilder<'a> {
                 let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
                 let pid = match ptr_eval.ty() {
                     Type::Ptr(pid) => pid,
-                    Type::OpaquePointer => {
-                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
-                    }
                     other => {
                         return Err(Error::new(format!("only pointers can be dereferenced, not {other:?}"))
                             .with_span(dereference_expr.op_span));
                     }
                 };
-                let pointee_ty = self.typesystem.get_ptr(pid).pointee;
+                let pointee_ty = match self.typesystem.get_ptr(pid).pointee {
+                    Some(ty) => ty,
+                    None => {
+                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
+                    }
+                };
                 Ok((ptr_eval, pointee_ty))
             }
             _ => Err(
@@ -655,7 +657,7 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 ast::UnaryOp::AddressOf => {
                     let (place_eval, place_ty) = self.eval_place_expr(&unary_expr.rhs)?;
-                    let pid = self.typesystem.get_or_create_pointer_type(place_ty);
+                    let pid = self.typesystem.get_or_create_pointer_type(Some(place_ty));
                     let ptr_ty = Type::Ptr(pid);
                     if let Some(expect_type) = expect_type
                         && expect_type != ptr_ty
@@ -670,7 +672,7 @@ impl<'a> FunctionBuilder<'a> {
                 }
             },
             ast::ExprWithNoBlock::AsCast(as_cast_expr) => {
-                let ty = self.typesystem.type_from_ast(&self.type_namespace, &as_cast_expr.ty)?;
+                let ty = self.typesystem.type_from_ast(self.type_namespace, &as_cast_expr.ty)?;
                 if let Some(expect_type) = expect_type
                     && expect_type != ty
                 {
@@ -694,7 +696,6 @@ impl<'a> FunctionBuilder<'a> {
                             Ok(EvalResult::Diverges(ty))
                         }
                     }
-                    Type::OpaquePointer => todo!(),
                     Type::Ptr(pid) => todo!(),
                     _ => {
                         Err(Error::new("only casting to integers and pointers is allowed")
@@ -1043,7 +1044,7 @@ impl InstructionCursor<'_> {
         if offset == 0 {
             ptr
         } else {
-            let definition_id = DefinitionId::new(Type::OpaquePointer);
+            let definition_id = DefinitionId::new(Type::Ptr(PtrId::OPAQUE));
             self.buf.push(Instruction {
                 definition_id,
                 kind: InstructionKind::OffsetPtr { ptr, offset },

@@ -487,7 +487,7 @@ impl BuildCtx<'_> {
                 ir::Type::Never | ir::Type::Void => LLVMStructType([].as_mut_ptr(), 0, 0),
                 ir::Type::Bool => LLVMInt1Type(),
                 ir::Type::Int(i) => LLVMIntType(i.bits() as u32),
-                ir::Type::OpaquePointer | ir::Type::Ptr(_) => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
+                ir::Type::Ptr(_) => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
                 ir::Type::Struct(sid) => {
                     let mut tys: Vec<_> = self
                         .typesystem

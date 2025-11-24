@@ -15,7 +15,6 @@ pub enum Type {
     Void,
     Bool,
     Int(IntType),
-    OpaquePointer,
     Struct(StructId),
     Ptr(PtrId),
 }
@@ -78,14 +77,17 @@ pub struct StructField {
 pub struct PtrId(usize);
 
 impl PtrId {
+    /// A well-known opaque pointer
+    pub const OPAQUE: Self = Self(0);
+
     /// A well-known pointer `*i8`
-    pub const TO_I8: Self = Self(0);
+    pub const TO_I8: Self = Self(1);
 }
 
 /// A description of a pointer
 #[derive(Debug)]
 pub struct Ptr {
-    pub pointee: Type,
+    pub pointee: Option<Type>,
 }
 
 /// Store the state of the type system
@@ -94,7 +96,7 @@ pub struct TypeSystem {
     ptr_size: u64,
     structs: Vec<Struct>,
     pointers: Vec<Ptr>,
-    pointer_lut: HashMap<Type, PtrId>, // pointee -> poniter id
+    pointer_lut: HashMap<Option<Type>, PtrId>, // pointee -> poniter id
 }
 
 impl TypeSystem {
@@ -103,15 +105,20 @@ impl TypeSystem {
         Self {
             ptr_size,
             structs: Vec::new(),
-            pointers: vec![Ptr {
-                pointee: Type::Int(IntType::I8),
-            }],
-            pointer_lut: [(Type::Int(IntType::I8), PtrId::TO_I8)].into_iter().collect(),
+            pointers: vec![
+                Ptr { pointee: None },
+                Ptr {
+                    pointee: Some(Type::Int(IntType::I8)),
+                },
+            ],
+            pointer_lut: [(None, PtrId::OPAQUE), (Some(Type::Int(IntType::I8)), PtrId::TO_I8)]
+                .into_iter()
+                .collect(),
         }
     }
 
     /// Get a pointer ID given the pointee, or allocate and cache a new one
-    pub fn get_or_create_pointer_type(&mut self, pointee: Type) -> PtrId {
+    pub fn get_or_create_pointer_type(&mut self, pointee: Option<Type>) -> PtrId {
         if let Some(pid) = self.pointer_lut.get(&pointee).copied() {
             pid
         } else {
@@ -132,7 +139,7 @@ impl TypeSystem {
                 .ok_or_else(|| Error::new(format!("unknown type {name:?}")).with_span(ast.span)),
             ast::TypeValue::Ptr(pointee) => {
                 let pointee = self.type_from_ast(type_namespace, pointee)?;
-                let pid = self.get_or_create_pointer_type(pointee);
+                let pid = self.get_or_create_pointer_type(Some(pointee));
                 Ok(Type::Ptr(pid))
             }
         }
@@ -171,7 +178,7 @@ impl TypeSystem {
                 size: i.bytes(),
                 align: i.bytes(),
             },
-            Type::OpaquePointer | Type::Ptr(_) => Layout {
+            Type::Ptr(_) => Layout {
                 size: self.ptr_size,
                 align: self.ptr_size,
             },
