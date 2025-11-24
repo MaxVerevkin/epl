@@ -696,7 +696,16 @@ impl<'a> FunctionBuilder<'a> {
                             Ok(EvalResult::Diverges(ty))
                         }
                     }
-                    Type::Ptr(pid) => todo!(),
+                    Type::Ptr(pid) => {
+                        if !matches!(expr_eval_ty, Type::Ptr(_)) {
+                            Err(Error::new(format!("cannot cast {expr_eval_ty:?} to a pointer"))
+                                .with_span(as_cast_expr.as_span))
+                        } else if let EvalResult::Value(value) = expr_eval {
+                            Ok(EvalResult::Value(Value::Definition(self.cursor().cast_ptr(value, pid))))
+                        } else {
+                            Ok(EvalResult::Diverges(ty))
+                        }
+                    }
                     _ => {
                         Err(Error::new("only casting to integers and pointers is allowed")
                             .with_span(as_cast_expr.as_span))
