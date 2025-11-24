@@ -80,6 +80,10 @@ pub enum Literal {
 pub enum Punct {
     /// ...
     TrippleDot,
+    // ||
+    LogicalOr,
+    // &&
+    LogicalAnd,
     /// ==
     CmpEq,
     /// !=
@@ -139,6 +143,8 @@ pub enum Punct {
 /// A mapping from strings to punct tokens
 const PUNCT_MAP: &[(&str, Punct)] = &[
     ("...", Punct::TrippleDot),
+    ("||", Punct::LogicalOr),
+    ("&&", Punct::LogicalAnd),
     ("==", Punct::CmpEq),
     ("!=", Punct::CmpNeq),
     ("<=", Punct::CmpLe),

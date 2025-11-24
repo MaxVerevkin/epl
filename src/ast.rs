@@ -327,6 +327,8 @@ pub struct DereferenceExpr {
 pub enum BinaryOp {
     Cmp(CmpOp),
     Arithmetic(ArithmeticOp),
+    LogicalOr,
+    LogicalAnd,
 }
 
 /// A unary operation
@@ -717,13 +719,13 @@ impl Parser<'_> {
     }
 
     fn next_assigning_expr(&mut self) -> Result<Expr, Error> {
-        let expr = self.next_comp_expr()?;
+        let expr = self.next_or_expr()?;
         match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::Assign)) => {
                 self.consume_token()?;
                 Ok(Expr::WithNoBlock(ExprWithNoBlock::Assignment(AssignmentExpr {
                     place: Box::new(expr),
-                    value: Box::new(self.next_comp_expr()?),
+                    value: Box::new(self.next_or_expr()?),
                 })))
             }
             Some(lex::Token::Punct(
@@ -740,7 +742,7 @@ impl Parser<'_> {
                 Ok(Expr::WithNoBlock(ExprWithNoBlock::CompoundAssignment(
                     CompoundAssignmentExpr {
                         place: Box::new(expr),
-                        value: Box::new(self.next_comp_expr()?),
+                        value: Box::new(self.next_or_expr()?),
                         op,
                         op_span,
                     },
@@ -748,6 +750,34 @@ impl Parser<'_> {
             }
             _ => Ok(expr),
         }
+    }
+
+    fn next_or_expr(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.next_and_expr()?;
+        while self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::LogicalOr)) {
+            let (op_span, _) = self.consume_token()?.unwrap();
+            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+                op: BinaryOp::LogicalOr,
+                lhs: Box::new(expr),
+                rhs: Box::new(self.next_and_expr()?),
+                op_span,
+            }));
+        }
+        Ok(expr)
+    }
+
+    fn next_and_expr(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.next_comp_expr()?;
+        while self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::LogicalAnd)) {
+            let (op_span, _) = self.consume_token()?.unwrap();
+            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+                op: BinaryOp::LogicalAnd,
+                lhs: Box::new(expr),
+                rhs: Box::new(self.next_comp_expr()?),
+                op_span,
+            }));
+        }
+        Ok(expr)
     }
 
     fn next_comp_expr(&mut self) -> Result<Expr, Error> {

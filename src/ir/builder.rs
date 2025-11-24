@@ -554,6 +554,64 @@ impl<'a> FunctionBuilder<'a> {
                         },
                     )
                 }
+                ast::BinaryOp::LogicalOr => {
+                    let continuation_id = BasicBlockId::new();
+                    let if_false_id = BasicBlockId::new();
+                    let result_def = DefinitionId::new(Type::Bool);
+
+                    match self.eval_expr(&binary_expr.lhs, Some(Type::Bool))? {
+                        EvalResult::Diverges(_) => self.finalize_block(Terminator::Unreachable),
+                        EvalResult::Value(lhs) => self.finalize_block(Terminator::CondJump {
+                            cond: lhs,
+                            if_true: continuation_id,
+                            if_true_args: vec![Value::Constant(Constant::Bool(true))],
+                            if_false: if_false_id,
+                            if_false_args: Vec::new(),
+                        }),
+                    }
+
+                    self.current_block_id = if_false_id;
+                    match self.eval_expr(&binary_expr.rhs, Some(Type::Bool))? {
+                        EvalResult::Diverges(_) => self.finalize_block(Terminator::Unreachable),
+                        EvalResult::Value(rhs) => self.finalize_block(Terminator::Jump {
+                            to: continuation_id,
+                            args: vec![rhs],
+                        }),
+                    }
+
+                    self.current_block_id = continuation_id;
+                    self.current_block_args = vec![result_def];
+                    Ok(EvalResult::Value(Value::Definition(result_def)))
+                }
+                ast::BinaryOp::LogicalAnd => {
+                    let continuation_id = BasicBlockId::new();
+                    let if_true_id = BasicBlockId::new();
+                    let result_def = DefinitionId::new(Type::Bool);
+
+                    match self.eval_expr(&binary_expr.lhs, Some(Type::Bool))? {
+                        EvalResult::Diverges(_) => self.finalize_block(Terminator::Unreachable),
+                        EvalResult::Value(lhs) => self.finalize_block(Terminator::CondJump {
+                            cond: lhs,
+                            if_true: if_true_id,
+                            if_true_args: Vec::new(),
+                            if_false: continuation_id,
+                            if_false_args: vec![Value::Constant(Constant::Bool(false))],
+                        }),
+                    }
+
+                    self.current_block_id = if_true_id;
+                    match self.eval_expr(&binary_expr.rhs, Some(Type::Bool))? {
+                        EvalResult::Diverges(_) => self.finalize_block(Terminator::Unreachable),
+                        EvalResult::Value(rhs) => self.finalize_block(Terminator::Jump {
+                            to: continuation_id,
+                            args: vec![rhs],
+                        }),
+                    }
+
+                    self.current_block_id = continuation_id;
+                    self.current_block_args = vec![result_def];
+                    Ok(EvalResult::Value(Value::Definition(result_def)))
+                }
             },
             ast::ExprWithNoBlock::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
