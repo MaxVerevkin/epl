@@ -854,18 +854,17 @@ impl Parser<'_> {
     }
 
     fn next_as_expr(&mut self) -> Result<Expr, Error> {
-        let expr = self.next_unary_expr()?;
-        if self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::As)) {
+        let mut expr = self.next_unary_expr()?;
+        while self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::As)) {
             let (as_span, _) = self.consume_token()?.unwrap();
             let ty = self.next_type()?;
-            Ok(Expr::WithNoBlock(ExprWithNoBlock::AsCast(AsCastExpr {
+            expr = Expr::WithNoBlock(ExprWithNoBlock::AsCast(AsCastExpr {
                 expr: Box::new(expr),
                 ty,
                 as_span,
-            })))
-        } else {
-            Ok(expr)
+            }));
         }
+        Ok(expr)
     }
 
     fn next_unary_expr(&mut self) -> Result<Expr, Error> {
