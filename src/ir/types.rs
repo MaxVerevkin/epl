@@ -226,6 +226,15 @@ impl TypeSystem {
 }
 
 impl Type {
+    /// Expect this type to be an integer type, extract the type, and panic otherwise.
+    #[track_caller]
+    pub fn expect_int(self) -> IntType {
+        match self {
+            Self::Int(i) => i,
+            _ => panic!("Type::expect_int() called on {self:?}"),
+        }
+    }
+
     /// Returns `true` if this data type is an integer
     pub fn is_int(self) -> bool {
         matches!(self, Self::Int(_))

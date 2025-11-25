@@ -129,7 +129,14 @@ impl LlvmModule {
                         },
                         ir::InstructionKind::CastPtr { ptr } => ctx.build_value(ptr),
                         ir::InstructionKind::CastInt { int } => {
-                            builder.int_cast(ctx.build_value(int), ctx.build_type(instruction.definition_id.ty()))
+                            let int_val = ctx.build_value(int);
+                            let target_ty = ctx.build_type(instruction.definition_id.ty());
+                            match (int.ty().expect_int(), instruction.definition_id.ty().expect_int()) {
+                                (a, b) if a.bits() == b.bits() => int_val,
+                                (a, b) if a.bits() > b.bits() => builder.trunc(int_val, target_ty),
+                                (a, _) if a.is_signed() => builder.sext(int_val, target_ty),
+                                _ => builder.zext(int_val, target_ty),
+                            }
                         }
                     };
                     ctx.value_map.insert(instruction.definition_id, value);
@@ -428,9 +435,19 @@ impl LlvmBuilder {
         unsafe { LLVMBuildXor(self.raw, lhs, rhs, c"".as_ptr()) }
     }
 
-    /// Build the `intcast` instruction
-    fn int_cast(&self, int: LLVMValueRef, target_ty: LLVMTypeRef) -> LLVMValueRef {
-        unsafe { LLVMBuildIntCast(self.raw, int, target_ty, c"".as_ptr()) }
+    /// Build the `trunc` instruction
+    fn trunc(&self, int: LLVMValueRef, target_ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMBuildTrunc(self.raw, int, target_ty, c"".as_ptr()) }
+    }
+
+    /// Build the `zext` instruction
+    fn zext(&self, int: LLVMValueRef, target_ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMBuildZExt(self.raw, int, target_ty, c"".as_ptr()) }
+    }
+
+    /// Build the `sext` instruction
+    fn sext(&self, int: LLVMValueRef, target_ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMBuildSExt(self.raw, int, target_ty, c"".as_ptr()) }
     }
 
     /// Build the `br` instruction
