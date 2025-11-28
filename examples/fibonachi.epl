@@ -20,12 +20,14 @@ fn fib_it(n: u32) -> u32 {
 }
 
 fn main() -> i32 {
-	let n: u32 = 0;
-	while n < 10 {
-		printf("fib(%i) = %i\n", n, fib(n));
-		printf("fib_id(%i) = %i\n", n, fib_it(n));
-		n += 1;
-	}
+	printf("%i\n", comptime fib(10));
+	printf("%i\n", comptime fib_it(10));
+	# let n: u32 = 0;
+	# while n < 10 {
+	# 	printf("fib(%i) = %i\n", n, fib(n));
+	# 	printf("fib_id(%i) = %i\n", n, fib_it(n));
+	# 	n += 1;
+	# }
 	0
 }
 

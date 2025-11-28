@@ -74,7 +74,7 @@ pub enum TypeValue {
 #[derive(Debug, Clone)]
 pub struct BlockExpr {
     pub statements: Vec<Statement>,
-    pub final_expr: Option<ExprWithNoBlock>,
+    pub final_expr: Option<Box<Expr>>,
     pub opening_brace_span: lex::Span,
     pub closing_brace_span: lex::Span,
 }
@@ -124,8 +124,7 @@ pub struct StructInitializerField {
 pub enum Statement {
     Empty,
     Let(LetStatement),
-    ExprWithNoBlock(ExprWithNoBlock),
-    ExprWithBlock(ExprWithBlock),
+    Expr(Expr),
 }
 
 /// A statement
@@ -136,15 +135,13 @@ pub enum LetStatement {
 }
 
 /// An expression
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Expr {
-    WithNoBlock(ExprWithNoBlock),
-    WithBlock(ExprWithBlock),
-}
-
-/// An expression which cannot be a statement on its own
-#[derive(Debug, Clone)]
-pub enum ExprWithNoBlock {
+    Block(BlockExpr),
+    If(IfExpr),
+    Loop(LoopExpr),
+    While(WhileExpr),
+    StructInitializer(StructInitializerExpr),
     Return(ReturnExpr),
     Break(BreakExpr),
     Literal(LiteralExpr),
@@ -157,52 +154,10 @@ pub enum ExprWithNoBlock {
     FieldAccess(FieldAccessExpr),
     Dereference(DereferenceExpr),
     AsCast(AsCastExpr),
-}
-
-/// An expression which can be a statement on its own
-#[derive(Debug, Clone)]
-pub enum ExprWithBlock {
-    Block(BlockExpr),
-    If(IfExpr),
-    Loop(LoopExpr),
-    While(WhileExpr),
-    StructInitializer(StructInitializerExpr),
+    Comptime(ComptimeExpr),
 }
 
 impl Expr {
-    /// Get the span of this expression
-    pub fn span(&self) -> lex::Span {
-        match self {
-            Self::WithNoBlock(expr) => expr.span(),
-            Self::WithBlock(expr) => expr.span(),
-        }
-    }
-}
-
-impl ExprWithNoBlock {
-    /// Get the span of this expression
-    pub fn span(&self) -> lex::Span {
-        match self {
-            Self::Return(return_expr) => return_expr.return_keyword_span.join(return_expr.value.span()),
-            Self::Break(break_expr) => match &break_expr.value {
-                Some(val) => break_expr.break_keyword_span.join(val.span()),
-                None => break_expr.break_keyword_span,
-            },
-            Self::Literal(literal_expr) => literal_expr.span,
-            Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
-            Self::Assignment(e) => e.place.span().join(e.value.span()),
-            Self::CompoundAssignment(e) => e.place.span().join(e.value.span()),
-            Self::Ident(ident) => ident.span,
-            Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
-            Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
-            Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
-            Self::Dereference(e) => e.ptr.span().join(e.op_span),
-            Self::AsCast(e) => e.expr.span().join(e.ty.span),
-        }
-    }
-}
-
-impl ExprWithBlock {
     /// Get the span of this expression
     pub fn span(&self) -> lex::Span {
         match self {
@@ -220,6 +175,22 @@ impl ExprWithBlock {
                 .as_ref()
                 .map_or(e.opening_brace_span, |n| n.span)
                 .join(e.closing_brace_span),
+            Self::Return(return_expr) => return_expr.return_keyword_span.join(return_expr.value.span()),
+            Self::Break(break_expr) => match &break_expr.value {
+                Some(val) => break_expr.break_keyword_span.join(val.span()),
+                None => break_expr.break_keyword_span,
+            },
+            Self::Literal(literal_expr) => literal_expr.span,
+            Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
+            Self::Assignment(e) => e.place.span().join(e.value.span()),
+            Self::CompoundAssignment(e) => e.place.span().join(e.value.span()),
+            Self::Ident(ident) => ident.span,
+            Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
+            Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
+            Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
+            Self::Dereference(e) => e.ptr.span().join(e.op_span),
+            Self::AsCast(e) => e.expr.span().join(e.ty.span),
+            Self::Comptime(e) => e.comptime_span.join(e.expr.span()),
         }
     }
 }
@@ -253,7 +224,7 @@ pub struct BreakExpr {
 }
 
 /// A literal expression with its span
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LiteralExpr {
     pub span: lex::Span,
     pub value: LiteralExprValue,
@@ -330,6 +301,13 @@ pub struct AsCastExpr {
     pub expr: Box<Expr>,
     pub ty: Type,
     pub as_span: lex::Span,
+}
+
+/// A `comptime` expression
+#[derive(Debug, Clone)]
+pub struct ComptimeExpr {
+    pub expr: Box<Expr>,
+    pub comptime_span: lex::Span,
 }
 
 /// A binary operation
@@ -641,29 +619,37 @@ impl Parser<'_> {
                     statements.push(self.next_let_statement()?);
                 }
                 _ => match self.next_expr()? {
-                    Expr::WithNoBlock(expr_with_no_block) => match self.peek_token()? {
+                    expr_with_block @ (Expr::Block(_)
+                    | Expr::If(_)
+                    | Expr::Loop(_)
+                    | Expr::While(_)
+                    | Expr::StructInitializer(_)) => match self.peek_token()? {
+                        Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
+                            final_expr = Some(expr_with_block);
+                            break;
+                        }
+                        _ => statements.push(Statement::Expr(expr_with_block)),
+                    },
+                    expr_with_no_block => match self.peek_token()? {
                         Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
                             final_expr = Some(expr_with_no_block);
                             break;
                         }
                         Some(lex::Token::Punct(lex::Punct::Semicolon)) => {
                             self.consume_token()?;
-                            statements.push(Statement::ExprWithNoBlock(expr_with_no_block));
+                            statements.push(Statement::Expr(expr_with_no_block));
                         }
                         _ => {
                             return self.consume_unexpected_token("';' or '}'");
                         }
                     },
-                    Expr::WithBlock(expr_with_block) => {
-                        statements.push(Statement::ExprWithBlock(expr_with_block));
-                    }
                 },
             }
         }
         let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
         Ok(BlockExpr {
             statements,
-            final_expr,
+            final_expr: final_expr.map(Box::new),
             opening_brace_span,
             closing_brace_span,
         })
@@ -706,10 +692,18 @@ impl Parser<'_> {
             Some(lex::Token::Keyword(lex::Keyword::Return)) => {
                 let (return_keyword_span, _) = self.consume_token()?.unwrap();
                 let value = self.next_expr()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Return(ReturnExpr {
+                Ok(Expr::Return(ReturnExpr {
                     return_keyword_span,
                     value: Box::new(value),
-                })))
+                }))
+            }
+            Some(lex::Token::Keyword(lex::Keyword::Comptime)) => {
+                let (comptime_span, _) = self.consume_token()?.unwrap();
+                let expr = self.next_expr()?;
+                Ok(Expr::Comptime(ComptimeExpr {
+                    expr: Box::new(expr),
+                    comptime_span,
+                }))
             }
             Some(lex::Token::Keyword(lex::Keyword::Break)) => {
                 let (break_keyword_span, _) = self.consume_token()?.unwrap();
@@ -719,10 +713,10 @@ impl Parser<'_> {
                     )) => None,
                     _ => Some(Box::new(self.next_expr()?)),
                 };
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Break(BreakExpr {
+                Ok(Expr::Break(BreakExpr {
                     break_keyword_span,
                     value,
-                })))
+                }))
             }
             _ => self.next_assigning_expr(),
         }
@@ -733,10 +727,10 @@ impl Parser<'_> {
         match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::Assign)) => {
                 self.consume_token()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Assignment(AssignmentExpr {
+                Ok(Expr::Assignment(AssignmentExpr {
                     place: Box::new(expr),
                     value: Box::new(self.next_or_expr()?),
-                })))
+                }))
             }
             Some(lex::Token::Punct(
                 op @ (lex::Punct::AddAssign | lex::Punct::SubAssign | lex::Punct::MulAssign | lex::Punct::DivAssign),
@@ -749,14 +743,12 @@ impl Parser<'_> {
                     _ => unreachable!(),
                 };
                 let (op_span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::CompoundAssignment(
-                    CompoundAssignmentExpr {
-                        place: Box::new(expr),
-                        value: Box::new(self.next_or_expr()?),
-                        op,
-                        op_span,
-                    },
-                )))
+                Ok(Expr::CompoundAssignment(CompoundAssignmentExpr {
+                    place: Box::new(expr),
+                    value: Box::new(self.next_or_expr()?),
+                    op,
+                    op_span,
+                }))
             }
             _ => Ok(expr),
         }
@@ -766,12 +758,12 @@ impl Parser<'_> {
         let mut expr = self.next_and_expr()?;
         while self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::LogicalOr)) {
             let (op_span, _) = self.consume_token()?.unwrap();
-            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+            expr = Expr::Binary(BinaryExpr {
                 op: BinaryOp::LogicalOr,
                 lhs: Box::new(expr),
                 rhs: Box::new(self.next_and_expr()?),
                 op_span,
-            }));
+            });
         }
         Ok(expr)
     }
@@ -780,12 +772,12 @@ impl Parser<'_> {
         let mut expr = self.next_comp_expr()?;
         while self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::LogicalAnd)) {
             let (op_span, _) = self.consume_token()?.unwrap();
-            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+            expr = Expr::Binary(BinaryExpr {
                 op: BinaryOp::LogicalAnd,
                 lhs: Box::new(expr),
                 rhs: Box::new(self.next_comp_expr()?),
                 op_span,
-            }));
+            });
         }
         Ok(expr)
     }
@@ -804,12 +796,12 @@ impl Parser<'_> {
         match op {
             Some(op) => {
                 let (op_span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+                Ok(Expr::Binary(BinaryExpr {
                     op,
                     lhs: Box::new(expr),
                     rhs: Box::new(self.next_additive_expr()?),
                     op_span,
-                })))
+                }))
             }
             None => Ok(expr),
         }
@@ -824,12 +816,12 @@ impl Parser<'_> {
                 _ => break,
             };
             let (op_span, _) = self.consume_token()?.unwrap();
-            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+            expr = Expr::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
                 rhs: Box::new(self.next_multiplicative_expr()?),
                 op_span,
-            }));
+            });
         }
         Ok(expr)
     }
@@ -843,12 +835,12 @@ impl Parser<'_> {
                 _ => break,
             };
             let (op_span, _) = self.consume_token()?.unwrap();
-            expr = Expr::WithNoBlock(ExprWithNoBlock::Binary(BinaryExpr {
+            expr = Expr::Binary(BinaryExpr {
                 op,
                 lhs: Box::new(expr),
                 rhs: Box::new(self.next_as_expr()?),
                 op_span,
-            }));
+            });
         }
         Ok(expr)
     }
@@ -858,11 +850,11 @@ impl Parser<'_> {
         while self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::As)) {
             let (as_span, _) = self.consume_token()?.unwrap();
             let ty = self.next_type()?;
-            expr = Expr::WithNoBlock(ExprWithNoBlock::AsCast(AsCastExpr {
+            expr = Expr::AsCast(AsCastExpr {
                 expr: Box::new(expr),
                 ty,
                 as_span,
-            }));
+            });
         }
         Ok(expr)
     }
@@ -872,29 +864,29 @@ impl Parser<'_> {
             Some(lex::Token::Punct(lex::Punct::Minus)) => {
                 let (op_span, _) = self.consume_token()?.unwrap();
                 let rhs = self.next_unary_expr()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                Ok(Expr::Unary(UnaryExpr {
                     op: UnaryOp::Negate,
                     rhs: Box::new(rhs),
                     op_span,
-                })))
+                }))
             }
             Some(lex::Token::Punct(lex::Punct::Exclam)) => {
                 let (op_span, _) = self.consume_token()?.unwrap();
                 let rhs = self.next_unary_expr()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                Ok(Expr::Unary(UnaryExpr {
                     op: UnaryOp::Not,
                     rhs: Box::new(rhs),
                     op_span,
-                })))
+                }))
             }
             Some(lex::Token::Punct(lex::Punct::Ampersand)) => {
                 let (op_span, _) = self.consume_token()?.unwrap();
                 let rhs = self.next_unary_expr()?;
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Unary(UnaryExpr {
+                Ok(Expr::Unary(UnaryExpr {
                     op: UnaryOp::AddressOf,
                     rhs: Box::new(rhs),
                     op_span,
-                })))
+                }))
             }
             _ => self.next_field_access_expr(),
         }
@@ -908,18 +900,18 @@ impl Parser<'_> {
             match self.peek_token()? {
                 Some(lex::Token::Ident(_)) => {
                     let name = self.next_ident()?;
-                    expr = Expr::WithNoBlock(ExprWithNoBlock::FieldAccess(FieldAccessExpr {
+                    expr = Expr::FieldAccess(FieldAccessExpr {
                         lhs: Box::new(expr),
                         field: name,
                         dot_span,
-                    }));
+                    });
                 }
                 Some(lex::Token::Punct(lex::Punct::Star)) => {
                     let (star_span, _) = self.consume_token()?.unwrap();
-                    expr = Expr::WithNoBlock(ExprWithNoBlock::Dereference(DereferenceExpr {
+                    expr = Expr::Dereference(DereferenceExpr {
                         ptr: Box::new(expr),
                         op_span: dot_span.join(star_span),
-                    }));
+                    });
                 }
                 _ => return self.consume_unexpected_token("ident or '*'"),
             }
@@ -932,48 +924,45 @@ impl Parser<'_> {
         match self.peek_token()? {
             Some(lex::Token::Ident(_)) => {
                 if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
-                    self.next_function_call_expr()
-                        .map(|expr| Expr::WithNoBlock(ExprWithNoBlock::FunctionCallExpr(expr)))
+                    self.next_function_call_expr().map(Expr::FunctionCallExpr)
                 } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
-                    self.next_struct_initializer_expr()
-                        .map(|expr| Expr::WithBlock(ExprWithBlock::StructInitializer(expr)))
+                    self.next_struct_initializer_expr().map(Expr::StructInitializer)
                 } else {
-                    self.next_ident()
-                        .map(|ident| Expr::WithNoBlock(ExprWithNoBlock::Ident(ident)))
+                    self.next_ident().map(Expr::Ident)
                 }
             }
             Some(lex::Token::Literal(_)) => {
                 let Some((span, lex::Token::Literal(lit))) = self.consume_token()? else {
                     unreachable!()
                 };
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                Ok(Expr::Literal(LiteralExpr {
                     span,
                     value: match lit {
                         lex::Literal::Number(num) => LiteralExprValue::Number(num),
                         lex::Literal::String(str) => LiteralExprValue::String(str),
                     },
-                })))
+                }))
             }
             Some(lex::Token::Keyword(lex::Keyword::True)) => {
                 let (span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                Ok(Expr::Literal(LiteralExpr {
                     span,
                     value: LiteralExprValue::Bool(true),
-                })))
+                }))
             }
             Some(lex::Token::Keyword(lex::Keyword::False)) => {
                 let (span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                Ok(Expr::Literal(LiteralExpr {
                     span,
                     value: LiteralExprValue::Bool(false),
-                })))
+                }))
             }
             Some(lex::Token::Keyword(lex::Keyword::Undefined)) => {
                 let (span, _) = self.consume_token()?.unwrap();
-                Ok(Expr::WithNoBlock(ExprWithNoBlock::Literal(LiteralExpr {
+                Ok(Expr::Literal(LiteralExpr {
                     span,
                     value: LiteralExprValue::Undefined,
-                })))
+                }))
             }
             Some(lex::Token::Punct(lex::Punct::LeftParen)) => {
                 self.consume_token()?;
@@ -981,21 +970,13 @@ impl Parser<'_> {
                 self.expect_punct(lex::Punct::RightParen)?;
                 Ok(expr)
             }
-            Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => self
-                .next_struct_initializer_expr()
-                .map(|expr| Expr::WithBlock(ExprWithBlock::StructInitializer(expr))),
-            Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self
-                .next_block_expr()
-                .map(|expr| Expr::WithBlock(ExprWithBlock::Block(expr))),
-            Some(lex::Token::Keyword(lex::Keyword::If)) => {
-                self.next_if_expr().map(|expr| Expr::WithBlock(ExprWithBlock::If(expr)))
+            Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => {
+                self.next_struct_initializer_expr().map(Expr::StructInitializer)
             }
-            Some(lex::Token::Keyword(lex::Keyword::Loop)) => self
-                .next_loop_expr()
-                .map(|expr| Expr::WithBlock(ExprWithBlock::Loop(expr))),
-            Some(lex::Token::Keyword(lex::Keyword::While)) => self
-                .next_while_expr()
-                .map(|expr| Expr::WithBlock(ExprWithBlock::While(expr))),
+            Some(lex::Token::Punct(lex::Punct::LeftBrace)) => self.next_block_expr().map(Expr::Block),
+            Some(lex::Token::Keyword(lex::Keyword::If)) => self.next_if_expr().map(Expr::If),
+            Some(lex::Token::Keyword(lex::Keyword::Loop)) => self.next_loop_expr().map(Expr::Loop),
+            Some(lex::Token::Keyword(lex::Keyword::While)) => self.next_while_expr().map(Expr::While),
             _ => self.consume_unexpected_token("expression"),
         }
     }
@@ -1138,5 +1119,43 @@ impl fmt::Debug for Item {
 impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}@{}..{}", self.value, self.span.start, self.span.end)
+    }
+}
+
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Block(e) => e.fmt(f),
+            Self::If(e) => e.fmt(f),
+            Self::Loop(e) => e.fmt(f),
+            Self::While(e) => e.fmt(f),
+            Self::StructInitializer(e) => e.fmt(f),
+            Self::Return(e) => e.fmt(f),
+            Self::Break(e) => e.fmt(f),
+            Self::Literal(e) => e.fmt(f),
+            Self::FunctionCallExpr(e) => e.fmt(f),
+            Self::Assignment(e) => e.fmt(f),
+            Self::CompoundAssignment(e) => e.fmt(f),
+            Self::Ident(e) => e.fmt(f),
+            Self::Binary(e) => e.fmt(f),
+            Self::Unary(e) => e.fmt(f),
+            Self::FieldAccess(e) => e.fmt(f),
+            Self::Dereference(e) => e.fmt(f),
+            Self::AsCast(e) => e.fmt(f),
+            Self::Comptime(e) => e.fmt(f),
+        }
+    }
+}
+
+impl fmt::Debug for LiteralExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.value {
+            LiteralExprValue::Undefined => f.write_str("undefined")?,
+            LiteralExprValue::Number(num) => num.fmt(f)?,
+            LiteralExprValue::String(s) => s.fmt(f)?,
+            LiteralExprValue::Bool(b) => b.fmt(f)?,
+        }
+        f.write_str("@")?;
+        self.span.fmt(f)
     }
 }

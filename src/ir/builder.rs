@@ -183,146 +183,255 @@ impl<'a> FunctionBuilder<'a> {
     /// Evaluate an expression
     fn eval_expr(&mut self, expr: &ast::Expr, expect_type: Option<Type>) -> Result<EvalResult, Error> {
         match expr {
-            ast::Expr::WithNoBlock(expr) => self.eval_expr_with_no_block(expr, expect_type),
-            ast::Expr::WithBlock(expr) => self.eval_expr_with_block(expr, expect_type),
-        }
-    }
-
-    /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
-    fn eval_place_expr(&mut self, expr: &ast::Expr) -> Result<(EvalResult, Type), Error> {
-        match expr {
-            ast::Expr::WithNoBlock(expr) => self.eval_place_expr_with_no_block(expr),
-            _ => Err(Error::new("expected a place expression (ident)").with_span(expr.span())),
-        }
-    }
-
-    /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
-    fn eval_place_expr_with_no_block(&mut self, expr: &ast::ExprWithNoBlock) -> Result<(EvalResult, Type), Error> {
-        match expr {
-            ast::ExprWithNoBlock::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
-                Some((alloca, ty)) => Ok((EvalResult::Value(Value::Definition(alloca)), ty)),
-                None => Err(Error::new(format!("variable {:?} not found", ident.value)).with_span(ident.span)),
-            },
-            ast::ExprWithNoBlock::FieldAccess(field_access_expr) => {
-                let (lhs_place, lhs_place_ty) = self.eval_place_expr(&field_access_expr.lhs)?;
-                let sid = match lhs_place_ty {
-                    Type::Struct(sid) => sid,
-                    other => {
-                        return Err(Error::new(format!("only structs can be field-accessed, not {other:?}"))
-                            .with_span(field_access_expr.dot_span));
-                    }
-                };
-                let (offset, field_ty) = self.typesystem.get_struct_field(sid, &field_access_expr.field)?;
-                match lhs_place {
-                    EvalResult::Diverges(_) => Ok((EvalResult::Diverges(Type::Never), field_ty)),
-                    EvalResult::Value(value) => {
-                        let ptr = self.cursor().offset_ptr(value, offset.try_into().unwrap());
-                        Ok((EvalResult::Value(ptr), field_ty))
-                    }
-                }
-            }
-            ast::ExprWithNoBlock::Dereference(dereference_expr) => {
-                let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
-                let pid = match ptr_eval.ty() {
-                    Type::Ptr(pid) => pid,
-                    other => {
-                        return Err(Error::new(format!("only pointers can be dereferenced, not {other:?}"))
-                            .with_span(dereference_expr.op_span));
-                    }
-                };
-                let pointee_ty = match self.typesystem.get_ptr(pid).pointee {
-                    Some(ty) => ty,
-                    None => {
-                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
-                    }
-                };
-                Ok((ptr_eval, pointee_ty))
-            }
-            _ => Err(
-                Error::new("expected a place expression (ident, field access or dereference)").with_span(expr.span()),
-            ),
-        }
-    }
-
-    /// Evaluate a block expression
-    fn eval_block_expr(&mut self, expr: &ast::BlockExpr, expect_type: Option<Type>) -> Result<EvalResult, Error> {
-        self.scope.push();
-        let mut value = None;
-
-        for (i, stmt) in expr.statements.iter().enumerate() {
-            match stmt {
-                ast::Statement::Empty => (),
-                ast::Statement::Let(let_statement) => match let_statement {
-                    ast::LetStatement::WithValue { name, ty, value } => {
-                        let ty = ty
-                            .as_ref()
-                            .map(|ty| self.typesystem.type_from_ast(self.type_namespace, ty))
-                            .transpose()?;
-                        let value_eval = self.eval_expr(value, ty)?;
-                        let value_ty = value_eval.ty();
-                        let alloca = self.alloca(value_ty);
-                        self.scope.variables.insert(name.value.clone(), (alloca, value_ty));
-                        match value_eval {
-                            EvalResult::Diverges(_) => (),
-                            EvalResult::Value(value) => self.cursor().store(Value::Definition(alloca), value),
-                        }
-                    }
-                    ast::LetStatement::WithoutValue { name, ty } => {
-                        let ty = self.typesystem.type_from_ast(self.type_namespace, ty)?;
-                        let alloca = self.alloca(ty);
-                        self.scope.variables.insert(name.value.clone(), (alloca, ty));
-                    }
-                },
-                ast::Statement::ExprWithNoBlock(expr_with_no_block) => {
-                    self.eval_expr_with_no_block(expr_with_no_block, None)?;
-                }
-                ast::Statement::ExprWithBlock(expr_with_block) => {
-                    if i + 1 == expr.statements.len() && expr.final_expr.is_none() {
-                        value = Some(self.eval_expr_with_block(expr_with_block, expect_type)?);
-                    } else {
-                        self.eval_expr_with_block(expr_with_block, Some(Type::Void))?;
-                    }
-                }
-            }
-        }
-
-        if let Some(final_expr) = &expr.final_expr {
-            value = Some(self.eval_expr_with_no_block(final_expr, expect_type)?);
-        }
-
-        self.scope.pop();
-
-        Ok(match value {
-            Some(value) => value,
-            None => {
+            ast::Expr::Block(block_expr) => self.eval_block_expr(block_expr, expect_type),
+            ast::Expr::If(if_expr) if if_expr.if_false.is_none() => {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Void
                 {
-                    return Err(
-                        Error::new(format!("expectd expr of type {expect_type:?}, found end-of-block"))
-                            .with_span(expr.closing_brace_span),
-                    );
+                    return Err(Error::new(format!(
+                        "if experession expected to evalueate to type {expect_type:?}, so it must have an else branch"
+                    ))
+                    .with_span(if_expr.if_keyword_span));
                 }
-                EvalResult::VOID
-            }
-        })
-    }
 
-    /// Evaluate an expression with no block
-    fn eval_expr_with_no_block(
-        &mut self,
-        expr: &ast::ExprWithNoBlock,
-        expect_type: Option<Type>,
-    ) -> Result<EvalResult, Error> {
-        match expr {
-            ast::ExprWithNoBlock::Return(return_expr) => {
+                let continuation_id = BasicBlockId::new();
+                let if_true_id = BasicBlockId::new();
+
+                let cond_eval = self.eval_expr(&if_expr.cond, Some(Type::Bool))?;
+                self.finalize_block(match cond_eval {
+                    EvalResult::Diverges(_) => Terminator::Unreachable,
+                    EvalResult::Value(cond) => Terminator::CondJump {
+                        cond,
+                        if_true: if_true_id,
+                        if_true_args: Vec::new(),
+                        if_false: continuation_id,
+                        if_false_args: Vec::new(),
+                    },
+                });
+
+                self.current_block_id = if_true_id;
+                self.eval_block_expr(&if_expr.if_true, Some(Type::Void))?;
+                self.finalize_block(Terminator::Jump {
+                    to: continuation_id,
+                    args: Vec::new(),
+                });
+                self.current_block_id = continuation_id;
+
+                Ok(EvalResult::VOID)
+            }
+            ast::Expr::If(if_expr) => {
+                let if_false_expr = if_expr.if_false.as_ref().unwrap();
+
+                let continuation_id = BasicBlockId::new();
+                let if_true_id = BasicBlockId::new();
+                let if_false_id = BasicBlockId::new();
+
+                let cond_eval = self.eval_expr(&if_expr.cond, Some(Type::Bool))?;
+                self.finalize_block(match cond_eval {
+                    EvalResult::Diverges(_) => Terminator::Unreachable,
+                    EvalResult::Value(cond) => Terminator::CondJump {
+                        cond,
+                        if_true: if_true_id,
+                        if_true_args: Vec::new(),
+                        if_false: if_false_id,
+                        if_false_args: Vec::new(),
+                    },
+                });
+
+                self.current_block_id = if_true_id;
+                let if_true_eval = self.eval_block_expr(&if_expr.if_true, expect_type)?;
+                let if_true_ty = if_true_eval.ty();
+                self.finalize_block(match if_true_eval {
+                    EvalResult::Diverges(_) => Terminator::Unreachable,
+                    EvalResult::Value(value) => Terminator::Jump {
+                        to: continuation_id,
+                        args: vec![value],
+                    },
+                });
+                self.current_block_id = if_false_id;
+                let if_false_eval = self.eval_block_expr(if_false_expr, expect_type)?;
+                let if_false_ty = if_false_eval.ty();
+                self.finalize_block(match if_false_eval {
+                    EvalResult::Diverges(_) => Terminator::Unreachable,
+                    EvalResult::Value(value) => Terminator::Jump {
+                        to: continuation_id,
+                        args: vec![value],
+                    },
+                });
+                self.current_block_id = continuation_id;
+
+                let Some(result_ty) = if_true_ty.comine_ignoring_never(if_false_ty) else {
+                    return Err(Error::new(format!(
+                        "if expression branches evaluate to different types: {if_true_ty:?} and {if_false_ty:?}"
+                    ))
+                    .with_span(if_expr.if_keyword_span));
+                };
+
+                let value = DefinitionId::new(result_ty);
+                self.current_block_args.push(value);
+                Ok(EvalResult::Value(Value::Definition(value)))
+            }
+            ast::Expr::Loop(loop_expr) => {
+                let body_id = BasicBlockId::new();
+                let continuation_id = BasicBlockId::new();
+
+                self.finalize_block(Terminator::Jump {
+                    to: body_id,
+                    args: Vec::new(),
+                });
+
+                self.current_block_id = body_id;
+                self.scope.push();
+                self.scope.loop_context = Some(LoopContext {
+                    break_to: continuation_id,
+                    break_used: false,
+                });
+                let _body_eval = self.eval_block_expr(&loop_expr.body, Some(Type::Void))?;
+                let loop_ctx = self.scope.loop_context.unwrap();
+                self.scope.pop();
+                self.finalize_block(Terminator::Jump {
+                    to: body_id,
+                    args: Vec::new(),
+                });
+
+                self.current_block_id = continuation_id;
+
+                if loop_ctx.break_used {
+                    if let Some(expect_type) = expect_type
+                        && expect_type != Type::Void
+                    {
+                        return Err(Error::new(format!(
+                            "loop experession expected to evalueate to type {expect_type:?}, but break is used, so it evaluates to Void"
+                        )).with_span(loop_expr.loop_keyword_span));
+                    }
+                    Ok(EvalResult::VOID)
+                } else {
+                    Ok(EvalResult::Diverges(Type::Never))
+                }
+            }
+            ast::Expr::While(while_expr) => {
+                let header_id = BasicBlockId::new();
+                let body_id = BasicBlockId::new();
+                let continuation_id = BasicBlockId::new();
+
+                self.finalize_block(Terminator::Jump {
+                    to: header_id,
+                    args: Vec::new(),
+                });
+
+                self.current_block_id = header_id;
+                let cond_eval = self.eval_expr(&while_expr.cond, Some(Type::Bool))?;
+                self.finalize_block(match cond_eval {
+                    EvalResult::Diverges(_) => Terminator::Unreachable,
+                    EvalResult::Value(cond) => Terminator::CondJump {
+                        cond,
+                        if_true: body_id,
+                        if_true_args: Vec::new(),
+                        if_false: continuation_id,
+                        if_false_args: Vec::new(),
+                    },
+                });
+
+                self.current_block_id = body_id;
+                self.scope.push();
+                self.scope.loop_context = Some(LoopContext {
+                    break_to: continuation_id,
+                    break_used: false,
+                });
+                let _body_eval = self.eval_block_expr(&while_expr.body, Some(Type::Void))?;
+                self.scope.pop();
+                self.finalize_block(Terminator::Jump {
+                    to: header_id,
+                    args: Vec::new(),
+                });
+
+                self.current_block_id = continuation_id;
+
+                if let Some(expect_type) = expect_type
+                    && expect_type != Type::Void
+                {
+                    return Err(Error::expr_type_missmatch(
+                        expect_type,
+                        Type::Void,
+                        while_expr.while_keyword_span,
+                    ));
+                }
+
+                Ok(EvalResult::VOID)
+            }
+            ast::Expr::StructInitializer(e) => {
+                let (ty, sid) = match &e.struct_name {
+                    Some(name) => {
+                        let ty =
+                            self.type_namespace.get(&name.value).copied().ok_or_else(|| {
+                                Error::new(format!("unknown type {:?}", name.value)).with_span(name.span)
+                            })?;
+                        let sid = match ty {
+                            Type::Struct(sid) => sid,
+                            other => {
+                                return Err(
+                                    Error::new(format!("{} is not a struct type, but {other:?}", name.value))
+                                        .with_span(name.span),
+                                );
+                            }
+                        };
+                        if let Some(expect_type) = expect_type
+                            && expect_type != ty
+                        {
+                            return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                        }
+                        (ty, sid)
+                    }
+                    None => {
+                        let expect_type =
+                            expect_type.ok_or_else(|| Error::new("type annotations needed").with_span(expr.span()))?;
+                        let sid = match expect_type {
+                            Type::Struct(sid) => sid,
+                            other => {
+                                return Err(Error::new(format!(
+                                    "expected expr of type {other:?}, got struct initializer"
+                                ))
+                                .with_span(expr.span()));
+                            }
+                        };
+                        (expect_type, sid)
+                    }
+                };
+                let struct_def = self.typesystem.get_struct(sid);
+                if let Some(missing_field) = struct_def
+                    .fields
+                    .iter()
+                    .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.name.value))
+                {
+                    return Err(Error::new(format!("missing field: {}", missing_field.name.value))
+                        .with_span(e.opening_brace_span.join(e.closing_brace_span)));
+                }
+                let place = self.alloca(ty);
+                for ef in &e.fields {
+                    let (offset, f_ty) = self.typesystem.get_struct_field(sid, &ef.name)?;
+                    match self.eval_expr(&ef.value, Some(f_ty))? {
+                        EvalResult::Diverges(_) => (),
+                        EvalResult::Value(value) => {
+                            let ptr = self
+                                .cursor()
+                                .offset_ptr(Value::Definition(place), offset.try_into().unwrap());
+                            self.cursor().store(ptr, value);
+                        }
+                    }
+                }
+                Ok(EvalResult::Value(Value::Definition(
+                    self.cursor().load(Value::Definition(place), ty),
+                )))
+            }
+
+            ast::Expr::Return(return_expr) => {
                 match self.eval_expr(&return_expr.value, Some(self.return_ty))? {
                     EvalResult::Diverges(_) => (),
                     EvalResult::Value(value) => self.finalize_block(Terminator::Return { value }),
                 }
                 Ok(EvalResult::Diverges(Type::Never))
             }
-            ast::ExprWithNoBlock::Break(break_expr) => match &break_expr.value {
+            ast::Expr::Break(break_expr) => match &break_expr.value {
                 Some(value) => {
                     match self.eval_expr(value, Some(Type::Void))? {
                         EvalResult::Diverges(_) => (),
@@ -349,7 +458,7 @@ impl<'a> FunctionBuilder<'a> {
                     Ok(EvalResult::Diverges(Type::Never))
                 }
             },
-            ast::ExprWithNoBlock::Literal(literal_expr) => match &literal_expr.value {
+            ast::Expr::Literal(literal_expr) => match &literal_expr.value {
                 ast::LiteralExprValue::Number(number) => {
                     let int_ty = match expect_type {
                         None => IntType::I32,
@@ -395,7 +504,7 @@ impl<'a> FunctionBuilder<'a> {
                     Ok(EvalResult::Value(Value::Constant(Constant::Undefined(expect_type))))
                 }
             },
-            ast::ExprWithNoBlock::FunctionCallExpr(function_call_expr) => {
+            ast::Expr::FunctionCallExpr(function_call_expr) => {
                 let decl = self.function_decls.get(&function_call_expr.name.value).ok_or_else(|| {
                     Error::new(format!("function {:?} not found", function_call_expr.name.value))
                         .with_span(function_call_expr.name.span)
@@ -453,7 +562,7 @@ impl<'a> FunctionBuilder<'a> {
                     }
                 }
             }
-            ast::ExprWithNoBlock::Assignment(assignment_expr) => {
+            ast::Expr::Assignment(assignment_expr) => {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Void
                 {
@@ -468,7 +577,7 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 Ok(EvalResult::VOID)
             }
-            ast::ExprWithNoBlock::CompoundAssignment(compound_assignment_expr) => {
+            ast::Expr::CompoundAssignment(compound_assignment_expr) => {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Void
                 {
@@ -493,7 +602,7 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 Ok(EvalResult::VOID)
             }
-            ast::ExprWithNoBlock::Binary(binary_expr) => match binary_expr.op {
+            ast::Expr::Binary(binary_expr) => match binary_expr.op {
                 ast::BinaryOp::Cmp(cmp_op) => {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
@@ -615,7 +724,7 @@ impl<'a> FunctionBuilder<'a> {
                     Ok(EvalResult::Value(Value::Definition(result_def)))
                 }
             },
-            ast::ExprWithNoBlock::Unary(unary_expr) => match unary_expr.op {
+            ast::Expr::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
                     let rhs_eval = self.eval_expr(&unary_expr.rhs, None)?; // TODO: pass expect type to eval_expr?
                     let int_ty = match rhs_eval.ty() {
@@ -671,7 +780,7 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
             },
-            ast::ExprWithNoBlock::AsCast(as_cast_expr) => {
+            ast::Expr::AsCast(as_cast_expr) => {
                 let ty = self.typesystem.type_from_ast(self.type_namespace, &as_cast_expr.ty)?;
                 if let Some(expect_type) = expect_type
                     && expect_type != ty
@@ -712,10 +821,11 @@ impl<'a> FunctionBuilder<'a> {
                     }
                 }
             }
-            ast::ExprWithNoBlock::Ident(_)
-            | ast::ExprWithNoBlock::FieldAccess(_)
-            | ast::ExprWithNoBlock::Dereference(_) => {
-                let (place_eval, place_ty) = self.eval_place_expr_with_no_block(expr)?;
+            ast::Expr::Comptime(_) => {
+                unimplemented!("comptime blocks are not yet implemented")
+            }
+            ast::Expr::Ident(_) | ast::Expr::FieldAccess(_) | ast::Expr::Dereference(_) => {
+                let (place_eval, place_ty) = self.eval_place_expr(expr)?;
                 if let Some(expect_type) = expect_type
                     && expect_type != place_ty
                 {
@@ -730,254 +840,110 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
-    /// Evaluate an expression with block
-    fn eval_expr_with_block(
-        &mut self,
-        expr: &ast::ExprWithBlock,
-        expect_type: Option<Type>,
-    ) -> Result<EvalResult, Error> {
+    /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
+    fn eval_place_expr(&mut self, expr: &ast::Expr) -> Result<(EvalResult, Type), Error> {
         match expr {
-            ast::ExprWithBlock::Block(block_expr) => self.eval_block_expr(block_expr, expect_type),
-            ast::ExprWithBlock::If(if_expr) if if_expr.if_false.is_none() => {
-                if let Some(expect_type) = expect_type
-                    && expect_type != Type::Void
-                {
-                    return Err(Error::new(format!(
-                        "if experession expected to evalueate to type {expect_type:?}, so it must have an else branch"
-                    ))
-                    .with_span(if_expr.if_keyword_span));
-                }
-
-                let continuation_id = BasicBlockId::new();
-                let if_true_id = BasicBlockId::new();
-
-                let cond_eval = self.eval_expr(&if_expr.cond, Some(Type::Bool))?;
-                self.finalize_block(match cond_eval {
-                    EvalResult::Diverges(_) => Terminator::Unreachable,
-                    EvalResult::Value(cond) => Terminator::CondJump {
-                        cond,
-                        if_true: if_true_id,
-                        if_true_args: Vec::new(),
-                        if_false: continuation_id,
-                        if_false_args: Vec::new(),
-                    },
-                });
-
-                self.current_block_id = if_true_id;
-                self.eval_block_expr(&if_expr.if_true, Some(Type::Void))?;
-                self.finalize_block(Terminator::Jump {
-                    to: continuation_id,
-                    args: Vec::new(),
-                });
-                self.current_block_id = continuation_id;
-
-                Ok(EvalResult::VOID)
-            }
-            ast::ExprWithBlock::If(if_expr) => {
-                let if_false_expr = if_expr.if_false.as_ref().unwrap();
-
-                let continuation_id = BasicBlockId::new();
-                let if_true_id = BasicBlockId::new();
-                let if_false_id = BasicBlockId::new();
-
-                let cond_eval = self.eval_expr(&if_expr.cond, Some(Type::Bool))?;
-                self.finalize_block(match cond_eval {
-                    EvalResult::Diverges(_) => Terminator::Unreachable,
-                    EvalResult::Value(cond) => Terminator::CondJump {
-                        cond,
-                        if_true: if_true_id,
-                        if_true_args: Vec::new(),
-                        if_false: if_false_id,
-                        if_false_args: Vec::new(),
-                    },
-                });
-
-                self.current_block_id = if_true_id;
-                let if_true_eval = self.eval_block_expr(&if_expr.if_true, expect_type)?;
-                let if_true_ty = if_true_eval.ty();
-                self.finalize_block(match if_true_eval {
-                    EvalResult::Diverges(_) => Terminator::Unreachable,
-                    EvalResult::Value(value) => Terminator::Jump {
-                        to: continuation_id,
-                        args: vec![value],
-                    },
-                });
-                self.current_block_id = if_false_id;
-                let if_false_eval = self.eval_block_expr(if_false_expr, expect_type)?;
-                let if_false_ty = if_false_eval.ty();
-                self.finalize_block(match if_false_eval {
-                    EvalResult::Diverges(_) => Terminator::Unreachable,
-                    EvalResult::Value(value) => Terminator::Jump {
-                        to: continuation_id,
-                        args: vec![value],
-                    },
-                });
-                self.current_block_id = continuation_id;
-
-                let Some(result_ty) = if_true_ty.comine_ignoring_never(if_false_ty) else {
-                    return Err(Error::new(format!(
-                        "if expression branches evaluate to different types: {if_true_ty:?} and {if_false_ty:?}"
-                    ))
-                    .with_span(if_expr.if_keyword_span));
+            ast::Expr::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
+                Some((alloca, ty)) => Ok((EvalResult::Value(Value::Definition(alloca)), ty)),
+                None => Err(Error::new(format!("variable {:?} not found", ident.value)).with_span(ident.span)),
+            },
+            ast::Expr::FieldAccess(field_access_expr) => {
+                let (lhs_place, lhs_place_ty) = self.eval_place_expr(&field_access_expr.lhs)?;
+                let sid = match lhs_place_ty {
+                    Type::Struct(sid) => sid,
+                    other => {
+                        return Err(Error::new(format!("only structs can be field-accessed, not {other:?}"))
+                            .with_span(field_access_expr.dot_span));
+                    }
                 };
-
-                let value = DefinitionId::new(result_ty);
-                self.current_block_args.push(value);
-                Ok(EvalResult::Value(Value::Definition(value)))
-            }
-            ast::ExprWithBlock::Loop(loop_expr) => {
-                let body_id = BasicBlockId::new();
-                let continuation_id = BasicBlockId::new();
-
-                self.finalize_block(Terminator::Jump {
-                    to: body_id,
-                    args: Vec::new(),
-                });
-
-                self.current_block_id = body_id;
-                self.scope.push();
-                self.scope.loop_context = Some(LoopContext {
-                    break_to: continuation_id,
-                    break_used: false,
-                });
-                let _body_eval = self.eval_block_expr(&loop_expr.body, Some(Type::Void))?;
-                let loop_ctx = self.scope.loop_context.unwrap();
-                self.scope.pop();
-                self.finalize_block(Terminator::Jump {
-                    to: body_id,
-                    args: Vec::new(),
-                });
-
-                self.current_block_id = continuation_id;
-
-                if loop_ctx.break_used {
-                    if let Some(expect_type) = expect_type
-                        && expect_type != Type::Void
-                    {
-                        return Err(Error::new(format!(
-                            "loop experession expected to evalueate to type {expect_type:?}, but break is used, so it evaluates to Void"
-                        )).with_span(loop_expr.loop_keyword_span));
+                let (offset, field_ty) = self.typesystem.get_struct_field(sid, &field_access_expr.field)?;
+                match lhs_place {
+                    EvalResult::Diverges(_) => Ok((EvalResult::Diverges(Type::Never), field_ty)),
+                    EvalResult::Value(value) => {
+                        let ptr = self.cursor().offset_ptr(value, offset.try_into().unwrap());
+                        Ok((EvalResult::Value(ptr), field_ty))
                     }
-                    Ok(EvalResult::VOID)
-                } else {
-                    Ok(EvalResult::Diverges(Type::Never))
                 }
             }
-            ast::ExprWithBlock::While(while_expr) => {
-                let header_id = BasicBlockId::new();
-                let body_id = BasicBlockId::new();
-                let continuation_id = BasicBlockId::new();
-
-                self.finalize_block(Terminator::Jump {
-                    to: header_id,
-                    args: Vec::new(),
-                });
-
-                self.current_block_id = header_id;
-                let cond_eval = self.eval_expr(&while_expr.cond, Some(Type::Bool))?;
-                self.finalize_block(match cond_eval {
-                    EvalResult::Diverges(_) => Terminator::Unreachable,
-                    EvalResult::Value(cond) => Terminator::CondJump {
-                        cond,
-                        if_true: body_id,
-                        if_true_args: Vec::new(),
-                        if_false: continuation_id,
-                        if_false_args: Vec::new(),
-                    },
-                });
-
-                self.current_block_id = body_id;
-                self.scope.push();
-                self.scope.loop_context = Some(LoopContext {
-                    break_to: continuation_id,
-                    break_used: false,
-                });
-                let _body_eval = self.eval_block_expr(&while_expr.body, Some(Type::Void))?;
-                self.scope.pop();
-                self.finalize_block(Terminator::Jump {
-                    to: header_id,
-                    args: Vec::new(),
-                });
-
-                self.current_block_id = continuation_id;
-
-                if let Some(expect_type) = expect_type
-                    && expect_type != Type::Void
-                {
-                    return Err(Error::expr_type_missmatch(
-                        expect_type,
-                        Type::Void,
-                        while_expr.while_keyword_span,
-                    ));
-                }
-
-                Ok(EvalResult::VOID)
-            }
-            ast::ExprWithBlock::StructInitializer(e) => {
-                let (ty, sid) = match &e.struct_name {
-                    Some(name) => {
-                        let ty =
-                            self.type_namespace.get(&name.value).copied().ok_or_else(|| {
-                                Error::new(format!("unknown type {:?}", name.value)).with_span(name.span)
-                            })?;
-                        let sid = match ty {
-                            Type::Struct(sid) => sid,
-                            other => {
-                                return Err(
-                                    Error::new(format!("{} is not a struct type, but {other:?}", name.value))
-                                        .with_span(name.span),
-                                );
-                            }
-                        };
-                        if let Some(expect_type) = expect_type
-                            && expect_type != ty
-                        {
-                            return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
-                        }
-                        (ty, sid)
+            ast::Expr::Dereference(dereference_expr) => {
+                let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
+                let pid = match ptr_eval.ty() {
+                    Type::Ptr(pid) => pid,
+                    other => {
+                        return Err(Error::new(format!("only pointers can be dereferenced, not {other:?}"))
+                            .with_span(dereference_expr.op_span));
                     }
+                };
+                let pointee_ty = match self.typesystem.get_ptr(pid).pointee {
+                    Some(ty) => ty,
                     None => {
-                        let expect_type =
-                            expect_type.ok_or_else(|| Error::new("type annotations needed").with_span(expr.span()))?;
-                        let sid = match expect_type {
-                            Type::Struct(sid) => sid,
-                            other => {
-                                return Err(Error::new(format!(
-                                    "expected expr of type {other:?}, got struct initializer"
-                                ))
-                                .with_span(expr.span()));
-                            }
-                        };
-                        (expect_type, sid)
+                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
                     }
                 };
-                let struct_def = self.typesystem.get_struct(sid);
-                if let Some(missing_field) = struct_def
-                    .fields
-                    .iter()
-                    .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.name.value))
-                {
-                    return Err(Error::new(format!("missing field: {}", missing_field.name.value))
-                        .with_span(e.opening_brace_span.join(e.closing_brace_span)));
-                }
-                let place = self.alloca(ty);
-                for ef in &e.fields {
-                    let (offset, f_ty) = self.typesystem.get_struct_field(sid, &ef.name)?;
-                    match self.eval_expr(&ef.value, Some(f_ty))? {
-                        EvalResult::Diverges(_) => (),
-                        EvalResult::Value(value) => {
-                            let ptr = self
-                                .cursor()
-                                .offset_ptr(Value::Definition(place), offset.try_into().unwrap());
-                            self.cursor().store(ptr, value);
+                Ok((ptr_eval, pointee_ty))
+            }
+            _ => Err(
+                Error::new("expected a place expression (ident, field access or dereference)").with_span(expr.span()),
+            ),
+        }
+    }
+
+    /// Evaluate a block expression
+    fn eval_block_expr(&mut self, expr: &ast::BlockExpr, expect_type: Option<Type>) -> Result<EvalResult, Error> {
+        self.scope.push();
+
+        for stmt in &expr.statements {
+            match stmt {
+                ast::Statement::Empty => (),
+                ast::Statement::Let(let_statement) => match let_statement {
+                    ast::LetStatement::WithValue { name, ty, value } => {
+                        let ty = ty
+                            .as_ref()
+                            .map(|ty| self.typesystem.type_from_ast(self.type_namespace, ty))
+                            .transpose()?;
+                        let value_eval = self.eval_expr(value, ty)?;
+                        let value_ty = value_eval.ty();
+                        let alloca = self.alloca(value_ty);
+                        self.scope.variables.insert(name.value.clone(), (alloca, value_ty));
+                        match value_eval {
+                            EvalResult::Diverges(_) => (),
+                            EvalResult::Value(value) => self.cursor().store(Value::Definition(alloca), value),
                         }
                     }
+                    ast::LetStatement::WithoutValue { name, ty } => {
+                        let ty = self.typesystem.type_from_ast(self.type_namespace, ty)?;
+                        let alloca = self.alloca(ty);
+                        self.scope.variables.insert(name.value.clone(), (alloca, ty));
+                    }
+                },
+                ast::Statement::Expr(expr) => {
+                    self.eval_expr(expr, None)?;
                 }
-                Ok(EvalResult::Value(Value::Definition(
-                    self.cursor().load(Value::Definition(place), ty),
-                )))
             }
         }
+
+        let value = if let Some(final_expr) = &expr.final_expr {
+            Some(self.eval_expr(final_expr, expect_type)?)
+        } else {
+            None
+        };
+
+        self.scope.pop();
+
+        Ok(match value {
+            Some(value) => value,
+            None => {
+                if let Some(expect_type) = expect_type
+                    && expect_type != Type::Void
+                {
+                    return Err(
+                        Error::new(format!("expectd expr of type {expect_type:?}, found end-of-block"))
+                            .with_span(expr.closing_brace_span),
+                    );
+                }
+                EvalResult::VOID
+            }
+        })
     }
 }
 

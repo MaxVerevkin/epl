@@ -1,3 +1,5 @@
+use std::fmt;
+
 /// The lexer
 pub struct Lexer<'a> {
     offset: usize,
@@ -12,7 +14,7 @@ impl<'a> Lexer<'a> {
 }
 
 /// A span represents a slice of the input source code
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -51,6 +53,7 @@ pub enum Keyword {
     Struct,
     Undefined,
     As,
+    Comptime,
 }
 
 /// A mapping from strings to keyword tokens
@@ -68,6 +71,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("struct", Keyword::Struct),
     ("undefined", Keyword::Undefined),
     ("as", Keyword::As),
+    ("comptime", Keyword::Comptime),
 ];
 
 /// A literal token
@@ -377,5 +381,11 @@ impl Span {
     /// Check if a given index is inside the span
     pub fn contains(self, index: usize) -> bool {
         (self.start..self.end).contains(&index)
+    }
+}
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
     }
 }

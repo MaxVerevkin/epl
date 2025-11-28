@@ -22,6 +22,7 @@ Everything after `#` is treated as a comment.
 - `struct`
 - `undefined`
 - `as`
+- `comptime`
 
 ## Items
 
@@ -40,7 +41,7 @@ Everything after `#` is treated as a comment.
 
 ## Expressions
 
-- expr = `return` expr | `break` expr? | assigning_expr
+- expr = `return` expr | `break` expr? | `comptime` expr | assigning_expr
 - assigning_expr = or_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` ) or_expr )?
 - or_expr = and_expr ( `||` and_expr )*
 - and_expr = comp_expr ( `&&` comp_expr )*
