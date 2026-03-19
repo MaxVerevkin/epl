@@ -122,7 +122,6 @@ pub struct StructInitializerField {
 /// A statement
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Empty,
     Let(LetStatement),
     Expr(Expr),
 }
@@ -639,7 +638,6 @@ impl Parser<'_> {
                 }
                 Some(lex::Token::Punct(lex::Punct::Semicolon)) => {
                     self.consume_token()?;
-                    statements.push(Statement::Empty);
                 }
                 Some(lex::Token::Keyword(lex::Keyword::Let)) => {
                     statements.push(self.next_let_statement()?);

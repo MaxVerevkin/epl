@@ -894,7 +894,6 @@ impl<'a> FunctionBuilder<'a> {
 
         for stmt in &expr.statements {
             match stmt {
-                ast::Statement::Empty => (),
                 ast::Statement::Let(let_statement) => match let_statement {
                     ast::LetStatement::WithValue { name, ty, value } => {
                         let ty = ty
