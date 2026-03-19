@@ -12,9 +12,10 @@ use std::num::NonZeroU64;
 use crate::ast;
 use crate::common::ArithmeticOp;
 use crate::common::CmpOp;
+use crate::ir::types::TypeId;
 use crate::lex;
 use crate::make_entity_id;
-pub use types::{IntType, Layout, PtrId, Type, TypeSystem};
+pub use types::{IntType, Layout, Type, TypeSystem};
 
 /// An intermediate representation of a program
 #[derive(Debug)]
@@ -68,7 +69,7 @@ impl Ir {
         type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
         type_namespace.insert(String::from("i32"), Type::Int(IntType::I32));
         type_namespace.insert(String::from("u32"), Type::Int(IntType::U32));
-        type_namespace.insert(String::from("ptr"), Type::Ptr(PtrId::OPAQUE));
+        type_namespace.insert(String::from("ptr"), Type::OPAQUE_PTR);
 
         for item in &ast.items {
             match item {
@@ -366,7 +367,9 @@ impl Constant {
             Self::Undefined(ty) => *ty,
             Self::Void => Type::Void,
             Self::Bool(_) => Type::Bool,
-            Self::String(_) => Type::Ptr(PtrId::TO_I8),
+            Self::String(_) => Type::Ptr {
+                pointee: Some(TypeId::I8),
+            },
             Self::Number { data: _, ty } => Type::Int(*ty),
         }
     }

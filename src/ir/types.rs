@@ -16,7 +16,17 @@ pub enum Type {
     Bool,
     Int(IntType),
     Struct(StructId),
-    Ptr(PtrId),
+    Ptr { pointee: Option<TypeId> },
+}
+
+impl Type {
+    /// An opaque pointer type
+    pub const OPAQUE_PTR: Self = Self::Ptr { pointee: None };
+
+    /// A pointer to `i8` type
+    pub const I8_PTR: Self = Self::Ptr {
+        pointee: Some(TypeId::I8),
+    };
 }
 
 /// Interegre data type
@@ -72,22 +82,13 @@ pub struct StructField {
     pub ty: Type,
 }
 
-/// The ID of a pointer type
+/// The ID of a type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PtrId(usize);
+pub struct TypeId(usize);
 
-impl PtrId {
-    /// A well-known opaque pointer
-    pub const OPAQUE: Self = Self(0);
-
-    /// A well-known pointer `*i8`
-    pub const TO_I8: Self = Self(1);
-}
-
-/// A description of a pointer
-#[derive(Debug)]
-pub struct Ptr {
-    pub pointee: Option<Type>,
+impl TypeId {
+    /// A well-known id of `i8`
+    pub const I8: Self = Self(0);
 }
 
 /// Store the state of the type system
@@ -95,8 +96,8 @@ pub struct Ptr {
 pub struct TypeSystem {
     ptr_size: u64,
     structs: Vec<Struct>,
-    pointers: Vec<Ptr>,
-    pointer_lut: HashMap<Option<Type>, PtrId>, // pointee -> poniter id
+    types_with_ids: Vec<Type>,
+    type_lut: HashMap<Type, TypeId>,
 }
 
 impl TypeSystem {
@@ -105,27 +106,20 @@ impl TypeSystem {
         Self {
             ptr_size,
             structs: Vec::new(),
-            pointers: vec![
-                Ptr { pointee: None },
-                Ptr {
-                    pointee: Some(Type::Int(IntType::I8)),
-                },
-            ],
-            pointer_lut: [(None, PtrId::OPAQUE), (Some(Type::Int(IntType::I8)), PtrId::TO_I8)]
-                .into_iter()
-                .collect(),
+            types_with_ids: vec![Type::Int(IntType::I8)],
+            type_lut: [(Type::Int(IntType::I8), TypeId::I8)].into_iter().collect(),
         }
     }
 
-    /// Get a pointer ID given the pointee, or allocate and cache a new one
-    pub fn get_or_create_pointer_type(&mut self, pointee: Option<Type>) -> PtrId {
-        if let Some(pid) = self.pointer_lut.get(&pointee).copied() {
-            pid
+    /// Get or create a type ID for the given type
+    pub fn get_type_id(&mut self, ty: Type) -> TypeId {
+        if let Some(id) = self.type_lut.get(&ty).copied() {
+            id
         } else {
-            let pid = PtrId(self.pointers.len());
-            self.pointers.push(Ptr { pointee });
-            self.pointer_lut.insert(pointee, pid);
-            pid
+            let id = TypeId(self.types_with_ids.len());
+            self.types_with_ids.push(ty);
+            self.type_lut.insert(ty, id);
+            id
         }
     }
 
@@ -139,8 +133,10 @@ impl TypeSystem {
                 .ok_or_else(|| Error::new(format!("unknown type {:?}", ident.value)).with_span(ident.span)),
             ast::Type::Ptr { star_span: _, pointee } => {
                 let pointee = self.type_from_ast(type_namespace, pointee)?;
-                let pid = self.get_or_create_pointer_type(Some(pointee));
-                Ok(Type::Ptr(pid))
+                let pointee_id = self.get_type_id(pointee);
+                Ok(Type::Ptr {
+                    pointee: Some(pointee_id),
+                })
             }
             ast::Type::Array { .. } => unimplemented!("array support in IR is not yet implemented"),
         }
@@ -179,7 +175,7 @@ impl TypeSystem {
                 size: i.bytes(),
                 align: i.bytes(),
             },
-            Type::Ptr(_) => Layout {
+            Type::Ptr { pointee: _ } => Layout {
                 size: self.ptr_size,
                 align: self.ptr_size,
             },
@@ -220,9 +216,9 @@ impl TypeSystem {
         &self.structs[sid.0]
     }
 
-    /// Get a referencse to the pointer description
-    pub fn get_ptr(&self, pid: PtrId) -> &Ptr {
-        &self.pointers[pid.0]
+    /// Get the actual type by ID
+    pub fn get_type(&self, id: TypeId) -> Type {
+        self.types_with_ids[id.0]
     }
 }
 

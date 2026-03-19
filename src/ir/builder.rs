@@ -172,7 +172,7 @@ impl<'a> FunctionBuilder<'a> {
 
     /// Returns a new static allocation slot
     fn alloca(&mut self, ty: Type) -> DefinitionId {
-        let alloca = DefinitionId::new(Type::Ptr(PtrId::OPAQUE));
+        let alloca = DefinitionId::new(Type::OPAQUE_PTR);
         self.allocas.push(Alloca {
             definition_id: alloca,
             layout: self.typesystem.layout_of(ty),
@@ -478,13 +478,9 @@ impl<'a> FunctionBuilder<'a> {
                 }
                 ast::LiteralExprValue::String(string) => {
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Ptr(PtrId::TO_I8)
+                        && expect_type != Type::I8_PTR
                     {
-                        Err(Error::expr_type_missmatch(
-                            expect_type,
-                            Type::Ptr(PtrId::TO_I8),
-                            literal_expr.span,
-                        ))
+                        Err(Error::expr_type_missmatch(expect_type, Type::I8_PTR, literal_expr.span))
                     } else {
                         Ok(EvalResult::Value(Value::Constant(Constant::String(string.clone()))))
                     }
@@ -769,15 +765,17 @@ impl<'a> FunctionBuilder<'a> {
                         return Err(Error::new("address-of operator expects a place RHS").with_span(expr.span()));
                     };
                     let (place_eval, place_ty) = self.eval_place_expr(rhs_place)?;
-                    let pid = self.typesystem.get_or_create_pointer_type(Some(place_ty));
-                    let ptr_ty = Type::Ptr(pid);
+                    let place_ty_id = self.typesystem.get_type_id(place_ty);
+                    let ptr_ty = Type::Ptr {
+                        pointee: Some(place_ty_id),
+                    };
                     if let Some(expect_type) = expect_type
                         && expect_type != ptr_ty
                     {
                         return Err(Error::expr_type_missmatch(expect_type, ptr_ty, expr.span()));
                     }
                     Ok(if let EvalResult::Value(place) = place_eval {
-                        EvalResult::Value(Value::Definition(self.cursor().cast_ptr(place, pid)))
+                        EvalResult::Value(Value::Definition(self.cursor().cast_ptr(place, Some(place_ty_id))))
                     } else {
                         EvalResult::Diverges(ptr_ty)
                     })
@@ -808,12 +806,14 @@ impl<'a> FunctionBuilder<'a> {
                             Ok(EvalResult::Diverges(ty))
                         }
                     }
-                    Type::Ptr(pid) => {
-                        if !matches!(expr_eval_ty, Type::Ptr(_)) {
+                    Type::Ptr { pointee } => {
+                        if !matches!(expr_eval_ty, Type::Ptr { .. }) {
                             Err(Error::new(format!("cannot cast {expr_eval_ty:?} to a pointer"))
                                 .with_span(as_cast_expr.as_span))
                         } else if let EvalResult::Value(value) = expr_eval {
-                            Ok(EvalResult::Value(Value::Definition(self.cursor().cast_ptr(value, pid))))
+                            Ok(EvalResult::Value(Value::Definition(
+                                self.cursor().cast_ptr(value, pointee),
+                            )))
                         } else {
                             Ok(EvalResult::Diverges(ty))
                         }
@@ -870,19 +870,17 @@ impl<'a> FunctionBuilder<'a> {
             }
             ast::PlaceExpr::Dereference(dereference_expr) => {
                 let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
-                let pid = match ptr_eval.ty() {
-                    Type::Ptr(pid) => pid,
+                let pointee = match ptr_eval.ty() {
+                    Type::Ptr { pointee: Some(pointee) } => pointee,
+                    Type::Ptr { pointee: None } => {
+                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
+                    }
                     other => {
                         return Err(Error::new(format!("only pointers can be dereferenced, not {other:?}"))
                             .with_span(dereference_expr.op_span));
                     }
                 };
-                let pointee_ty = match self.typesystem.get_ptr(pid).pointee {
-                    Some(ty) => ty,
-                    None => {
-                        return Err(Error::new("cannot dereference opaque pointer").with_span(dereference_expr.op_span));
-                    }
-                };
+                let pointee_ty = self.typesystem.get_type(pointee);
                 Ok((ptr_eval, pointee_ty))
             }
         }
@@ -1018,7 +1016,7 @@ impl InstructionCursor<'_> {
         if offset == 0 {
             ptr
         } else {
-            let definition_id = DefinitionId::new(Type::Ptr(PtrId::OPAQUE));
+            let definition_id = DefinitionId::new(Type::OPAQUE_PTR);
             self.buf.push(Instruction {
                 definition_id,
                 kind: InstructionKind::OffsetPtr { ptr, offset },
@@ -1028,8 +1026,10 @@ impl InstructionCursor<'_> {
     }
 
     /// Generate a `CastPtr` instruction
-    fn cast_ptr(&mut self, ptr: Value, target_pid: PtrId) -> DefinitionId {
-        let definition_id = DefinitionId::new(Type::Ptr(target_pid));
+    fn cast_ptr(&mut self, ptr: Value, target_pointee: Option<TypeId>) -> DefinitionId {
+        let definition_id = DefinitionId::new(Type::Ptr {
+            pointee: target_pointee,
+        });
         self.buf.push(Instruction {
             definition_id,
             kind: InstructionKind::CastPtr { ptr },
