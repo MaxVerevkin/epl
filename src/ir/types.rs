@@ -131,17 +131,18 @@ impl TypeSystem {
 
     /// Parse type from its AST representation
     pub fn type_from_ast(&mut self, type_namespace: &HashMap<String, Type>, ast: &ast::Type) -> Result<Type, Error> {
-        match &ast.value {
-            ast::TypeValue::Never => Ok(Type::Never),
-            ast::TypeValue::Ident(name) => type_namespace
-                .get(name)
+        match ast {
+            ast::Type::Never(_) => Ok(Type::Never),
+            ast::Type::Ident(ident) => type_namespace
+                .get(&ident.value)
                 .copied()
-                .ok_or_else(|| Error::new(format!("unknown type {name:?}")).with_span(ast.span)),
-            ast::TypeValue::Ptr(pointee) => {
+                .ok_or_else(|| Error::new(format!("unknown type {:?}", ident.value)).with_span(ident.span)),
+            ast::Type::Ptr { star_span: _, pointee } => {
                 let pointee = self.type_from_ast(type_namespace, pointee)?;
                 let pid = self.get_or_create_pointer_type(Some(pointee));
                 Ok(Type::Ptr(pid))
             }
+            ast::Type::Array { .. } => unimplemented!("array support in IR is not yet implemented"),
         }
     }
 

@@ -57,17 +57,36 @@ pub struct Ident {
 
 /// A type with its span
 #[derive(Clone, Debug)]
-pub struct Type {
-    pub span: lex::Span,
-    pub value: TypeValue,
+pub enum Type {
+    Never(lex::Span),
+    Ident(Ident),
+    Ptr {
+        star_span: lex::Span,
+        pointee: Box<Type>,
+    },
+    Array {
+        element_type: Box<Type>,
+        length: Box<Expr>,
+        left_bracket_span: lex::Span,
+        right_bracket_span: lex::Span,
+    },
 }
 
-/// The value of the type
-#[derive(Clone, Debug)]
-pub enum TypeValue {
-    Never,
-    Ident(String),
-    Ptr(Box<Type>),
+impl Type {
+    /// Get the span of this expression
+    pub fn span(&self) -> lex::Span {
+        match self {
+            Type::Never(span) => *span,
+            Type::Ident(ident) => ident.span,
+            Type::Ptr { star_span, pointee } => star_span.join(pointee.span()),
+            Type::Array {
+                element_type: _,
+                length: _,
+                left_bracket_span,
+                right_bracket_span,
+            } => left_bracket_span.join(*right_bracket_span),
+        }
+    }
 }
 
 /// A block expression
@@ -191,7 +210,7 @@ impl Expr {
             Self::CompoundAssignment(e) => e.place.span().join(e.value.span()),
             Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
-            Self::AsCast(e) => e.expr.span().join(e.ty.span),
+            Self::AsCast(e) => e.expr.span().join(e.ty.span()),
             Self::Comptime(e) => e.comptime_span.join(e.expr.span()),
             Self::Place(e) => e.span(),
         }
@@ -476,19 +495,25 @@ impl Parser<'_> {
     /// Parse type
     fn next_type(&mut self) -> Result<Type, Error> {
         match self.consume_token()? {
-            Some((span, lex::Token::Ident(value))) => Ok(Type {
-                span,
-                value: TypeValue::Ident(value),
-            }),
-            Some((span, lex::Token::Punct(lex::Punct::Exclam))) => Ok(Type {
-                span,
-                value: TypeValue::Never,
-            }),
+            Some((span, lex::Token::Ident(value))) => Ok(Type::Ident(Ident { span, value })),
+            Some((span, lex::Token::Punct(lex::Punct::Exclam))) => Ok(Type::Never(span)),
             Some((star_span, lex::Token::Punct(lex::Punct::Star))) => {
                 let pointee = self.next_type()?;
-                Ok(Type {
-                    span: star_span.join(pointee.span),
-                    value: TypeValue::Ptr(Box::new(pointee)),
+                Ok(Type::Ptr {
+                    star_span,
+                    pointee: Box::new(pointee),
+                })
+            }
+            Some((left_bracket_span, lex::Token::Punct(lex::Punct::LeftBracket))) => {
+                let element_type = self.next_type()?;
+                self.expect_punct(lex::Punct::Semicolon)?;
+                let length = self.next_expr()?;
+                let right_bracket_span = self.expect_punct(lex::Punct::RightBracket)?;
+                Ok(Type::Array {
+                    element_type: Box::new(element_type),
+                    length: Box::new(length),
+                    left_bracket_span,
+                    right_bracket_span,
                 })
             }
             got => Err(Error {

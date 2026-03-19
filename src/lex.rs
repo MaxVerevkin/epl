@@ -128,6 +128,10 @@ pub enum Punct {
     LeftBrace,
     /// }
     RightBrace,
+    /// [
+    LeftBracket,
+    /// ]
+    RightBracket,
     /// -
     Minus,
     /// +
@@ -170,6 +174,8 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     (")", Punct::RightParen),
     ("{", Punct::LeftBrace),
     ("}", Punct::RightBrace),
+    ("[", Punct::LeftBracket),
+    ("]", Punct::RightBracket),
     ("-", Punct::Minus),
     ("+", Punct::Plus),
     ("<", Punct::CmpL),
