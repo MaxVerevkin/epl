@@ -765,7 +765,10 @@ impl<'a> FunctionBuilder<'a> {
                     })
                 }
                 ast::UnaryOp::AddressOf => {
-                    let (place_eval, place_ty) = self.eval_place_expr(&unary_expr.rhs)?;
+                    let ast::Expr::Place(rhs_place) = &*unary_expr.rhs else {
+                        return Err(Error::new("address-of operator expects a place RHS").with_span(expr.span()));
+                    };
+                    let (place_eval, place_ty) = self.eval_place_expr(rhs_place)?;
                     let pid = self.typesystem.get_or_create_pointer_type(Some(place_ty));
                     let ptr_ty = Type::Ptr(pid);
                     if let Some(expect_type) = expect_type
@@ -824,8 +827,8 @@ impl<'a> FunctionBuilder<'a> {
             ast::Expr::Comptime(_) => {
                 unimplemented!("comptime blocks are not yet implemented")
             }
-            ast::Expr::Ident(_) | ast::Expr::FieldAccess(_) | ast::Expr::Dereference(_) => {
-                let (place_eval, place_ty) = self.eval_place_expr(expr)?;
+            ast::Expr::Place(place_expr) => {
+                let (place_eval, place_ty) = self.eval_place_expr(place_expr)?;
                 if let Some(expect_type) = expect_type
                     && expect_type != place_ty
                 {
@@ -841,13 +844,13 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Evaluate a place expression, the value returned is the pointer, type is pointee type.
-    fn eval_place_expr(&mut self, expr: &ast::Expr) -> Result<(EvalResult, Type), Error> {
+    fn eval_place_expr(&mut self, expr: &ast::PlaceExpr) -> Result<(EvalResult, Type), Error> {
         match expr {
-            ast::Expr::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
+            ast::PlaceExpr::Ident(ident) => match self.scope.lookup_variable(&ident.value) {
                 Some((alloca, ty)) => Ok((EvalResult::Value(Value::Definition(alloca)), ty)),
                 None => Err(Error::new(format!("variable {:?} not found", ident.value)).with_span(ident.span)),
             },
-            ast::Expr::FieldAccess(field_access_expr) => {
+            ast::PlaceExpr::FieldAccess(field_access_expr) => {
                 let (lhs_place, lhs_place_ty) = self.eval_place_expr(&field_access_expr.lhs)?;
                 let sid = match lhs_place_ty {
                     Type::Struct(sid) => sid,
@@ -865,7 +868,7 @@ impl<'a> FunctionBuilder<'a> {
                     }
                 }
             }
-            ast::Expr::Dereference(dereference_expr) => {
+            ast::PlaceExpr::Dereference(dereference_expr) => {
                 let ptr_eval = self.eval_expr(&dereference_expr.ptr, None)?;
                 let pid = match ptr_eval.ty() {
                     Type::Ptr(pid) => pid,
@@ -882,9 +885,6 @@ impl<'a> FunctionBuilder<'a> {
                 };
                 Ok((ptr_eval, pointee_ty))
             }
-            _ => Err(
-                Error::new("expected a place expression (ident, field access or dereference)").with_span(expr.span()),
-            ),
         }
     }
 

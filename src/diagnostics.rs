@@ -31,6 +31,7 @@ impl SpanError for ast::Error {
                 String::from("let statement with no value requires type to be specified")
             }
             ast::ErrorKind::VariadicIsNotLast => String::from("variadic specifier (...) must be the last argument"),
+            ast::ErrorKind::NotAPlaceExpr => String::from("expected a place expression"),
         }
     }
 

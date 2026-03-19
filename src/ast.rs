@@ -148,13 +148,19 @@ pub enum Expr {
     FunctionCallExpr(FunctionCallExpr),
     Assignment(AssignmentExpr),
     CompoundAssignment(CompoundAssignmentExpr),
-    Ident(Ident),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
-    FieldAccess(FieldAccessExpr),
-    Dereference(DereferenceExpr),
     AsCast(AsCastExpr),
     Comptime(ComptimeExpr),
+    Place(PlaceExpr),
+}
+
+/// A place expression
+#[derive(Clone)]
+pub enum PlaceExpr {
+    Ident(Ident),
+    FieldAccess(FieldAccessExpr),
+    Dereference(DereferenceExpr),
 }
 
 impl Expr {
@@ -184,13 +190,32 @@ impl Expr {
             Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
             Self::Assignment(e) => e.place.span().join(e.value.span()),
             Self::CompoundAssignment(e) => e.place.span().join(e.value.span()),
-            Self::Ident(ident) => ident.span,
             Self::Binary(binary_expr) => binary_expr.lhs.span().join(binary_expr.rhs.span()),
             Self::Unary(unary_expr) => unary_expr.op_span.join(unary_expr.rhs.span()),
-            Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
-            Self::Dereference(e) => e.ptr.span().join(e.op_span),
             Self::AsCast(e) => e.expr.span().join(e.ty.span),
             Self::Comptime(e) => e.comptime_span.join(e.expr.span()),
+            Self::Place(e) => e.span(),
+        }
+    }
+
+    fn expect_place(self) -> Result<PlaceExpr, Error> {
+        match self {
+            Self::Place(p) => Ok(p),
+            _ => Err(Error {
+                span: Some(self.span()),
+                kind: ErrorKind::NotAPlaceExpr,
+            }),
+        }
+    }
+}
+
+impl PlaceExpr {
+    /// Get the span of this expression
+    pub fn span(&self) -> lex::Span {
+        match self {
+            Self::Ident(ident) => ident.span,
+            Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
+            Self::Dereference(e) => e.ptr.span().join(e.op_span),
         }
     }
 }
@@ -250,14 +275,14 @@ pub struct FunctionCallExpr {
 /// An assignment expression
 #[derive(Debug, Clone)]
 pub struct AssignmentExpr {
-    pub place: Box<Expr>,
+    pub place: Box<PlaceExpr>,
     pub value: Box<Expr>,
 }
 
 /// A compound assignment expression, e.g. `+=`, `-=`, etc.
 #[derive(Debug, Clone)]
 pub struct CompoundAssignmentExpr {
-    pub place: Box<Expr>,
+    pub place: Box<PlaceExpr>,
     pub value: Box<Expr>,
     pub op: ArithmeticOp,
     pub op_span: lex::Span,
@@ -283,7 +308,7 @@ pub struct UnaryExpr {
 /// A field-access expression
 #[derive(Debug, Clone)]
 pub struct FieldAccessExpr {
-    pub lhs: Box<Expr>,
+    pub lhs: Box<PlaceExpr>,
     pub field: Ident,
     pub dot_span: lex::Span,
 }
@@ -347,6 +372,7 @@ pub enum ErrorKind {
     UnexpectedToken { expected: String, got: Option<lex::Token> },
     LetNoValueNoType,
     VariadicIsNotLast,
+    NotAPlaceExpr,
 }
 
 impl<'a> Parser<'a> {
@@ -728,7 +754,7 @@ impl Parser<'_> {
             Some(lex::Token::Punct(lex::Punct::Assign)) => {
                 self.consume_token()?;
                 Ok(Expr::Assignment(AssignmentExpr {
-                    place: Box::new(expr),
+                    place: Box::new(expr.expect_place()?),
                     value: Box::new(self.next_or_expr()?),
                 }))
             }
@@ -744,7 +770,7 @@ impl Parser<'_> {
                 };
                 let (op_span, _) = self.consume_token()?.unwrap();
                 Ok(Expr::CompoundAssignment(CompoundAssignmentExpr {
-                    place: Box::new(expr),
+                    place: Box::new(expr.expect_place()?),
                     value: Box::new(self.next_or_expr()?),
                     op,
                     op_span,
@@ -900,18 +926,18 @@ impl Parser<'_> {
             match self.peek_token()? {
                 Some(lex::Token::Ident(_)) => {
                     let name = self.next_ident()?;
-                    expr = Expr::FieldAccess(FieldAccessExpr {
-                        lhs: Box::new(expr),
+                    expr = Expr::Place(PlaceExpr::FieldAccess(FieldAccessExpr {
+                        lhs: Box::new(expr.expect_place()?),
                         field: name,
                         dot_span,
-                    });
+                    }));
                 }
                 Some(lex::Token::Punct(lex::Punct::Star)) => {
                     let (star_span, _) = self.consume_token()?.unwrap();
-                    expr = Expr::Dereference(DereferenceExpr {
+                    expr = Expr::Place(PlaceExpr::Dereference(DereferenceExpr {
                         ptr: Box::new(expr),
                         op_span: dot_span.join(star_span),
-                    });
+                    }));
                 }
                 _ => return self.consume_unexpected_token("ident or '*'"),
             }
@@ -928,7 +954,7 @@ impl Parser<'_> {
                 } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
                     self.next_struct_initializer_expr().map(Expr::StructInitializer)
                 } else {
-                    self.next_ident().map(Expr::Ident)
+                    self.next_ident().map(|ident| Expr::Place(PlaceExpr::Ident(ident)))
                 }
             }
             Some(lex::Token::Literal(_)) => {
@@ -1136,13 +1162,21 @@ impl fmt::Debug for Expr {
             Self::FunctionCallExpr(e) => e.fmt(f),
             Self::Assignment(e) => e.fmt(f),
             Self::CompoundAssignment(e) => e.fmt(f),
-            Self::Ident(e) => e.fmt(f),
             Self::Binary(e) => e.fmt(f),
             Self::Unary(e) => e.fmt(f),
-            Self::FieldAccess(e) => e.fmt(f),
-            Self::Dereference(e) => e.fmt(f),
             Self::AsCast(e) => e.fmt(f),
             Self::Comptime(e) => e.fmt(f),
+            Self::Place(e) => e.fmt(f),
+        }
+    }
+}
+
+impl fmt::Debug for PlaceExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ident(e) => e.fmt(f),
+            Self::FieldAccess(e) => e.fmt(f),
+            Self::Dereference(e) => e.fmt(f),
         }
     }
 }
