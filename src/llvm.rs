@@ -515,6 +515,9 @@ impl BuildCtx<'_> {
                         .collect();
                     LLVMStructType(tys.as_mut_ptr(), tys.len() as u32, 0)
                 }
+                ir::Type::Array { element, length } => {
+                    LLVMArrayType2(self.build_type(self.typesystem.get_type(element)), length)
+                }
             }
         }
     }

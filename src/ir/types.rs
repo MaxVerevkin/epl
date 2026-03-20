@@ -17,6 +17,7 @@ pub enum Type {
     Int(IntType),
     Struct(StructId),
     Ptr { pointee: Option<TypeId> },
+    Array { element: TypeId, length: u64 },
 }
 
 impl Type {
@@ -138,7 +139,26 @@ impl TypeSystem {
                     pointee: Some(pointee_id),
                 })
             }
-            ast::Type::Array { .. } => unimplemented!("array support in IR is not yet implemented"),
+            ast::Type::Array {
+                element_type,
+                length,
+                left_bracket_span: _,
+                right_bracket_span: _,
+            } => {
+                let element_type = self.type_from_ast(type_namespace, element_type)?;
+                let element_type_id = self.get_type_id(element_type);
+                let length = match &**length {
+                    ast::Expr::Literal(ast::LiteralExpr {
+                        span: _,
+                        value: ast::LiteralExprValue::Number(num),
+                    }) => *num as u64,
+                    _ => return Err(Error::new("array length must be a number literal").with_span(length.span())),
+                };
+                Ok(Type::Array {
+                    element: element_type_id,
+                    length,
+                })
+            }
         }
     }
 
@@ -191,6 +211,12 @@ impl TypeSystem {
                     layout.size += f_layout.size;
                 }
                 layout.size = layout.size.next_multiple_of(layout.align);
+                layout
+            }
+            Type::Array { element, length } => {
+                let mut layout = self.layout_of(self.get_type(element));
+                layout.size = layout.size.next_multiple_of(layout.align);
+                layout.size *= length;
                 layout
             }
         }
