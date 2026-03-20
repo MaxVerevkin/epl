@@ -359,6 +359,10 @@ impl<'a> FunctionBuilder<'a> {
 
                 Ok(EvalResult::VOID)
             }
+            ast::Expr::ArrayInitializer(e) => {
+                dbg!(e);
+                todo!()
+            }
             ast::Expr::StructInitializer(e) => {
                 let (ty, sid) = match &e.struct_name {
                     Some(name) => {

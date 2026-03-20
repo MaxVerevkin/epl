@@ -122,6 +122,14 @@ pub struct WhileExpr {
     pub while_keyword_span: lex::Span,
 }
 
+/// An array initializer expression
+#[derive(Debug, Clone)]
+pub struct ArrayInitializerExpr {
+    pub elements: Vec<Expr>,
+    pub opening_bracket_span: lex::Span,
+    pub closing_bracket_span: lex::Span,
+}
+
 /// A struct initializer expression
 #[derive(Debug, Clone)]
 pub struct StructInitializerExpr {
@@ -159,6 +167,7 @@ pub enum Expr {
     If(IfExpr),
     Loop(LoopExpr),
     While(WhileExpr),
+    ArrayInitializer(ArrayInitializerExpr),
     StructInitializer(StructInitializerExpr),
     Return(ReturnExpr),
     Break(BreakExpr),
@@ -194,6 +203,7 @@ impl Expr {
             ),
             Self::Loop(loop_expr) => loop_expr.loop_keyword_span.join(loop_expr.body.span()),
             Self::While(while_expr) => while_expr.while_keyword_span.join(while_expr.body.span()),
+            Self::ArrayInitializer(e) => e.opening_bracket_span.join(e.closing_bracket_span),
             Self::StructInitializer(e) => e
                 .struct_name
                 .as_ref()
@@ -619,34 +629,12 @@ impl Parser<'_> {
         self.expect_keyword(lex::Keyword::Struct)?;
         let name = self.next_ident()?;
         self.expect_punct(lex::Punct::LeftBrace)?;
-        let mut fields = Vec::new();
-        loop {
-            match self.peek_token()? {
-                Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
-                    break;
-                }
-                Some(lex::Token::Ident(_)) => {
-                    let name = self.next_ident()?;
-                    self.expect_punct(lex::Punct::Colon)?;
-                    let ty = self.next_type()?;
-                    fields.push(StructField { name, ty });
-                    match self.peek_token()? {
-                        Some(lex::Token::Punct(lex::Punct::Comma)) => {
-                            self.consume_token()?;
-                        }
-                        Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
-                            break;
-                        }
-                        _ => {
-                            return self.consume_unexpected_token("struct field, ',' or '}'");
-                        }
-                    }
-                }
-                _ => {
-                    return self.consume_unexpected_token("struct field or '}'");
-                }
-            }
-        }
+        let fields = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBrace, |parser| {
+            let name = parser.next_ident()?;
+            parser.expect_punct(lex::Punct::Colon)?;
+            let ty = parser.next_type()?;
+            Ok(StructField { name, ty })
+        })?;
         self.expect_punct(lex::Punct::RightBrace)?;
         Ok(Item::Struct(Struct { name, fields }))
     }
@@ -1019,6 +1007,9 @@ impl Parser<'_> {
                 self.expect_punct(lex::Punct::RightParen)?;
                 Ok(expr)
             }
+            Some(lex::Token::Punct(lex::Punct::LeftBracket)) => {
+                self.next_array_initializer_expr().map(Expr::ArrayInitializer)
+            }
             Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => {
                 self.next_struct_initializer_expr().map(Expr::StructInitializer)
             }
@@ -1034,33 +1025,25 @@ impl Parser<'_> {
     fn next_function_call_expr(&mut self) -> Result<FunctionCallExpr, Error> {
         let name = self.next_ident()?;
         let left_paren_span = self.expect_punct(lex::Punct::LeftParen)?;
-        let mut args = Vec::new();
-        loop {
-            match self.peek_token()? {
-                Some(lex::Token::Punct(lex::Punct::RightParen)) => {
-                    break;
-                }
-                _ => {
-                    args.push(self.next_expr()?);
-                    match self.peek_token()? {
-                        Some(lex::Token::Punct(lex::Punct::Comma)) => {
-                            self.consume_token()?;
-                        }
-                        Some(lex::Token::Punct(lex::Punct::RightParen)) => {
-                            break;
-                        }
-                        _ => {
-                            return self.consume_unexpected_token("function argument, ',' or ')'");
-                        }
-                    }
-                }
-            }
-        }
+        let args = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightParen, |parser| parser.next_expr())?;
         let right_paren_span = self.expect_punct(lex::Punct::RightParen)?;
         Ok(FunctionCallExpr {
             name,
             args,
             args_span: left_paren_span.join(right_paren_span),
+        })
+    }
+
+    /// Parse arraay initializer
+    fn next_array_initializer_expr(&mut self) -> Result<ArrayInitializerExpr, Error> {
+        let opening_bracket_span = self.expect_punct(lex::Punct::LeftBracket)?;
+        let elements =
+            self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBracket, |parser| parser.next_expr())?;
+        let closing_bracket_span = self.expect_punct(lex::Punct::RightBracket)?;
+        Ok(ArrayInitializerExpr {
+            elements,
+            opening_bracket_span,
+            closing_bracket_span,
         })
     }
 
@@ -1071,34 +1054,12 @@ impl Parser<'_> {
             Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => (None, self.expect_punct(lex::Punct::DotLeftBrace)?),
             _ => return self.consume_unexpected_token("struct name or .{"),
         };
-        let mut fields = Vec::new();
-        loop {
-            match self.peek_token()? {
-                Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
-                    break;
-                }
-                Some(lex::Token::Ident(_)) => {
-                    let name = self.next_ident()?;
-                    self.expect_punct(lex::Punct::Colon)?;
-                    let value = self.next_expr()?;
-                    fields.push(StructInitializerField { name, value });
-                    match self.peek_token()? {
-                        Some(lex::Token::Punct(lex::Punct::Comma)) => {
-                            self.consume_token()?;
-                        }
-                        Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
-                            break;
-                        }
-                        _ => {
-                            return self.consume_unexpected_token("struct field, ',' or '}'");
-                        }
-                    }
-                }
-                _ => {
-                    return self.consume_unexpected_token("struct field or '}'");
-                }
-            }
-        }
+        let fields = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBrace, |parser| {
+            let name = parser.next_ident()?;
+            parser.expect_punct(lex::Punct::Colon)?;
+            let value = parser.next_expr()?;
+            Ok(StructInitializerField { name, value })
+        })?;
         let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
         Ok(StructInitializerExpr {
             struct_name,
@@ -1148,6 +1109,30 @@ impl Parser<'_> {
             while_keyword_span,
         })
     }
+
+    fn parse_delimited<T>(
+        &mut self,
+        delim: lex::Punct,
+        until: lex::Punct,
+        mut parse: impl FnMut(&mut Self) -> Result<T, Error>,
+    ) -> Result<Vec<T>, Error> {
+        let mut list = Vec::new();
+        while self.peek_token()? != Some(&lex::Token::Punct(until)) {
+            list.push(parse(self)?);
+            match self.peek_token()? {
+                Some(lex::Token::Punct(p)) if *p == delim => {
+                    self.consume_token()?;
+                }
+                Some(lex::Token::Punct(p)) if *p == until => {
+                    break;
+                }
+                _ => {
+                    return self.consume_unexpected_token(format!("{delim:?} or {until:?}"));
+                }
+            }
+        }
+        Ok(list)
+    }
 }
 
 impl fmt::Debug for Item {
@@ -1178,6 +1163,7 @@ impl fmt::Debug for Expr {
             Self::If(e) => e.fmt(f),
             Self::Loop(e) => e.fmt(f),
             Self::While(e) => e.fmt(f),
+            Self::ArrayInitializer(e) => e.fmt(f),
             Self::StructInitializer(e) => e.fmt(f),
             Self::Return(e) => e.fmt(f),
             Self::Break(e) => e.fmt(f),
