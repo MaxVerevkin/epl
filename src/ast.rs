@@ -188,6 +188,7 @@ pub enum PlaceExpr {
     Ident(Ident),
     FieldAccess(FieldAccessExpr),
     Dereference(DereferenceExpr),
+    Index(IndexExpr),
 }
 
 impl Expr {
@@ -244,6 +245,7 @@ impl PlaceExpr {
             Self::Ident(ident) => ident.span,
             Self::FieldAccess(field_access) => field_access.lhs.span().join(field_access.field.span),
             Self::Dereference(e) => e.ptr.span().join(e.op_span),
+            Self::Index(e) => e.lhs.span().join(e.right_bracket_span),
         }
     }
 }
@@ -346,6 +348,16 @@ pub struct FieldAccessExpr {
 pub struct DereferenceExpr {
     pub ptr: Box<Expr>,
     pub op_span: lex::Span,
+}
+
+/// An index ([...]) expression
+#[derive(Debug, Clone)]
+pub struct IndexExpr {
+    pub lhs: Box<PlaceExpr>,
+    pub index: Box<Expr>,
+    #[expect(unused)]
+    pub left_bracket_span: lex::Span,
+    pub right_bracket_span: lex::Span,
 }
 
 /// A `as` cast expression
@@ -932,25 +944,41 @@ impl Parser<'_> {
     /// Parse a field-access expr
     fn next_field_access_expr(&mut self) -> Result<Expr, Error> {
         let mut expr = self.next_base_expr()?;
-        while let Some(lex::Token::Punct(lex::Punct::Dot)) = self.peek_token()? {
-            let (dot_span, _) = self.consume_token()?.unwrap();
+        loop {
             match self.peek_token()? {
-                Some(lex::Token::Ident(_)) => {
-                    let name = self.next_ident()?;
-                    expr = Expr::Place(PlaceExpr::FieldAccess(FieldAccessExpr {
+                Some(lex::Token::Punct(lex::Punct::Dot)) => {
+                    let (dot_span, _) = self.consume_token()?.unwrap();
+                    match self.peek_token()? {
+                        Some(lex::Token::Ident(_)) => {
+                            let name = self.next_ident()?;
+                            expr = Expr::Place(PlaceExpr::FieldAccess(FieldAccessExpr {
+                                lhs: Box::new(expr.expect_place()?),
+                                field: name,
+                                dot_span,
+                            }));
+                        }
+                        Some(lex::Token::Punct(lex::Punct::Star)) => {
+                            let (star_span, _) = self.consume_token()?.unwrap();
+                            expr = Expr::Place(PlaceExpr::Dereference(DereferenceExpr {
+                                ptr: Box::new(expr),
+                                op_span: dot_span.join(star_span),
+                            }));
+                        }
+                        _ => return self.consume_unexpected_token("ident or '*'"),
+                    }
+                }
+                Some(lex::Token::Punct(lex::Punct::LeftBracket)) => {
+                    let (left_bracket_span, _) = self.consume_token()?.unwrap();
+                    let index = self.next_expr()?;
+                    let right_bracket_span = self.expect_punct(lex::Punct::RightBracket)?;
+                    expr = Expr::Place(PlaceExpr::Index(IndexExpr {
                         lhs: Box::new(expr.expect_place()?),
-                        field: name,
-                        dot_span,
+                        index: Box::new(index),
+                        left_bracket_span,
+                        right_bracket_span,
                     }));
                 }
-                Some(lex::Token::Punct(lex::Punct::Star)) => {
-                    let (star_span, _) = self.consume_token()?.unwrap();
-                    expr = Expr::Place(PlaceExpr::Dereference(DereferenceExpr {
-                        ptr: Box::new(expr),
-                        op_span: dot_span.join(star_span),
-                    }));
-                }
-                _ => return self.consume_unexpected_token("ident or '*'"),
+                _ => break,
             }
         }
         Ok(expr)
@@ -1186,6 +1214,7 @@ impl fmt::Debug for PlaceExpr {
             Self::Ident(e) => e.fmt(f),
             Self::FieldAccess(e) => e.fmt(f),
             Self::Dereference(e) => e.fmt(f),
+            Self::Index(e) => e.fmt(f),
         }
     }
 }

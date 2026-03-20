@@ -946,6 +946,23 @@ impl<'a> FunctionBuilder<'a> {
                 let pointee_ty = self.typesystem.get_type(pointee);
                 Ok((ptr_eval, pointee_ty))
             }
+            ast::PlaceExpr::Index(index_expr) => {
+                let (lhs_place, lhs_place_ty) = self.eval_place_expr(&index_expr.lhs)?;
+                let Type::Array { element, length: _ } = lhs_place_ty else {
+                    return Err(Error::new(format!("only arrays may be indexed, not {lhs_place_ty:?}"))
+                        .with_span(index_expr.lhs.span()));
+                };
+                let element_ty = self.typesystem.get_type(element);
+                let _element_layout = self.typesystem.layout_of(element_ty);
+                let index = self.eval_expr(&index_expr.index, Some(Type::Int(IntType::U32)))?;
+                if let EvalResult::Value(_lhs_place) = lhs_place
+                    && let EvalResult::Value(_index) = index
+                {
+                    unimplemented!("first, implement 64 bit numbers and multiplication")
+                } else {
+                    Ok((EvalResult::Diverges(Type::OPAQUE_PTR), element_ty))
+                }
+            }
         }
     }
 
