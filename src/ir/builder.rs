@@ -124,6 +124,11 @@ impl EvalResult {
             Self::Value(value) => value.ty(),
         }
     }
+
+    /// Wheather the result diverges
+    fn diverges(&self) -> bool {
+        matches!(self, Self::Diverges(_))
+    }
 }
 
 impl<'a> FunctionBuilder<'a> {
@@ -360,8 +365,65 @@ impl<'a> FunctionBuilder<'a> {
                 Ok(EvalResult::VOID)
             }
             ast::Expr::ArrayInitializer(e) => {
-                dbg!(e);
-                todo!()
+                let length = e.elements.len() as u64;
+                let expect_element_type = match expect_type {
+                    Some(Type::Array {
+                        element,
+                        length: expected_length,
+                    }) => {
+                        if length != expected_length {
+                            return Err(Error::new(format!(
+                                "expected array of length {expected_length}, got {length}"
+                            ))
+                            .with_span(expr.span()));
+                        }
+                        Some(self.typesystem.get_type(element))
+                    }
+                    Some(other) => {
+                        return Err(
+                            Error::new(format!("expected expr of type {other:?}, got array initializer"))
+                                .with_span(expr.span()),
+                        );
+                    }
+                    None => None,
+                };
+                let elements_eval = e
+                    .elements
+                    .iter()
+                    .map(|expr| self.eval_expr(expr, expect_element_type))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let element_ty = expect_element_type.unwrap_or_else(|| {
+                    elements_eval
+                        .iter()
+                        .map(|x| x.ty())
+                        .find(|ty| *ty != Type::Never)
+                        .unwrap_or(Type::Never)
+                });
+                let element_ty_id = self.typesystem.get_type_id(element_ty);
+                let array_ty = Type::Array {
+                    element: element_ty_id,
+                    length,
+                };
+                if elements_eval.iter().any(|eval| eval.diverges()) {
+                    return Ok(EvalResult::Diverges(array_ty));
+                }
+                let place = self.alloca(Type::Array {
+                    element: element_ty_id,
+                    length,
+                });
+                let element_layout = self.typesystem.layout_of(element_ty);
+                for (i, eval) in elements_eval.into_iter().enumerate() {
+                    let EvalResult::Value(eval_value) = eval else {
+                        unreachable!()
+                    };
+                    let ptr = self
+                        .cursor()
+                        .offset_ptr(Value::Definition(place), i as i64 * element_layout.size as i64);
+                    self.cursor().store(ptr, eval_value);
+                }
+                Ok(EvalResult::Value(Value::Definition(
+                    self.cursor().load(Value::Definition(place), array_ty),
+                )))
             }
             ast::Expr::StructInitializer(e) => {
                 let (ty, sid) = match &e.struct_name {
@@ -386,20 +448,16 @@ impl<'a> FunctionBuilder<'a> {
                         }
                         (ty, sid)
                     }
-                    None => {
-                        let expect_type =
-                            expect_type.ok_or_else(|| Error::new("type annotations needed").with_span(expr.span()))?;
-                        let sid = match expect_type {
-                            Type::Struct(sid) => sid,
-                            other => {
-                                return Err(Error::new(format!(
-                                    "expected expr of type {other:?}, got struct initializer"
-                                ))
-                                .with_span(expr.span()));
-                            }
-                        };
-                        (expect_type, sid)
-                    }
+                    None => match expect_type {
+                        Some(ty @ Type::Struct(sid)) => (ty, sid),
+                        None => return Err(Error::new("type annotations needed").with_span(expr.span())),
+                        Some(other) => {
+                            return Err(
+                                Error::new(format!("expected expr of type {other:?}, got struct initializer"))
+                                    .with_span(expr.span()),
+                            );
+                        }
+                    },
                 };
                 let struct_def = self.typesystem.get_struct(sid);
                 if let Some(missing_field) = struct_def
@@ -407,8 +465,9 @@ impl<'a> FunctionBuilder<'a> {
                     .iter()
                     .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.name.value))
                 {
-                    return Err(Error::new(format!("missing field: {}", missing_field.name.value))
-                        .with_span(e.opening_brace_span.join(e.closing_brace_span)));
+                    return Err(
+                        Error::new(format!("missing field: {}", missing_field.name.value)).with_span(expr.span())
+                    );
                 }
                 let place = self.alloca(ty);
                 for ef in &e.fields {
