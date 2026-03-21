@@ -37,6 +37,8 @@ pub enum IntType {
     U8,
     I32,
     U32,
+    I64,
+    U64,
 }
 
 impl IntType {
@@ -45,6 +47,7 @@ impl IntType {
         match self {
             Self::I8 | Self::U8 => 8,
             Self::I32 | Self::U32 => 32,
+            Self::I64 | Self::U64 => 64,
         }
     }
 
@@ -53,14 +56,15 @@ impl IntType {
         match self {
             Self::I8 | Self::U8 => 1,
             Self::I32 | Self::U32 => 4,
+            Self::I64 | Self::U64 => 8,
         }
     }
 
     /// Returns `true` if this data type is a signed integer
     pub fn is_signed(self) -> bool {
         match self {
-            Self::I8 | Self::I32 => true,
-            Self::U8 | Self::U32 => false,
+            Self::I8 | Self::I32 | Self::I64 => true,
+            Self::U8 | Self::U32 | Self::U64 => false,
         }
     }
 }

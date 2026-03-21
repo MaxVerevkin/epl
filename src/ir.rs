@@ -69,6 +69,8 @@ impl Ir {
         type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
         type_namespace.insert(String::from("i32"), Type::Int(IntType::I32));
         type_namespace.insert(String::from("u32"), Type::Int(IntType::U32));
+        type_namespace.insert(String::from("i64"), Type::Int(IntType::I64));
+        type_namespace.insert(String::from("u64"), Type::Int(IntType::U64));
         type_namespace.insert(String::from("ptr"), Type::OPAQUE_PTR);
 
         for item in &ast.items {
@@ -259,7 +261,7 @@ pub enum InstructionKind {
     Cmp { op: CmpOp, lhs: Value, rhs: Value },
     Arithmetic { op: ArithmeticOp, lhs: Value, rhs: Value },
     Not { value: Value },
-    OffsetPtr { ptr: Value, offset: i64 },
+    OffsetPtr { ptr: Value, offset: Value },
     CastPtr { ptr: Value },
     CastInt { int: Value },
 }
@@ -371,6 +373,14 @@ impl Constant {
                 pointee: Some(TypeId::I8),
             },
             Self::Number { data: _, ty } => Type::Int(*ty),
+        }
+    }
+
+    /// Create a new constant with a given value
+    pub fn new_u64(value: u64) -> Self {
+        Self::Number {
+            data: value as i64,
+            ty: IntType::U64,
         }
     }
 }

@@ -118,11 +118,12 @@ impl LlvmModule {
                             ctx.build_value(&ir::Value::Constant(ir::Constant::Bool(true))),
                         ),
                         ir::InstructionKind::OffsetPtr { ptr, offset } => unsafe {
+                            let offset = ctx.build_value(offset);
                             LLVMBuildGEP2(
                                 builder.raw,
                                 LLVMInt8Type(),
                                 ctx.build_value(ptr),
-                                [LLVMConstInt(LLVMInt64Type(), *offset as u64, 1)].as_mut_ptr(),
+                                [offset].as_mut_ptr(),
                                 1,
                                 c"".as_ptr(),
                             )

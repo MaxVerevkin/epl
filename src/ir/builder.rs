@@ -416,9 +416,10 @@ impl<'a> FunctionBuilder<'a> {
                     let EvalResult::Value(eval_value) = eval else {
                         unreachable!()
                     };
+                    let offset = i as u64 * element_layout.size;
                     let ptr = self
                         .cursor()
-                        .offset_ptr(Value::Definition(place), i as i64 * element_layout.size as i64);
+                        .offset_ptr(Value::Definition(place), Value::Constant(Constant::new_u64(offset)));
                     self.cursor().store(ptr, eval_value);
                 }
                 Ok(EvalResult::Value(Value::Definition(
@@ -477,7 +478,7 @@ impl<'a> FunctionBuilder<'a> {
                         EvalResult::Value(value) => {
                             let ptr = self
                                 .cursor()
-                                .offset_ptr(Value::Definition(place), offset.try_into().unwrap());
+                                .offset_ptr(Value::Definition(place), Value::Constant(Constant::new_u64(offset)));
                             self.cursor().store(ptr, value);
                         }
                     }
@@ -926,7 +927,9 @@ impl<'a> FunctionBuilder<'a> {
                 match lhs_place {
                     EvalResult::Diverges(_) => Ok((EvalResult::Diverges(Type::Never), field_ty)),
                     EvalResult::Value(value) => {
-                        let ptr = self.cursor().offset_ptr(value, offset.try_into().unwrap());
+                        let ptr = self
+                            .cursor()
+                            .offset_ptr(value, Value::Constant(Constant::new_u64(offset)));
                         Ok((EvalResult::Value(ptr), field_ty))
                     }
                 }
@@ -953,12 +956,21 @@ impl<'a> FunctionBuilder<'a> {
                         .with_span(index_expr.lhs.span()));
                 };
                 let element_ty = self.typesystem.get_type(element);
-                let _element_layout = self.typesystem.layout_of(element_ty);
-                let index = self.eval_expr(&index_expr.index, Some(Type::Int(IntType::U32)))?;
-                if let EvalResult::Value(_lhs_place) = lhs_place
-                    && let EvalResult::Value(_index) = index
+                let element_layout = self.typesystem.layout_of(element_ty);
+                let index = self.eval_expr(&index_expr.index, Some(Type::Int(IntType::U64)))?;
+                if let EvalResult::Value(lhs_place) = lhs_place
+                    && let EvalResult::Value(index) = index
                 {
-                    unimplemented!("first, implement 64 bit numbers and multiplication")
+                    let offset = self.cursor().arithmetic(
+                        ArithmeticOp::Mul,
+                        index,
+                        Value::Constant(Constant::Number {
+                            data: element_layout.size as i64,
+                            ty: IntType::U64,
+                        }),
+                    );
+                    let ptr = self.cursor().offset_ptr(lhs_place, Value::Definition(offset));
+                    Ok((EvalResult::Value(ptr), element_ty))
                 } else {
                     Ok((EvalResult::Diverges(Type::OPAQUE_PTR), element_ty))
                 }
@@ -1092,8 +1104,8 @@ impl InstructionCursor<'_> {
     }
 
     /// Generate a `OffsetPtr` instruction
-    fn offset_ptr(&mut self, ptr: Value, offset: i64) -> Value {
-        if offset == 0 {
+    fn offset_ptr(&mut self, ptr: Value, offset: Value) -> Value {
+        if matches!(offset, Value::Constant(Constant::Number { data: 0, ty: _ })) {
             ptr
         } else {
             let definition_id = DefinitionId::new(Type::OPAQUE_PTR);
