@@ -1,0 +1,30 @@
+fn main() {
+	print_array(fib_array());
+}
+
+fn fib_array() -> [i32; 10] {
+	let array: [i32; 10];
+	array[0] = 0;
+	array[1] = 1;
+	let i: u64 = 2;
+	while i < 10 {
+		array[i] = array[i - 1] + array[i - 2];
+		i += 1;
+	}
+	array
+}
+
+fn print_array(array: [i32; 10]) {
+	printf("[");
+	let i: u64 = 0;
+	while i < 10 {
+		printf("%i", array[i]);
+		if i != 9 {
+			printf(", ")
+		}
+		i += 1;
+	}
+	printf("]\n");
+}
+
+fn printf(fmt: *i8, ...);
