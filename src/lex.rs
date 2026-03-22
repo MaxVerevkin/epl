@@ -47,6 +47,8 @@ pub enum Keyword {
     Else,
     Loop,
     While,
+    For,
+    In,
     Let,
     True,
     False,
@@ -65,6 +67,8 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("else", Keyword::Else),
     ("loop", Keyword::Loop),
     ("while", Keyword::While),
+    ("for", Keyword::For),
+    ("in", Keyword::In),
     ("let", Keyword::Let),
     ("true", Keyword::True),
     ("false", Keyword::False),
@@ -86,6 +90,8 @@ pub enum Literal {
 pub enum Punct {
     /// ...
     TrippleDot,
+    /// ..
+    DoubleDot,
     // ||
     LogicalOr,
     // &&
@@ -153,6 +159,7 @@ pub enum Punct {
 /// A mapping from strings to punct tokens
 const PUNCT_MAP: &[(&str, Punct)] = &[
     ("...", Punct::TrippleDot),
+    ("..", Punct::DoubleDot),
     ("||", Punct::LogicalOr),
     ("&&", Punct::LogicalAnd),
     ("==", Punct::CmpEq),

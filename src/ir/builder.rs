@@ -364,6 +364,15 @@ impl<'a> FunctionBuilder<'a> {
 
                 Ok(EvalResult::VOID)
             }
+            ast::Expr::For(e) => {
+                let ast::Expr::Range(_range_expr) = &*e.iterator else {
+                    return Err(
+                        Error::new("only range exprs (e.g. 'a..b') are supported as iterator in 'for' yet")
+                            .with_span(e.iterator.span()),
+                    );
+                };
+                unimplemented!("for exprs are not implemened yet, awaiting introduction of ir_tree")
+            }
             ast::Expr::ArrayInitializer(e) => {
                 let length = e.elements.len() as u64;
                 let expect_element_type = match expect_type {
@@ -903,6 +912,9 @@ impl<'a> FunctionBuilder<'a> {
                 } else {
                     EvalResult::Diverges(place_ty)
                 })
+            }
+            ast::Expr::Range(range_expr) => {
+                unimplemented!("range expressions cannot be evaluated yet")
             }
         }
     }

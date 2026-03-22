@@ -45,14 +45,15 @@ Everything after `#` is treated as a comment.
 - assigning_expr = or_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` ) or_expr )?
 - or_expr = and_expr ( `||` and_expr )*
 - and_expr = comp_expr ( `&&` comp_expr )*
-- comp_expr = additive_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) additive_expr )?
+- comp_expr = range_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) range_expr )?
+- range_expr = additive_expr ( `..` additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
 - multiplicative_expr = as_expr ( (`*` | `/`) as_expr )*
 - as_expr = unary_expr ( `as` type )*
 - unary_expr = (`-` | `!` | `&`)? unary_expr | field_access_expr
 - field_access_expr = base_expr ( `.` `*` | `.` ident | `[` expr `]` )*
 - base_expr = literal | function_call_expr | ident | `(` expr `)` | expr_with_block
-- expr_with_block = block_expr | if_expr | loop_expr | while_expr | struct_initializer | array_initializer
+- expr_with_block = block_expr | if_expr | loop_expr | while_expr | for_expr | struct_initializer | array_initializer
 - array_initializer = `[` (expr ,?)? | expr (, expr)* ,? `]`
 - struct_initializer = ident? `.{` struct_initializer_fields `}`
 - struct_initializer_fields = (struct_initializer_field ,?)? | struct_initializer_field (, struct_initializer_field)* ,?
@@ -63,6 +64,7 @@ Everything after `#` is treated as a comment.
 - if_expr = `if` expr block_expr (`else` block_expr)?
 - loop_expr = `loop` block_expr
 - while_expr = `while` expr block_expr
+- for_expr = `for` ident `in` expr block_expr
 - function_call_expr = ident `(` expr? (, expr)*, `...` `)` | ident `(` `...` `)`
 - let_statement =  `let` ident `:` type `;` | `let` ident (`:` type)? `=` expr `;`
 - type = `!` | ident | `*` type | `[` type `;` expr `]`

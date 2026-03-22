@@ -122,6 +122,15 @@ pub struct WhileExpr {
     pub while_keyword_span: lex::Span,
 }
 
+/// A `for` expression
+#[derive(Debug, Clone)]
+pub struct ForExpr {
+    pub i: Ident,
+    pub iterator: Box<Expr>,
+    pub body: BlockExpr,
+    pub for_keyword_span: lex::Span,
+}
+
 /// An array initializer expression
 #[derive(Debug, Clone)]
 pub struct ArrayInitializerExpr {
@@ -167,6 +176,7 @@ pub enum Expr {
     If(IfExpr),
     Loop(LoopExpr),
     While(WhileExpr),
+    For(ForExpr),
     ArrayInitializer(ArrayInitializerExpr),
     StructInitializer(StructInitializerExpr),
     Return(ReturnExpr),
@@ -180,6 +190,7 @@ pub enum Expr {
     AsCast(AsCastExpr),
     Comptime(ComptimeExpr),
     Place(PlaceExpr),
+    Range(RangeExpr),
 }
 
 /// A place expression
@@ -204,6 +215,7 @@ impl Expr {
             ),
             Self::Loop(loop_expr) => loop_expr.loop_keyword_span.join(loop_expr.body.span()),
             Self::While(while_expr) => while_expr.while_keyword_span.join(while_expr.body.span()),
+            Self::For(e) => e.for_keyword_span.join(e.body.span()),
             Self::ArrayInitializer(e) => e.opening_bracket_span.join(e.closing_bracket_span),
             Self::StructInitializer(e) => e
                 .struct_name
@@ -224,6 +236,7 @@ impl Expr {
             Self::AsCast(e) => e.expr.span().join(e.ty.span()),
             Self::Comptime(e) => e.comptime_span.join(e.expr.span()),
             Self::Place(e) => e.span(),
+            Self::Range(e) => e.from.span().join(e.to.span()),
         }
     }
 
@@ -373,6 +386,13 @@ pub struct AsCastExpr {
 pub struct ComptimeExpr {
     pub expr: Box<Expr>,
     pub comptime_span: lex::Span,
+}
+
+/// A `..` expression
+#[derive(Debug, Clone)]
+pub struct RangeExpr {
+    pub from: Box<Expr>,
+    pub to: Box<Expr>,
 }
 
 /// A binary operation
@@ -672,6 +692,7 @@ impl Parser<'_> {
                     | Expr::If(_)
                     | Expr::Loop(_)
                     | Expr::While(_)
+                    | Expr::For(_)
                     | Expr::StructInitializer(_)) => match self.peek_token()? {
                         Some(lex::Token::Punct(lex::Punct::RightBrace)) => {
                             final_expr = Some(expr_with_block);
@@ -832,7 +853,7 @@ impl Parser<'_> {
     }
 
     fn next_comp_expr(&mut self) -> Result<Expr, Error> {
-        let expr = self.next_additive_expr()?;
+        let expr = self.next_range_expr()?;
         let op = match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::CmpEq)) => Some(BinaryOp::Cmp(CmpOp::Equal)),
             Some(lex::Token::Punct(lex::Punct::CmpNeq)) => Some(BinaryOp::Cmp(CmpOp::NotEqual)),
@@ -848,11 +869,24 @@ impl Parser<'_> {
                 Ok(Expr::Binary(BinaryExpr {
                     op,
                     lhs: Box::new(expr),
-                    rhs: Box::new(self.next_additive_expr()?),
+                    rhs: Box::new(self.next_range_expr()?),
                     op_span,
                 }))
             }
             None => Ok(expr),
+        }
+    }
+
+    fn next_range_expr(&mut self) -> Result<Expr, Error> {
+        let expr = self.next_additive_expr()?;
+        if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::DoubleDot)) {
+            self.consume_token()?;
+            Ok(Expr::Range(RangeExpr {
+                from: Box::new(expr),
+                to: Box::new(self.next_additive_expr()?),
+            }))
+        } else {
+            Ok(expr)
         }
     }
 
@@ -1045,6 +1079,7 @@ impl Parser<'_> {
             Some(lex::Token::Keyword(lex::Keyword::If)) => self.next_if_expr().map(Expr::If),
             Some(lex::Token::Keyword(lex::Keyword::Loop)) => self.next_loop_expr().map(Expr::Loop),
             Some(lex::Token::Keyword(lex::Keyword::While)) => self.next_while_expr().map(Expr::While),
+            Some(lex::Token::Keyword(lex::Keyword::For)) => self.next_for_expr().map(Expr::For),
             _ => self.consume_unexpected_token("expression"),
         }
     }
@@ -1138,6 +1173,21 @@ impl Parser<'_> {
         })
     }
 
+    /// Parse for expression
+    fn next_for_expr(&mut self) -> Result<ForExpr, Error> {
+        let for_keyword_span = self.expect_keyword(lex::Keyword::For)?;
+        let i = self.next_ident()?;
+        self.expect_keyword(lex::Keyword::In)?;
+        let iterator = self.next_expr()?;
+        let body = self.next_block_expr()?;
+        Ok(ForExpr {
+            i,
+            iterator: Box::new(iterator),
+            body,
+            for_keyword_span,
+        })
+    }
+
     fn parse_delimited<T>(
         &mut self,
         delim: lex::Punct,
@@ -1191,6 +1241,7 @@ impl fmt::Debug for Expr {
             Self::If(e) => e.fmt(f),
             Self::Loop(e) => e.fmt(f),
             Self::While(e) => e.fmt(f),
+            Self::For(e) => e.fmt(f),
             Self::ArrayInitializer(e) => e.fmt(f),
             Self::StructInitializer(e) => e.fmt(f),
             Self::Return(e) => e.fmt(f),
@@ -1204,6 +1255,7 @@ impl fmt::Debug for Expr {
             Self::AsCast(e) => e.fmt(f),
             Self::Comptime(e) => e.fmt(f),
             Self::Place(e) => e.fmt(f),
+            Self::Range(e) => e.fmt(f),
         }
     }
 }
