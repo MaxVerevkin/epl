@@ -440,14 +440,33 @@ impl<'a> FunctionLoweringCtx<'a> {
                     kind: RExprKind::StructInitializer(lowered_fields),
                 }))
             }
-            ast::Expr::Return(return_expr) => Ok(Expr::R(RExpr {
-                ty: Type::Never,
-                span,
-                kind: RExprKind::Return(Box::new(
-                    self.lower_expr(&return_expr.value, Some(self.decl.return_ty))?,
-                )),
-            })),
+            ast::Expr::Return(return_expr) => {
+                if return_expr.value.is_none() && self.decl.return_ty != Type::Unit {
+                    return Err(
+                        Error::new(format!("a return value of type {:?} is expected", self.decl.return_ty))
+                            .with_span(return_expr.return_keyword_span),
+                    );
+                }
+                let lowered_value = return_expr
+                    .value
+                    .as_ref()
+                    .map(|expr| self.lower_expr(expr, Some(self.decl.return_ty)))
+                    .transpose()?
+                    .unwrap_or(Expr::UNIT);
+                Ok(Expr::R(RExpr {
+                    ty: Type::Never,
+                    span,
+                    kind: RExprKind::Return(Box::new(lowered_value)),
+                }))
+            }
             ast::Expr::Break(break_expr) => {
+                if break_expr.value.is_none()
+                    && let Some(expect_type) = expect_type
+                    && expect_type != Type::Unit
+                {
+                    return Err(Error::new(format!("a break value of type {expect_type:?} is expected"))
+                        .with_span(break_expr.break_keyword_span));
+                }
                 let loop_ctx = self.scope.loop_context().ok_or_else(|| {
                     Error::new("break expressions are only allowed inside loops")
                         .with_span(break_expr.break_keyword_span)

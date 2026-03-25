@@ -216,7 +216,10 @@ impl Expr {
                 .as_ref()
                 .map_or(e.opening_brace_span, |n| n.span)
                 .join(e.closing_brace_span),
-            Self::Return(return_expr) => return_expr.return_keyword_span.join(return_expr.value.span()),
+            Self::Return(return_expr) => match &return_expr.value {
+                Some(val) => return_expr.return_keyword_span.join(val.span()),
+                None => return_expr.return_keyword_span,
+            },
             Self::Break(break_expr) => match &break_expr.value {
                 Some(val) => break_expr.break_keyword_span.join(val.span()),
                 None => break_expr.break_keyword_span,
@@ -256,7 +259,7 @@ impl BlockExpr {
 #[derive(Debug, Clone)]
 pub struct ReturnExpr {
     pub return_keyword_span: lex::Span,
-    pub value: Box<Expr>,
+    pub value: Option<Box<Expr>>,
 }
 
 /// A break expression
@@ -726,10 +729,15 @@ impl Parser<'_> {
         match self.peek_token()? {
             Some(lex::Token::Keyword(lex::Keyword::Return)) => {
                 let (return_keyword_span, _) = self.consume_token()?.unwrap();
-                let value = self.next_expr()?;
+                let value = match self.peek_token()? {
+                    Some(lex::Token::Punct(
+                        lex::Punct::Semicolon | lex::Punct::Comma | lex::Punct::RightParen | lex::Punct::RightBrace,
+                    )) => None,
+                    _ => Some(Box::new(self.next_expr()?)),
+                };
                 Ok(Expr::Return(ReturnExpr {
                     return_keyword_span,
-                    value: Box::new(value),
+                    value,
                 }))
             }
             Some(lex::Token::Keyword(lex::Keyword::Comptime)) => {
