@@ -67,7 +67,6 @@ impl ExprRef<'_> {
     }
 }
 
-#[expect(unused)]
 impl ExprMutRef<'_> {
     pub fn visit_children(&mut self, mut visitor: impl FnMut(ExprMutRef<'_>)) {
         match self {

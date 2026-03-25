@@ -1,5 +1,6 @@
 mod dump;
 mod lower_ast;
+mod opt;
 pub mod types;
 mod visit;
 
@@ -88,7 +89,7 @@ impl Module {
                     if let Some(body) = &function.body {
                         let function_id = functions_namespace[&function.name.value];
                         let decl = &functions[&function_id];
-                        let body = lower_ast::lower_function_body(
+                        let mut body = lower_ast::lower_function_body(
                             decl,
                             body,
                             &functions_namespace,
@@ -96,6 +97,7 @@ impl Module {
                             &mut typesystem,
                             &type_namespace,
                         )?;
+                        body.as_mut().basic_optimize();
                         functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
                 }
