@@ -75,154 +75,80 @@ fn dump_block_expr(output: &mut String, body: &BlockExpr, module: &Module, inden
         output.push('\n');
     }
     for expr in &body.exprs {
-        indent(output, indent_level + 1);
-        dump_expr(output, expr, module, indent_level + 1);
+        dump_expr(output, expr.as_ref(), module, indent_level + 1);
     }
     indent(output, indent_level);
     output.push_str("}\n");
 }
 
-fn dump_expr(output: &mut String, expr: &Expr, module: &Module, indent_level: u32) {
+fn dump_expr(output: &mut String, expr: ExprRef, module: &Module, indent_level: u32) {
+    indent(output, indent_level);
     match expr {
-        Expr::R(expr) => dump_rexpr(output, expr, module, indent_level),
-        Expr::L(expr) => dump_lexpr(output, expr, module, indent_level),
+        ExprRef::R(expr) => {
+            dump_rexpr(output, expr, module);
+            output.push_str(" TYPE=");
+            dump_type(output, expr.ty, module);
+        }
+        ExprRef::L(expr) => {
+            dump_lexpr(output, expr, module);
+            output.push_str(" TYPE=");
+            dump_type(output, expr.ty, module);
+        }
+    }
+    output.push('\n');
+    expr.visit_children(|expr| dump_expr(output, expr, module, indent_level + 1));
+}
+
+fn dump_rexpr(output: &mut String, expr: &RExpr, module: &Module) {
+    match &expr.kind {
+        RExprKind::Undefined => output.push_str("UNDEFINED"),
+        RExprKind::ConstUnit => output.push_str("UNIT"),
+        RExprKind::ConstNumber(num) => write!(output, "CONST_NUMBER({num})").unwrap(),
+        RExprKind::ConstString(str) => write!(output, "CONST_STRING({str:?})").unwrap(),
+        RExprKind::ConstBool(bool) => write!(output, "CONST_BOOL({bool})").unwrap(),
+        RExprKind::Field(_, field) => write!(output, "FIELD_ACCESS({field})").unwrap(),
+        RExprKind::ArrayElement(_, _) => output.push_str("ARRAY_ELEMENT"),
+        RExprKind::Store(_, _) => output.push_str("STORE"),
+        RExprKind::GetPointer(_) => output.push_str("GET_POINTER"),
+        RExprKind::Block(_) => output.push_str("BLOCK"), // TODO: enumerate variables
+        RExprKind::Return(_) => output.push_str("RETURN"),
+        RExprKind::Break(loop_id, _) => write!(output, "BREAK({loop_id:?})").unwrap(),
+        RExprKind::BinOp(op, _, _) => write!(output, "BIN_OP({op:?})").unwrap(),
+        RExprKind::If { .. } => output.push_str("IF"),
+        RExprKind::Loop(loop_id, _) => write!(output, "LOOP({loop_id:?})").unwrap(),
+        RExprKind::ArrayInitializer(_) => output.push_str("ARRAY_INITIALIZER"),
+        RExprKind::StructInitializer(_) => output.push_str("STRUCT_INITIALIZER"),
+        RExprKind::FunctionCall(function_id, _) => write!(
+            output,
+            "FUNCTION_CALL({:?})",
+            module.functions.get(function_id).unwrap().name.value
+        )
+        .unwrap(),
+        RExprKind::Cast(_) => output.push_str("CAST"),
+        RExprKind::Not(_) => output.push_str("NOT"),
     }
 }
 
-fn dump_rexpr(output: &mut String, expr: &RExpr, module: &Module, indent_level: u32) {
+fn dump_lexpr(output: &mut String, expr: &LExpr, module: &Module) {
     match &expr.kind {
-        RExprKind::Undefined => output.push_str("undefined\n"),
-        RExprKind::ConstUnit => output.push_str("unit\n"),
-        RExprKind::ConstNumber(num) => write!(output, "{num}\n").unwrap(),
-        RExprKind::ConstString(str) => write!(output, "{str:?}\n").unwrap(),
-        RExprKind::ConstBool(bool) => write!(output, "{bool}\n").unwrap(),
-        RExprKind::Field(expr, field) => {
-            output.push_str("FIELD_ACCESS (");
-            output.push_str(field);
-            output.push_str(")\n");
-            indent(output, indent_level + 1);
-            output.push_str("place: ");
-            dump_rexpr(output, expr, module, indent_level + 1);
-        }
-        RExprKind::ArrayElement(array, index) => {
-            output.push_str("ARRAY_ELEMENT\n");
-            indent(output, indent_level + 1);
-            output.push_str("array: ");
-            dump_rexpr(output, array, module, indent_level + 1);
-            indent(output, indent_level + 1);
-            output.push_str("index: ");
-            dump_expr(output, index, module, indent_level + 1);
-        }
-        RExprKind::Store(place, value) => {
-            output.push_str("STORE\n");
-            indent(output, indent_level + 1);
-            output.push_str("place: ");
-            dump_lexpr(output, place, module, indent_level + 1);
-            indent(output, indent_level + 1);
-            output.push_str("value: ");
-            dump_expr(output, value, module, indent_level + 1);
-        }
-        RExprKind::GetPointer(expr) => {
-            output.push_str("GET_POINTER ");
-            dump_lexpr(output, expr, module, indent_level);
-        }
-        RExprKind::Block(e) => dump_block_expr(output, e, module, indent_level),
-        RExprKind::Return(expr) => {
-            output.push_str("RETURN ");
-            dump_expr(output, expr, module, indent_level + 1);
-        }
-        RExprKind::Break(loop_id, expr) => {
-            output.push_str("BREAK ");
-            dump_expr(output, expr, module, indent_level + 1);
-        }
-        RExprKind::BinOp(binop, lhs, rhs) => {
-            output.push_str("BIN_OP\n");
-            indent(output, indent_level + 1);
-            writeln!(output, "op: {binop:?}").unwrap();
-            indent(output, indent_level + 1);
-            output.push_str("lhs: ");
-            dump_expr(output, lhs, module, indent_level + 1);
-            indent(output, indent_level + 1);
-            output.push_str("rhs: ");
-            dump_expr(output, rhs, module, indent_level + 1);
-        }
-        RExprKind::If {
-            cond,
-            if_true,
-            if_false,
-        } => {
-            output.push_str("IF\n");
-            indent(output, indent_level + 1);
-            output.push_str("cond: ");
-            dump_expr(output, cond, module, indent_level + 1);
-            indent(output, indent_level + 1);
-            output.push_str("if_true: ");
-            dump_expr(output, if_true, module, indent_level + 1);
-            if let Some(if_false) = if_false {
-                indent(output, indent_level + 1);
-                output.push_str("if_false: ");
-                dump_expr(output, if_false, module, indent_level + 1);
-            }
-        }
-        RExprKind::Loop(loop_id, expr) => {
-            output.push_str("LOOP\n");
-            indent(output, indent_level + 1);
-            output.push_str("body: ");
-            dump_expr(output, expr, module, indent_level + 1);
-        }
-        RExprKind::ArrayInitializer(exprs) => output.push_str("ArrayInitializer\n"),
-        RExprKind::StructInitializer(items) => output.push_str("StructInitializer\n"),
-        RExprKind::FunctionCall(function_id, exprs) => {
-            output.push_str("FUNCTION_CALL\n");
-            indent(output, indent_level + 1);
-            output.push_str("name: ");
-            output.push_str(&module.functions.get(function_id).unwrap().name.value);
-            output.push('\n');
-            for arg in exprs {
-                indent(output, indent_level + 1);
-                output.push_str("arg: ");
-                dump_expr(output, arg, module, indent_level + 1);
-            }
-        }
-        RExprKind::Cast(expr) => output.push_str("Cast\n"),
-        RExprKind::Not(expr) => output.push_str("Not\n"),
-    }
-}
-
-fn dump_lexpr(output: &mut String, expr: &LExpr, module: &Module, indent_level: u32) {
-    match &expr.kind {
-        LExprKind::Dereference(expr) => {
-            output.push_str("DEREFERENCE ");
-            dump_expr(output, expr, module, indent_level);
-        }
-        LExprKind::Variable(variable_id) => {
-            writeln!(output, "{variable_id:?}").unwrap();
-        }
-        LExprKind::Field(expr, field) => {
-            output.push_str("FIELD_ACCESS (");
-            output.push_str(field);
-            output.push_str(")\n");
-            indent(output, indent_level + 1);
-            output.push_str("place: ");
-            dump_lexpr(output, expr, module, indent_level + 1);
-        }
-        LExprKind::ArrayElement(array, index) => {
-            output.push_str("ARRAY_ELEMENT\n");
-            indent(output, indent_level + 1);
-            output.push_str("array: ");
-            dump_lexpr(output, array, module, indent_level + 1);
-            indent(output, indent_level + 1);
-            output.push_str("index: ");
-            dump_expr(output, index, module, indent_level + 1);
-        }
+        LExprKind::Dereference(_) => output.push_str("DEREFERENCE"),
+        LExprKind::Variable(variable_id) => write!(output, "VARIABLE({variable_id:?})").unwrap(),
+        LExprKind::Field(_, field) => write!(output, "FIELD({field:?})").unwrap(),
+        LExprKind::ArrayElement(_, _) => output.push_str("ARRAY_ELEMENT"),
     }
 }
 
 fn indent(output: &mut String, indent: u32) {
-    for _ in 0..indent {
+    if indent > 0 {
         output.push(' ');
         output.push(' ');
         output.push(' ');
         output.push(' ');
+        for _ in 1..indent {
+            output.push('|');
+            output.push(' ');
+            output.push(' ');
+            output.push(' ');
+        }
     }
 }
