@@ -55,7 +55,7 @@ impl Module {
         let mut functions = HashMap::new();
 
         let mut type_namespace = HashMap::new();
-        type_namespace.insert(String::from("void"), Type::Void);
+        type_namespace.insert(String::from("unit"), Type::Unit);
         type_namespace.insert(String::from("bool"), Type::Bool);
         type_namespace.insert(String::from("i8"), Type::Int(IntType::I8));
         type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
@@ -135,7 +135,7 @@ impl Function {
                 .as_ref()
                 .map(|ty| typesystem.type_from_ast(type_namespace, ty))
                 .transpose()?
-                .unwrap_or(Type::Void),
+                .unwrap_or(Type::Unit),
             is_variadic: ast.is_variadic,
             body: None,
         })
@@ -237,7 +237,7 @@ impl Expr {
 
     fn set_var(var: VariableId, expr: Expr) -> Self {
         Self::R(RExpr {
-            ty: Type::Void,
+            ty: Type::Unit,
             span: None,
             kind: RExprKind::Store(
                 Box::new(LExpr {

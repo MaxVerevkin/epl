@@ -12,7 +12,7 @@ pub struct Layout {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Type {
     Never,
-    Void,
+    Unit,
     Bool,
     Int(IntType),
     Struct(StructId),
@@ -200,7 +200,7 @@ impl TypeSystem {
     /// Get the layout of a type
     pub fn layout_of(&self, ty: Type) -> Layout {
         match ty {
-            Type::Never | Type::Void => Layout { size: 0, align: 1 },
+            Type::Never | Type::Unit => Layout { size: 0, align: 1 },
             Type::Bool => Layout { size: 1, align: 1 },
             Type::Int(i) => Layout {
                 size: i.bytes(),

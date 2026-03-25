@@ -137,7 +137,7 @@ impl<'a> FunctionLoweringCtx<'a> {
             ast::Expr::Block(block_expr) => self.lower_block_expr(block_expr, expect_type),
             ast::Expr::If(if_expr) => {
                 let expect_type = match (expect_type, if_expr.if_false.is_some()) {
-                    (None | Some(Type::Void), false) => Some(Type::Void),
+                    (None | Some(Type::Unit), false) => Some(Type::Unit),
 
                     (_, false) => {
                         return Err(Error::new(format!(
@@ -165,7 +165,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .transpose()?;
 
                 Ok(Expr::R(RExpr {
-                    ty: coalesce_types(if_true.ty(), if_false.as_ref().map_or(Type::Void, |expr| expr.ty())),
+                    ty: coalesce_types(if_true.ty(), if_false.as_ref().map_or(Type::Unit, |expr| expr.ty())),
                     span,
                     kind: RExprKind::If {
                         cond: Box::new(cond),
@@ -193,19 +193,19 @@ impl<'a> FunctionLoweringCtx<'a> {
                 //     if <cond> { $body } else { break }
                 // }
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Void
+                    && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Void, expr.span()));
+                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
                 }
                 let cond = self.lower_expr(&while_expr.cond, Some(Type::Bool))?;
-                let lowered_body = self.lower_loop_body(&while_expr.body, Some(Type::Void))?;
+                let lowered_body = self.lower_loop_body(&while_expr.body, Some(Type::Unit))?;
                 Ok(Expr::R(RExpr {
-                    ty: Type::Void,
+                    ty: Type::Unit,
                     span,
                     kind: RExprKind::Loop(
                         lowered_body.loop_id,
                         Box::new(Expr::R(RExpr {
-                            ty: Type::Void,
+                            ty: Type::Unit,
                             span,
                             kind: RExprKind::If {
                                 cond: Box::new(cond),
@@ -244,9 +244,9 @@ impl<'a> FunctionLoweringCtx<'a> {
                 // TODO: shadowed target will no longer be needed when mutability is implemented
 
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Void
+                    && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Void, expr.span()));
+                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
                 }
 
                 let ast::Expr::Range(range_expr) = &*e.iterator else {
@@ -269,11 +269,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                 self.scope
                     .variables
                     .insert(e.i.value.clone(), (shadowed_var_id, var_type));
-                let lowered_body = self.lower_loop_body(&e.body, Some(Type::Void))?;
+                let lowered_body = self.lower_loop_body(&e.body, Some(Type::Unit))?;
                 self.scope.pop();
 
                 Ok(Expr::R(RExpr {
-                    ty: Type::Void,
+                    ty: Type::Unit,
                     span,
                     kind: RExprKind::Block(BlockExpr {
                         variables: vec![(var_id, var_type), (target_id, var_type), (shadowed_var_id, var_type)],
@@ -281,12 +281,12 @@ impl<'a> FunctionLoweringCtx<'a> {
                             Expr::set_var(var_id, from_expr),
                             Expr::set_var(target_id, to_expr),
                             Expr::R(RExpr {
-                                ty: Type::Void,
+                                ty: Type::Unit,
                                 span: None,
                                 kind: RExprKind::Loop(
                                     lowered_body.loop_id,
                                     Box::new(Expr::R(RExpr {
-                                        ty: Type::Void,
+                                        ty: Type::Unit,
                                         span: None,
                                         kind: RExprKind::If {
                                             cond: Box::new(Expr::R(RExpr {
@@ -299,7 +299,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                 ),
                                             })),
                                             if_true: Box::new(Expr::R(RExpr {
-                                                ty: Type::Void,
+                                                ty: Type::Unit,
                                                 span: None,
                                                 kind: RExprKind::Block(BlockExpr {
                                                     variables: Vec::new(),
@@ -463,7 +463,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .map(|expr| self.lower_expr(expr, expect_type))
                     .transpose()?;
                 self.scope.loop_context().unwrap().break_used_with_type =
-                    Some(lowered_value.as_ref().map_or(Type::Void, |expr| expr.ty()));
+                    Some(lowered_value.as_ref().map_or(Type::Unit, |expr| expr.ty()));
                 Ok(Expr::R(RExpr {
                     ty: Type::Never,
                     span,
@@ -574,23 +574,23 @@ impl<'a> FunctionLoweringCtx<'a> {
             }
             ast::Expr::Assignment(e) => {
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Void
+                    && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Void, expr.span()));
+                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
                 }
                 let lowered_place = self.lower_expr(&e.place, None)?.expect_lvalue()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
                 Ok(Expr::R(RExpr {
-                    ty: Type::Void,
+                    ty: Type::Unit,
                     span,
                     kind: RExprKind::Store(Box::new(lowered_place), Box::new(lowered_value)),
                 }))
             }
             ast::Expr::CompoundAssignment(e) => {
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Void
+                    && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Void, expr.span()));
+                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
                 }
                 let lowered_place = self.lower_expr(&e.place, None)?.expect_lvalue()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
@@ -609,14 +609,14 @@ impl<'a> FunctionLoweringCtx<'a> {
                 });
                 let tmp_var_id = VariableId::new();
                 Ok(Expr::R(RExpr {
-                    ty: Type::Void,
+                    ty: Type::Unit,
                     span,
                     kind: RExprKind::Block(BlockExpr {
                         variables: vec![(tmp_var_id, place_ptr_ty)],
                         statements: vec![
                             Expr::set_var(tmp_var_id, place_ptr_expr),
                             Expr::R(RExpr {
-                                ty: Type::Void,
+                                ty: Type::Unit,
                                 span: None,
                                 kind: RExprKind::Store(
                                     Box::new(LExpr::dereference(Expr::get_var(tmp_var_id, place_ptr_ty), operands_ty)),
@@ -932,7 +932,7 @@ impl<'a> FunctionLoweringCtx<'a> {
 
         if final_expr.is_none()
             && let Some(expect_type) = expect_type
-            && expect_type != Type::Void
+            && expect_type != Type::Unit
         {
             return Err(
                 Error::new(format!("expected expr of type {expect_type:?}, found end-of-block"))
@@ -941,7 +941,7 @@ impl<'a> FunctionLoweringCtx<'a> {
         }
 
         Ok(Expr::R(RExpr {
-            ty: final_expr.as_ref().map_or(Type::Void, |expr| expr.ty()),
+            ty: final_expr.as_ref().map_or(Type::Unit, |expr| expr.ty()),
             span: Some(expr.span()),
             kind: RExprKind::Block(BlockExpr {
                 variables,
@@ -963,7 +963,7 @@ impl<'a> FunctionLoweringCtx<'a> {
             break_used_with_type: None,
             expect_type,
         });
-        let body = self.lower_block_expr(body, Some(Type::Void))?;
+        let body = self.lower_block_expr(body, Some(Type::Unit))?;
         let loop_ctx = self.scope.loop_context.unwrap();
         self.scope.pop();
         Ok(LowerLoopBodyResult {
