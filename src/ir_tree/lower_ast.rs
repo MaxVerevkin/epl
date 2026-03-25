@@ -967,7 +967,7 @@ impl<'a> FunctionLoweringCtx<'a> {
         self.scope.pop();
 
         Ok(Expr::R(RExpr {
-            ty: exprs.last().unwrap().ty(),
+            ty: exprs.last().map_or(Type::Unit, |expr| expr.ty()),
             span: Some(expr.span()),
             kind: RExprKind::Block(BlockExpr { variables, exprs }),
         }))
