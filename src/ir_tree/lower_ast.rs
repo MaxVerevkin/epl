@@ -212,7 +212,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                                 if_false: Some(Box::new(Expr::R(RExpr {
                                     ty: Type::Never,
                                     span: None,
-                                    kind: RExprKind::Break(lowered_body.loop_id, None),
+                                    kind: RExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
                                 }))),
                             },
                         })),
@@ -323,7 +323,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                                             if_false: Some(Box::new(Expr::R(RExpr {
                                                 ty: Type::Never,
                                                 span: None,
-                                                kind: RExprKind::Break(lowered_body.loop_id, None),
+                                                kind: RExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
                                             }))),
                                         },
                                     })),
@@ -458,13 +458,13 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .value
                     .as_ref()
                     .map(|expr| self.lower_expr(expr, expect_type))
-                    .transpose()?;
-                self.scope.loop_context().unwrap().break_used_with_type =
-                    Some(lowered_value.as_ref().map_or(Type::Unit, |expr| expr.ty()));
+                    .transpose()?
+                    .unwrap_or(Expr::UNIT);
+                self.scope.loop_context().unwrap().break_used_with_type = Some(lowered_value.ty());
                 Ok(Expr::R(RExpr {
                     ty: Type::Never,
                     span,
-                    kind: RExprKind::Break(break_from, lowered_value.map(Box::new)),
+                    kind: RExprKind::Break(break_from, Box::new(lowered_value)),
                 }))
             }
             ast::Expr::Literal(literal_expr) => match &literal_expr.value {

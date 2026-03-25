@@ -132,13 +132,8 @@ fn dump_rexpr(output: &mut String, expr: &RExpr, module: &Module, indent_level: 
             dump_expr(output, expr, module, indent_level + 1);
         }
         RExprKind::Break(loop_id, expr) => {
-            output.push_str("BREAK");
-            if let Some(expr) = expr {
-                output.push(' ');
-                dump_expr(output, expr, module, indent_level + 1);
-            } else {
-                output.push('\n');
-            }
+            output.push_str("BREAK ");
+            dump_expr(output, expr, module, indent_level + 1);
         }
         RExprKind::BinOp(binop, lhs, rhs) => {
             output.push_str("BIN_OP\n");

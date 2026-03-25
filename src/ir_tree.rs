@@ -187,7 +187,7 @@ pub enum RExprKind {
 
     Block(BlockExpr),
     Return(Box<Expr>),
-    Break(LoopId, Option<Box<Expr>>),
+    Break(LoopId, Box<Expr>),
     BinOp(BinaryOp, Box<Expr>, Box<Expr>),
     If { cond: Box<Expr>, if_true: Box<Expr>, if_false: Option<Box<Expr>> },
     Loop(LoopId, Box<Expr>),
