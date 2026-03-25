@@ -97,7 +97,7 @@ struct LowerLoopBodyResult {
 }
 
 impl<'a> FunctionLoweringCtx<'a> {
-    /// Create a new builder context
+    /// Create a new function lowering context
     fn new(
         decl: &'a Function,
         functions_namespace: &'a HashMap<String, FunctionId>,
@@ -793,9 +793,6 @@ impl<'a> FunctionLoweringCtx<'a> {
             ast::Expr::Range(_range_expr) => {
                 unimplemented!("range expressions cannot be evaluated yet")
             }
-
-            // Places
-            //
             ast::Expr::Ident(ident) => {
                 let (var_id, ty) = self
                     .scope
@@ -882,7 +879,7 @@ impl<'a> FunctionLoweringCtx<'a> {
         }
     }
 
-    /// Evaluate a block expression
+    /// Lower a block expression
     fn lower_block_expr(&mut self, expr: &ast::BlockExpr, expect_type: Option<Type>) -> Result<Expr, Error> {
         if expr.final_expr.is_none()
             && let Some(expect_type) = expect_type
