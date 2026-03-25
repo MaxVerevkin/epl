@@ -9,7 +9,7 @@ macro_rules! make_entity_id {
                 use std::sync::atomic;
                 static NEXT: atomic::AtomicU64 = atomic::AtomicU64::new(1);
                 let id = NEXT.fetch_add(1, atomic::Ordering::SeqCst);
-                Self(NonZeroU64::new(id).unwrap())
+                Self(::std::num::NonZeroU64::new(id).unwrap())
             }
         }
 

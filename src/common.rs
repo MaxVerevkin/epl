@@ -17,3 +17,12 @@ pub enum CmpOp {
     Equal,
     NotEqual,
 }
+
+/// A binary operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Cmp(CmpOp),
+    Arithmetic(ArithmeticOp),
+    LogicalOr,
+    LogicalAnd,
+}

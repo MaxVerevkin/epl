@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast;
+use crate::common::BinaryOp;
 
 /// Construct an IR of a function from its AST
 pub fn build_function(
@@ -672,7 +673,7 @@ impl<'a> FunctionBuilder<'a> {
                 Ok(EvalResult::VOID)
             }
             ast::Expr::Binary(binary_expr) => match binary_expr.op {
-                ast::BinaryOp::Cmp(cmp_op) => {
+                BinaryOp::Cmp(cmp_op) => {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
@@ -702,7 +703,7 @@ impl<'a> FunctionBuilder<'a> {
                         },
                     )
                 }
-                ast::BinaryOp::Arithmetic(arithmetic_op) => {
+                BinaryOp::Arithmetic(arithmetic_op) => {
                     let lhs_eval = self.eval_expr(&binary_expr.lhs, None)?;
                     let rhs_eval = self.eval_expr(&binary_expr.rhs, Some(lhs_eval.ty()))?;
                     let Some(ty) = lhs_eval.ty().comine_ignoring_never(rhs_eval.ty()) else {
@@ -734,7 +735,7 @@ impl<'a> FunctionBuilder<'a> {
                         },
                     )
                 }
-                ast::BinaryOp::LogicalOr => {
+                BinaryOp::LogicalOr => {
                     let continuation_id = BasicBlockId::new();
                     let if_false_id = BasicBlockId::new();
                     let result_def = DefinitionId::new(Type::Bool);
@@ -763,7 +764,7 @@ impl<'a> FunctionBuilder<'a> {
                     self.current_block_args = vec![result_def];
                     Ok(EvalResult::Value(Value::Definition(result_def)))
                 }
-                ast::BinaryOp::LogicalAnd => {
+                BinaryOp::LogicalAnd => {
                     let continuation_id = BasicBlockId::new();
                     let if_true_id = BasicBlockId::new();
                     let result_def = DefinitionId::new(Type::Bool);

@@ -1,4 +1,4 @@
-use crate::{ast, ir, lex};
+use crate::{ast, ir_tree, lex};
 
 pub trait SpanError {
     fn message(&self) -> String;
@@ -31,7 +31,6 @@ impl SpanError for ast::Error {
                 String::from("let statement with no value requires type to be specified")
             }
             ast::ErrorKind::VariadicIsNotLast => String::from("variadic specifier (...) must be the last argument"),
-            ast::ErrorKind::NotAPlaceExpr => String::from("expected a place expression"),
         }
     }
 
@@ -40,7 +39,7 @@ impl SpanError for ast::Error {
     }
 }
 
-impl SpanError for ir::Error {
+impl SpanError for ir_tree::Error {
     fn message(&self) -> String {
         self.message.clone()
     }
