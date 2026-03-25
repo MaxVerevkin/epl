@@ -1000,7 +1000,7 @@ impl Parser<'_> {
                 } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
                     self.next_struct_initializer_expr().map(Expr::StructInitializer)
                 } else {
-                    self.next_ident().map(|ident| Expr::Ident(ident))
+                    self.next_ident().map(Expr::Ident)
                 }
             }
             Some(lex::Token::Literal(_)) => {

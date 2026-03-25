@@ -49,15 +49,6 @@ pub enum IntType {
 }
 
 impl IntType {
-    /// Returns the number of bits used to store this int
-    pub fn bits(self) -> u64 {
-        match self {
-            Self::I8 | Self::U8 => 8,
-            Self::I32 | Self::U32 => 32,
-            Self::I64 | Self::U64 => 64,
-        }
-    }
-
     /// Returns the number of bytes used to store this int
     pub fn bytes(self) -> u64 {
         match self {
@@ -260,40 +251,8 @@ impl TypeSystem {
 }
 
 impl Type {
-    /// Expect this type to be an integer type, extract the type, and panic otherwise.
-    #[track_caller]
-    pub fn expect_int(self) -> IntType {
-        match self {
-            Self::Int(i) => i,
-            _ => panic!("Type::expect_int() called on {self:?}"),
-        }
-    }
-
     /// Returns `true` if this data type is an integer
     pub fn is_int(self) -> bool {
         matches!(self, Self::Int(_))
-    }
-
-    /// Returns `true` if this data type is a signed integer
-    pub fn is_signed_int(self) -> bool {
-        match self {
-            Self::Int(i) => i.is_signed(),
-            _ => false,
-        }
-    }
-
-    /// Combines two types into one, handling the Never type
-    ///
-    /// 1. If `self` or `other` is Never, the other type is returned.
-    /// 2. If both are Never, Never is returned.
-    /// 3. Ohterwise require types to be equal, and return the type.
-    pub fn comine_ignoring_never(self, other: Self) -> Option<Self> {
-        if self == Self::Never {
-            Some(other)
-        } else if other == Self::Never {
-            Some(self)
-        } else {
-            (self == other).then_some(self)
-        }
     }
 }

@@ -557,7 +557,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         Error::new(format!("function {:?} not found", function_call_expr.name.value))
                             .with_span(function_call_expr.name.span)
                     })?;
-                let callee = &self.functions[&callee_id];
+                let callee = &self.functions[callee_id];
                 if callee.is_variadic {
                     if callee.args.len() > function_call_expr.args.len() {
                         return Err(Error::new(format!(
@@ -835,7 +835,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 let lowered_lhs = self.lower_expr(&e.lhs, None)?;
                 let struct_id = match lowered_lhs.ty() {
                     Type::Struct(struct_id) => struct_id,
-                    _ => return Err(Error::new(format!("only structs have fields")).with_span(e.dot_span)),
+                    _ => return Err(Error::new("only structs have fields").with_span(e.dot_span)),
                 };
                 let struct_ty = self.typesystem.get_struct(struct_id);
                 let field = struct_ty
