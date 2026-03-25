@@ -1,4 +1,4 @@
-mod builder;
+mod lower_ast;
 pub mod types;
 
 use std::collections::HashMap;
@@ -86,7 +86,7 @@ impl Module {
                     if let Some(body) = &function.body {
                         let function_id = functions_namespace[&function.name.value];
                         let decl = &functions[&function_id];
-                        let body = builder::build_function_body(
+                        let body = lower_ast::build_function_body(
                             decl,
                             body,
                             &functions_namespace,
