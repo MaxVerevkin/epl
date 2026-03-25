@@ -64,7 +64,7 @@ fn main() {
                 std::process::exit(1);
             });
 
-            println!("{ir:#?}");
+            println!("{}", ir.dump());
         }
         // "cfg" => {
         //     let Some(file) = args.next() else { print_usage(&arg0, 1) };

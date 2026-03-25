@@ -1,3 +1,4 @@
+mod dump;
 mod lower_ast;
 pub mod types;
 
@@ -102,6 +103,14 @@ impl Module {
         }
 
         Ok(Self { typesystem, functions })
+    }
+
+    /// Dump the contents of this module in a human-readable representation.
+    ///
+    /// Note: the representation is not stable and should only be used for
+    /// demonstation/debugging purposes
+    pub fn dump(&self) -> String {
+        dump::dump(self)
     }
 }
 
