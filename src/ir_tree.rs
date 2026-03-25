@@ -1,6 +1,7 @@
 mod dump;
 mod lower_ast;
 pub mod types;
+mod visit;
 
 use std::collections::HashMap;
 
@@ -171,6 +172,33 @@ pub struct LExpr {
     pub kind: LExprKind,
 }
 
+#[derive(Clone, Copy)]
+pub enum ExprRef<'a> {
+    R(&'a RExpr),
+    L(&'a LExpr),
+}
+
+pub enum ExprMutRef<'a> {
+    R(&'a mut RExpr),
+    L(&'a mut LExpr),
+}
+
+impl Expr {
+    pub fn as_ref(&self) -> ExprRef<'_> {
+        match self {
+            Self::R(e) => ExprRef::R(e),
+            Self::L(e) => ExprRef::L(e),
+        }
+    }
+
+    pub fn as_mut(&mut self) -> ExprMutRef<'_> {
+        match self {
+            Self::R(e) => ExprMutRef::R(e),
+            Self::L(e) => ExprMutRef::L(e),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum RExprKind {
     Undefined,
@@ -289,90 +317,6 @@ impl LExpr {
             ty,
             span: None,
             kind: LExprKind::Dereference(Box::new(expr)),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum ExprRef<'a> {
-    R(&'a RExpr),
-    L(&'a LExpr),
-}
-
-impl Expr {
-    fn as_ref(&self) -> ExprRef<'_> {
-        match self {
-            Self::R(e) => ExprRef::R(e),
-            Self::L(e) => ExprRef::L(e),
-        }
-    }
-}
-
-impl ExprRef<'_> {
-    fn visit_children(&self, mut visitor: impl FnMut(Self)) {
-        match self {
-            Self::R(e) => match &e.kind {
-                RExprKind::Undefined
-                | RExprKind::ConstUnit
-                | RExprKind::ConstNumber(_)
-                | RExprKind::ConstString(_)
-                | RExprKind::ConstBool(_)
-                | RExprKind::Argument(_) => (),
-                RExprKind::Field(rexpr, _) => visitor(Self::R(rexpr)),
-                RExprKind::ArrayElement(rexpr, expr) => {
-                    visitor(Self::R(rexpr));
-                    visitor(expr.as_ref().as_ref());
-                }
-                RExprKind::Store(lexpr, expr) => {
-                    visitor(Self::L(lexpr));
-                    visitor(expr.as_ref().as_ref());
-                }
-                RExprKind::GetPointer(lexpr) => visitor(Self::L(lexpr)),
-                RExprKind::Block(bexpr) => {
-                    for expr in &bexpr.exprs {
-                        visitor(expr.as_ref());
-                    }
-                }
-                RExprKind::Return(expr)
-                | RExprKind::Break(_, expr)
-                | RExprKind::Loop(_, expr)
-                | RExprKind::Cast(expr)
-                | RExprKind::Not(expr) => visitor(expr.as_ref().as_ref()),
-                RExprKind::BinOp(_, expr, expr1) => {
-                    visitor(expr.as_ref().as_ref());
-                    visitor(expr1.as_ref().as_ref());
-                }
-                RExprKind::If {
-                    cond,
-                    if_true,
-                    if_false,
-                } => {
-                    visitor(cond.as_ref().as_ref());
-                    visitor(if_true.as_ref().as_ref());
-                    if let Some(if_false) = if_false {
-                        visitor(if_false.as_ref().as_ref());
-                    }
-                }
-                RExprKind::ArrayInitializer(exprs) | RExprKind::FunctionCall(_, exprs) => {
-                    for expr in exprs {
-                        visitor(expr.as_ref());
-                    }
-                }
-                RExprKind::StructInitializer(items) => {
-                    for (_, expr) in items {
-                        visitor(expr.as_ref());
-                    }
-                }
-            },
-            Self::L(e) => match &e.kind {
-                LExprKind::Dereference(expr) => visitor(expr.as_ref().as_ref()),
-                LExprKind::Variable(_) => (),
-                LExprKind::Field(lexpr, _) => visitor(Self::L(lexpr)),
-                LExprKind::ArrayElement(lexpr, expr) => {
-                    visitor(Self::L(lexpr));
-                    visitor(expr.as_ref().as_ref());
-                }
-            },
         }
     }
 }
