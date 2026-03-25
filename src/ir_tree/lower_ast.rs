@@ -169,15 +169,16 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .if_false
                     .as_ref()
                     .map(|expr| self.lower_block_expr(expr, expect_type))
-                    .transpose()?;
+                    .transpose()?
+                    .unwrap_or(Expr::UNIT);
 
                 Ok(Expr::R(RExpr {
-                    ty: coalesce_types(if_true.ty(), if_false.as_ref().map_or(Type::Unit, |expr| expr.ty())),
+                    ty: coalesce_types(if_true.ty(), if_false.ty()),
                     span,
                     kind: RExprKind::If {
                         cond: Box::new(cond),
                         if_true: Box::new(if_true),
-                        if_false: if_false.map(Box::new),
+                        if_false: Box::new(if_false),
                     },
                 }))
             }
@@ -217,11 +218,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                             kind: RExprKind::If {
                                 cond: Box::new(cond),
                                 if_true: Box::new(lowered_body.body),
-                                if_false: Some(Box::new(Expr::R(RExpr {
+                                if_false: Box::new(Expr::R(RExpr {
                                     ty: Type::Never,
                                     span: None,
                                     kind: RExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
-                                }))),
+                                })),
                             },
                         })),
                     ),
@@ -328,11 +329,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                     ],
                                                 }),
                                             })),
-                                            if_false: Some(Box::new(Expr::R(RExpr {
+                                            if_false: Box::new(Expr::R(RExpr {
                                                 ty: Type::Never,
                                                 span: None,
                                                 kind: RExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
-                                            }))),
+                                            })),
                                         },
                                     })),
                                 ),
@@ -719,7 +720,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         kind: RExprKind::If {
                             cond: Box::new(lowered_lhs),
                             if_true: Box::new(Expr::const_bool(true)),
-                            if_false: Some(Box::new(lowered_rhs)),
+                            if_false: Box::new(lowered_rhs),
                         },
                     }))
                 }
@@ -737,7 +738,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         kind: RExprKind::If {
                             cond: Box::new(lowered_lhs),
                             if_true: Box::new(lowered_rhs),
-                            if_false: Some(Box::new(Expr::const_bool(false))),
+                            if_false: Box::new(Expr::const_bool(false)),
                         },
                     }))
                 }

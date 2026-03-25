@@ -190,7 +190,7 @@ pub enum RExprKind {
     Return(Box<Expr>),
     Break(LoopId, Box<Expr>),
     BinOp(BinaryOp, Box<Expr>, Box<Expr>),
-    If { cond: Box<Expr>, if_true: Box<Expr>, if_false: Option<Box<Expr>> },
+    If { cond: Box<Expr>, if_true: Box<Expr>, if_false: Box<Expr> },
     Loop(LoopId, Box<Expr>),
     ArrayInitializer(Vec<Expr>),
     StructInitializer(Vec<(String, Expr)>),
