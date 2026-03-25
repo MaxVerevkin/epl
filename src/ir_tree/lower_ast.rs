@@ -25,8 +25,7 @@ pub fn build_function_body(
 
     Ok(BlockExpr {
         variables: builder.args,
-        statements: Vec::new(),
-        final_expr: Some(Box::new(body_eval)),
+        exprs: vec![body_eval],
     })
 }
 
@@ -277,7 +276,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     span,
                     kind: RExprKind::Block(BlockExpr {
                         variables: vec![(var_id, var_type), (target_id, var_type), (shadowed_var_id, var_type)],
-                        statements: vec![
+                        exprs: vec![
                             Expr::set_var(var_id, from_expr),
                             Expr::set_var(target_id, to_expr),
                             Expr::R(RExpr {
@@ -303,7 +302,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                 span: None,
                                                 kind: RExprKind::Block(BlockExpr {
                                                     variables: Vec::new(),
-                                                    statements: vec![
+                                                    exprs: vec![
                                                         Expr::set_var(shadowed_var_id, Expr::get_var(var_id, var_type)),
                                                         lowered_body.body,
                                                         Expr::set_var(
@@ -319,7 +318,6 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                             }),
                                                         ),
                                                     ],
-                                                    final_expr: None,
                                                 }),
                                             })),
                                             if_false: Some(Box::new(Expr::R(RExpr {
@@ -332,7 +330,6 @@ impl<'a> FunctionLoweringCtx<'a> {
                                 ),
                             }),
                         ],
-                        final_expr: None,
                     }),
                 }))
             }
@@ -613,7 +610,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     span,
                     kind: RExprKind::Block(BlockExpr {
                         variables: vec![(tmp_var_id, place_ptr_ty)],
-                        statements: vec![
+                        exprs: vec![
                             Expr::set_var(tmp_var_id, place_ptr_expr),
                             Expr::R(RExpr {
                                 ty: Type::Unit,
@@ -635,7 +632,6 @@ impl<'a> FunctionLoweringCtx<'a> {
                                 ),
                             }),
                         ],
-                        final_expr: None,
                     }),
                 }))
             }
@@ -888,10 +884,20 @@ impl<'a> FunctionLoweringCtx<'a> {
 
     /// Evaluate a block expression
     fn lower_block_expr(&mut self, expr: &ast::BlockExpr, expect_type: Option<Type>) -> Result<Expr, Error> {
+        if expr.final_expr.is_none()
+            && let Some(expect_type) = expect_type
+            && expect_type != Type::Unit
+        {
+            return Err(
+                Error::new(format!("expected expr of type {expect_type:?}, found end-of-block"))
+                    .with_span(expr.closing_brace_span),
+            );
+        }
+
         self.scope.push();
 
         let mut variables = Vec::new();
-        let mut statements = Vec::new();
+        let mut exprs = Vec::new();
 
         for stmt in &expr.statements {
             match stmt {
@@ -907,7 +913,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         self.scope
                             .variables
                             .insert(name.value.clone(), (var_id, value_eval.ty()));
-                        statements.push(Expr::set_var(var_id, value_eval));
+                        exprs.push(Expr::set_var(var_id, value_eval));
                     }
                     ast::LetStatement::WithoutValue { name, ty } => {
                         let id = VariableId::new();
@@ -917,37 +923,28 @@ impl<'a> FunctionLoweringCtx<'a> {
                     }
                 },
                 ast::Statement::Expr(expr) => {
-                    statements.push(self.lower_expr(expr, None)?);
+                    exprs.push(self.lower_expr(expr, None)?);
                 }
             }
         }
 
-        let final_expr = expr
-            .final_expr
-            .as_ref()
-            .map(|expr| self.lower_expr(expr, expect_type))
-            .transpose()?;
+        match &expr.final_expr {
+            Some(final_expr) => {
+                exprs.push(self.lower_expr(final_expr, expect_type)?);
+            }
+            None => {
+                if !exprs.is_empty() {
+                    exprs.push(Expr::UNIT);
+                }
+            }
+        }
 
         self.scope.pop();
 
-        if final_expr.is_none()
-            && let Some(expect_type) = expect_type
-            && expect_type != Type::Unit
-        {
-            return Err(
-                Error::new(format!("expected expr of type {expect_type:?}, found end-of-block"))
-                    .with_span(expr.closing_brace_span),
-            );
-        }
-
         Ok(Expr::R(RExpr {
-            ty: final_expr.as_ref().map_or(Type::Unit, |expr| expr.ty()),
+            ty: exprs.last().unwrap().ty(),
             span: Some(expr.span()),
-            kind: RExprKind::Block(BlockExpr {
-                variables,
-                statements,
-                final_expr: final_expr.map(Box::new),
-            }),
+            kind: RExprKind::Block(BlockExpr { variables, exprs }),
         }))
     }
 

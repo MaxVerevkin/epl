@@ -165,6 +165,7 @@ pub struct LExpr {
 #[derive(Debug)]
 pub enum RExprKind {
     Undefined,
+    ConstUnit,
     ConstNumber(i64),
     ConstString(String),
     ConstBool(bool),
@@ -208,11 +209,16 @@ impl Expr {
 #[derive(Debug)]
 pub struct BlockExpr {
     pub variables: Vec<(VariableId, Type)>,
-    pub statements: Vec<Expr>,
-    pub final_expr: Option<Box<Expr>>,
+    pub exprs: Vec<Expr>,
 }
 
 impl Expr {
+    const UNIT: Self = Self::R(RExpr {
+        ty: Type::Unit,
+        span: None,
+        kind: RExprKind::ConstUnit,
+    });
+
     fn ty(&self) -> Type {
         match self {
             Self::R(e) => e.ty,
