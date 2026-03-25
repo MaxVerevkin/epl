@@ -87,7 +87,7 @@ impl Module {
                     if let Some(body) = &function.body {
                         let function_id = functions_namespace[&function.name.value];
                         let decl = &functions[&function_id];
-                        let body = lower_ast::build_function_body(
+                        let body = lower_ast::lower_function_body(
                             decl,
                             body,
                             &functions_namespace,
@@ -121,7 +121,7 @@ pub struct Function {
     pub args: Vec<(String, Type)>,
     pub return_ty: Type,
     pub is_variadic: bool,
-    pub body: Option<BlockExpr>,
+    pub body: Option<Expr>,
 }
 
 impl Function {
@@ -185,6 +185,7 @@ pub enum RExprKind {
     Store(Box<LExpr>, Box<Expr>),
     GetPointer(Box<LExpr>),
 
+    Argument(String),
     Block(BlockExpr),
     Return(Box<Expr>),
     Break(LoopId, Box<Expr>),
@@ -315,7 +316,8 @@ impl ExprRef<'_> {
                 | RExprKind::ConstUnit
                 | RExprKind::ConstNumber(_)
                 | RExprKind::ConstString(_)
-                | RExprKind::ConstBool(_) => (),
+                | RExprKind::ConstBool(_)
+                | RExprKind::Argument(_) => (),
                 RExprKind::Field(rexpr, _) => visitor(Self::R(rexpr)),
                 RExprKind::ArrayElement(rexpr, expr) => {
                     visitor(Self::R(rexpr));

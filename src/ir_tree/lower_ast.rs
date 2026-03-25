@@ -7,26 +7,44 @@ use crate::{
 };
 
 /// Construct an IR of a function from its AST
-pub fn build_function_body(
+pub fn lower_function_body(
     decl: &Function,
     body: &ast::BlockExpr,
     functions_namespace: &HashMap<String, FunctionId>,
     functions: &HashMap<FunctionId, Function>,
     typesystem: &mut TypeSystem,
     type_namespace: &HashMap<String, Type>,
-) -> Result<BlockExpr, Error> {
+) -> Result<Expr, Error> {
     if decl.is_variadic {
         return Err(Error::new("defining variadic functions is not supported").with_span(decl.name.span));
     }
 
     let mut builder = FunctionLoweringCtx::new(decl, functions_namespace, functions, typesystem, type_namespace);
 
-    let body_eval = builder.lower_block_expr(body, Some(decl.return_ty))?;
+    let mut variables = Vec::new();
+    let mut exprs = Vec::new();
 
-    Ok(BlockExpr {
-        variables: builder.args,
-        exprs: vec![body_eval],
-    })
+    for (arg_name, arg_ty) in &decl.args {
+        let arg_var_id = VariableId::new();
+        builder.scope.variables.insert(arg_name.clone(), (arg_var_id, *arg_ty));
+        variables.push((arg_var_id, *arg_ty));
+        exprs.push(Expr::set_var(
+            arg_var_id,
+            Expr::R(RExpr {
+                ty: *arg_ty,
+                span: None,
+                kind: RExprKind::Argument(arg_name.clone()),
+            }),
+        ));
+    }
+
+    exprs.push(builder.lower_block_expr(body, Some(decl.return_ty))?);
+
+    Ok(Expr::R(RExpr {
+        ty: decl.return_ty,
+        span: Some(body.span()),
+        kind: RExprKind::Block(BlockExpr { variables, exprs }),
+    }))
 }
 
 /// A function's AST -> IR_TREE lowering context
@@ -34,7 +52,6 @@ struct FunctionLoweringCtx<'a> {
     decl: &'a Function,
     functions_namespace: &'a HashMap<String, FunctionId>,
     functions: &'a HashMap<FunctionId, Function>,
-    args: Vec<(VariableId, Type)>,
     typesystem: &'a mut TypeSystem,
     type_namespace: &'a HashMap<String, Type>,
     scope: Scope,
@@ -105,23 +122,14 @@ impl<'a> FunctionLoweringCtx<'a> {
         typesystem: &'a mut TypeSystem,
         type_namespace: &'a HashMap<String, Type>,
     ) -> Self {
-        let mut this = Self {
+        Self {
             decl,
             functions_namespace,
             functions,
-            args: Vec::new(),
             typesystem,
             type_namespace,
             scope: Scope::default(),
-        };
-
-        for (name, ty) in &decl.args {
-            let var_id = VariableId::new();
-            this.scope.variables.insert(name.clone(), (var_id, *ty));
-            this.args.push((var_id, *ty));
         }
-
-        this
     }
 
     /// lower an expression

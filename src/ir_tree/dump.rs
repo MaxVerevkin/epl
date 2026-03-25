@@ -7,12 +7,8 @@ pub fn dump(module: &Module) -> String {
 
     for function in module.functions.values() {
         dump_function_desc(&mut output, function, module);
-        match &function.body {
-            Some(body) => {
-                output.push(' ');
-                dump_block_expr(&mut output, body, module, 0);
-            }
-            None => output.push_str(";\n"),
+        if let Some(body) = &function.body {
+            dump_expr(&mut output, body.as_ref(), module, 1);
         }
         output.push('\n');
     }
@@ -37,6 +33,7 @@ fn dump_function_desc(output: &mut String, function: &Function, module: &Module)
     }
     output.push_str(") -> ");
     dump_type(output, function.return_ty, module);
+    output.push('\n');
 }
 
 fn dump_type(output: &mut String, ty: Type, module: &Module) {
@@ -66,36 +63,23 @@ fn dump_type(output: &mut String, ty: Type, module: &Module) {
     }
 }
 
-fn dump_block_expr(output: &mut String, body: &BlockExpr, module: &Module, indent_level: u32) {
-    output.push_str("{\n");
-    for (var, ty) in &body.variables {
-        indent(output, indent_level + 1);
-        write!(output, "{var:?}: ").unwrap();
-        dump_type(output, *ty, module);
-        output.push('\n');
-    }
-    for expr in &body.exprs {
-        dump_expr(output, expr.as_ref(), module, indent_level + 1);
-    }
-    indent(output, indent_level);
-    output.push_str("}\n");
-}
-
 fn dump_expr(output: &mut String, expr: ExprRef, module: &Module, indent_level: u32) {
     indent(output, indent_level);
     match expr {
-        ExprRef::R(expr) => {
-            dump_rexpr(output, expr, module);
-            output.push_str(" TYPE=");
-            dump_type(output, expr.ty, module);
-        }
-        ExprRef::L(expr) => {
-            dump_lexpr(output, expr, module);
-            output.push_str(" TYPE=");
-            dump_type(output, expr.ty, module);
-        }
+        ExprRef::R(expr) => dump_rexpr(output, expr, module),
+        ExprRef::L(expr) => dump_lexpr(output, expr, module),
     }
     output.push('\n');
+    if let ExprRef::R(expr) = expr
+        && let RExprKind::Block(bexpr) = &expr.kind
+    {
+        for (var_id, var_ty) in &bexpr.variables {
+            indent(output, indent_level + 1);
+            write!(output, "DECLARE {var_id:?} : ").unwrap();
+            dump_type(output, *var_ty, module);
+            output.push('\n');
+        }
+    }
     expr.visit_children(|expr| dump_expr(output, expr, module, indent_level + 1));
 }
 
@@ -110,7 +94,8 @@ fn dump_rexpr(output: &mut String, expr: &RExpr, module: &Module) {
         RExprKind::ArrayElement(_, _) => output.push_str("ARRAY_ELEMENT"),
         RExprKind::Store(_, _) => output.push_str("STORE"),
         RExprKind::GetPointer(_) => output.push_str("GET_POINTER"),
-        RExprKind::Block(_) => output.push_str("BLOCK"), // TODO: enumerate variables
+        RExprKind::Argument(arg) => write!(output, "ARGUMENT({arg:?})").unwrap(),
+        RExprKind::Block(_) => output.push_str("BLOCK"),
         RExprKind::Return(_) => output.push_str("RETURN"),
         RExprKind::Break(loop_id, _) => write!(output, "BREAK({loop_id:?})").unwrap(),
         RExprKind::BinOp(op, _, _) => write!(output, "BIN_OP({op:?})").unwrap(),
@@ -127,6 +112,8 @@ fn dump_rexpr(output: &mut String, expr: &RExpr, module: &Module) {
         RExprKind::Cast(_) => output.push_str("CAST"),
         RExprKind::Not(_) => output.push_str("NOT"),
     }
+    output.push_str(" TYPE=");
+    dump_type(output, expr.ty, module);
 }
 
 fn dump_lexpr(output: &mut String, expr: &LExpr, module: &Module) {
@@ -136,6 +123,8 @@ fn dump_lexpr(output: &mut String, expr: &LExpr, module: &Module) {
         LExprKind::Field(_, field) => write!(output, "FIELD({field:?})").unwrap(),
         LExprKind::ArrayElement(_, _) => output.push_str("ARRAY_ELEMENT"),
     }
+    output.push_str(" [LVALUE] TYPE=");
+    dump_type(output, expr.ty, module);
 }
 
 fn indent(output: &mut String, indent: u32) {
