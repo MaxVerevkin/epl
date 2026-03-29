@@ -1,12 +1,5 @@
 use super::*;
-use crate::ast;
-
-/// A memory layout of a type
-#[derive(Debug, Clone, Copy)]
-pub struct Layout {
-    pub size: u64,
-    pub align: u64,
-}
+use crate::{ast, common::Layout};
 
 /// The set of data types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -33,6 +26,78 @@ impl Type {
     pub fn make_ptr(self, typesystem: &mut TypeSystem) -> Self {
         Self::Ptr {
             pointee: Some(typesystem.get_type_id(self)),
+        }
+    }
+
+    /// Returns `true` if this data type is an integer
+    pub fn is_int(self) -> bool {
+        matches!(self, Self::Int(_))
+    }
+
+    /// Returns `true` if this data type is an integer that is signed
+    pub fn is_signed_int(self) -> bool {
+        matches!(self, Self::Int(i) if i.is_signed())
+    }
+
+    /// Returns the type of the array's element, or None if not an array
+    pub fn array_element_type(self, typesystem: &TypeSystem) -> Option<Self> {
+        match self {
+            Self::Array { element, length: _ } => Some(typesystem.get_type(element)),
+            _ => None,
+        }
+    }
+
+    /// Returns the byte offset of the struct's field
+    pub fn get_field_offset(self, name: &str, typesystem: &TypeSystem) -> Option<u64> {
+        match self {
+            Self::Struct(struct_id) => {
+                let struct_def = typesystem.get_struct(struct_id);
+                let mut offset = 0u64;
+                for field in &struct_def.fields {
+                    let field_layout = field.ty.layout(typesystem);
+                    offset = offset.next_multiple_of(field_layout.size);
+                    if field.name.value == name {
+                        return Some(offset);
+                    }
+                    offset += field_layout.size;
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Get physical layout of this type
+    pub fn layout(self, typesystem: &TypeSystem) -> Layout {
+        match self {
+            Self::Never | Self::Unit => Layout { size: 0, align: 1 },
+            Self::Bool => Layout { size: 1, align: 1 },
+            Self::Int(i) => Layout {
+                size: i.bytes(),
+                align: i.bytes(),
+            },
+            Self::Ptr { pointee: _ } => Layout {
+                size: typesystem.ptr_size,
+                align: typesystem.ptr_size,
+            },
+            Self::Struct(sid) => {
+                let s = typesystem.get_struct(sid);
+                let mut layout = Layout { size: 0, align: 1 };
+                for f in &s.fields {
+                    let f_layout = f.ty.layout(typesystem);
+                    layout.align = layout.align.max(f_layout.align);
+                    layout.size = layout.size.next_multiple_of(f_layout.align);
+                    layout.size += f_layout.size;
+                }
+                layout.size = layout.size.next_multiple_of(layout.align);
+                layout
+            }
+            Self::Array { element, length } => {
+                let mut layout = typesystem.get_type(element).layout(typesystem);
+                layout.size = layout.size.next_multiple_of(layout.align);
+                layout.size *= length;
+                layout
+            }
         }
     }
 }
@@ -114,6 +179,11 @@ impl TypeSystem {
         }
     }
 
+    /// Returns the target pointer size
+    pub fn ptr_size(&self) -> u64 {
+        self.ptr_size
+    }
+
     /// Get or create a type ID for the given type
     pub fn get_type_id(&mut self, ty: Type) -> TypeId {
         if let Some(id) = self.type_lut.get(&ty).copied() {
@@ -188,57 +258,6 @@ impl TypeSystem {
         Ok(Type::Struct(sid))
     }
 
-    /// Get the layout of a type
-    pub fn layout_of(&self, ty: Type) -> Layout {
-        match ty {
-            Type::Never | Type::Unit => Layout { size: 0, align: 1 },
-            Type::Bool => Layout { size: 1, align: 1 },
-            Type::Int(i) => Layout {
-                size: i.bytes(),
-                align: i.bytes(),
-            },
-            Type::Ptr { pointee: _ } => Layout {
-                size: self.ptr_size,
-                align: self.ptr_size,
-            },
-            Type::Struct(sid) => {
-                let s = &self.structs[sid.0];
-                let mut layout = Layout { size: 0, align: 1 };
-                for f in &s.fields {
-                    let f_layout = self.layout_of(f.ty);
-                    if f_layout.align > layout.align {
-                        layout.align = f_layout.align;
-                    }
-                    layout.size = layout.size.next_multiple_of(f_layout.align);
-                    layout.size += f_layout.size;
-                }
-                layout.size = layout.size.next_multiple_of(layout.align);
-                layout
-            }
-            Type::Array { element, length } => {
-                let mut layout = self.layout_of(self.get_type(element));
-                layout.size = layout.size.next_multiple_of(layout.align);
-                layout.size *= length;
-                layout
-            }
-        }
-    }
-
-    /// Get struct field's byte offset and type
-    pub fn get_struct_field(&self, sid: StructId, field: &ast::Ident) -> Result<(u64, Type), Error> {
-        let s = &self.structs[sid.0];
-        let mut offset = 0u64;
-        for f in &s.fields {
-            let f_layout = self.layout_of(f.ty);
-            offset = offset.next_multiple_of(f_layout.align);
-            if f.name.value == field.value {
-                return Ok((offset, f.ty));
-            }
-            offset += f_layout.size;
-        }
-        Err(Error::new(format!("struct {} has no field {}", s.name.value, field.value)).with_span(field.span))
-    }
-
     /// Get a referencse to the struct declaration
     pub fn get_struct(&self, sid: StructId) -> &Struct {
         &self.structs[sid.0]
@@ -247,12 +266,5 @@ impl TypeSystem {
     /// Get the actual type by ID
     pub fn get_type(&self, id: TypeId) -> Type {
         self.types_with_ids[id.0]
-    }
-}
-
-impl Type {
-    /// Returns `true` if this data type is an integer
-    pub fn is_int(self) -> bool {
-        matches!(self, Self::Int(_))
     }
 }

@@ -30,7 +30,7 @@ impl ExprRef<'_> {
                 | RExprKind::Loop(_, expr)
                 | RExprKind::Cast(expr)
                 | RExprKind::Not(expr) => visitor(expr.as_ref().as_ref()),
-                RExprKind::BinOp(_, expr, expr1) => {
+                RExprKind::Arithmetic(_, expr, expr1) | RExprKind::Cmp(_, expr, expr1) => {
                     visitor(expr.as_ref().as_ref());
                     visitor(expr1.as_ref().as_ref());
                 }
@@ -97,7 +97,7 @@ impl ExprMutRef<'_> {
                 | RExprKind::Loop(_, expr)
                 | RExprKind::Cast(expr)
                 | RExprKind::Not(expr) => visitor(expr.as_mut().as_mut()),
-                RExprKind::BinOp(_, expr, expr1) => {
+                RExprKind::Arithmetic(_, expr, expr1) | RExprKind::Cmp(_, expr, expr1) => {
                     visitor(expr.as_mut().as_mut());
                     visitor(expr1.as_mut().as_mut());
                 }

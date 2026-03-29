@@ -12,6 +12,7 @@ use llvm_sys::target_machine::*;
 
 use crate::common::ArithmeticOp;
 use crate::common::CmpOp;
+use crate::common::Layout;
 use crate::ir;
 
 /// An LLVM module
@@ -29,12 +30,12 @@ impl LlvmModule {
 
         let mut ctx = BuildCtx {
             module: &module,
-            typesystem: &ir.typesystem,
             value_map: HashMap::new(),
         };
 
-        for (fn_name, fn_decl) in &ir.function_decls {
-            let fn_type = ctx.build_function_type(fn_decl);
+        for function in &ir.functions {
+            let fn_type = ctx.build_function_type(function);
+            let fn_name = function.mangled_name.clone();
             fn_type_map.insert(fn_name.clone(), fn_type);
             fn_map.insert(
                 fn_name.clone(),
@@ -42,13 +43,17 @@ impl LlvmModule {
             );
         }
 
-        for (fn_name, fn_ir) in &ir.functions {
-            let fn_value = &fn_map[fn_name];
-            let postorder = fn_ir.postorder();
+        for function in &ir.functions {
+            let Some(body) = &function.body else {
+                continue;
+            };
+
+            let fn_value = &fn_map[&function.mangled_name];
+            let postorder = body.postorder();
             ctx.value_map.clear();
 
-            for (i, &arg) in fn_ir.basic_blokcs[&fn_ir.entry].args.iter().enumerate() {
-                ctx.value_map.insert(arg, fn_value.get_param(i));
+            for (i, arg) in body.basic_blokcs[&body.entry].args.iter().enumerate() {
+                ctx.value_map.insert(arg.clone(), fn_value.get_param(i));
             }
 
             let mut basic_blocks_map = HashMap::new();
@@ -56,23 +61,23 @@ impl LlvmModule {
                 basic_blocks_map.insert(basic_black_id, fn_value.append_basic_block());
             }
 
-            builder.position_at_end(basic_blocks_map[&fn_ir.entry]);
-            for alloca in &fn_ir.allocas {
+            builder.position_at_end(basic_blocks_map[&body.entry]);
+            for alloca in &body.allocas {
                 ctx.value_map
-                    .insert(alloca.definition_id, builder.alloca(alloca.layout));
+                    .insert(alloca.definition_id.clone(), builder.alloca(alloca.layout));
             }
 
             for &basic_block_id in &postorder {
-                if basic_block_id != fn_ir.entry {
+                if basic_block_id != body.entry {
                     builder.position_at_end(basic_blocks_map[&basic_block_id]);
-                    for &arg in &fn_ir.basic_blokcs[&basic_block_id].args {
-                        ctx.value_map.insert(arg, builder.phi(ctx.build_type(arg.ty())));
+                    for arg in &body.basic_blokcs[&basic_block_id].args {
+                        ctx.value_map.insert(arg.clone(), builder.phi(ctx.build_type(arg.ty())));
                     }
                 }
             }
 
             for &basic_block_id in postorder.iter().rev() {
-                let basic_block_ir = &fn_ir.basic_blokcs[&basic_block_id];
+                let basic_block_ir = &body.basic_blokcs[&basic_block_id];
                 builder.position_at_end(basic_blocks_map[&basic_block_id]);
 
                 for instruction in &basic_block_ir.instructions {
@@ -86,10 +91,10 @@ impl LlvmModule {
                             let args: Vec<_> = args.iter().map(|arg| ctx.build_value(arg)).collect();
                             builder.function_call(fn_type_map[name], &fn_map[name], &args)
                         }
-                        ir::InstructionKind::Cmp { op, lhs, rhs } => builder.cmp(
+                        ir::InstructionKind::Cmp { op, signed, lhs, rhs } => builder.cmp(
                             ctx.build_value(lhs),
                             ctx.build_value(rhs),
-                            match (op, lhs.ty().is_signed_int()) {
+                            match (op, signed) {
                                 (CmpOp::Less, true) => LLVMIntPredicate::LLVMIntSLT,
                                 (CmpOp::Less, false) => LLVMIntPredicate::LLVMIntULT,
                                 (CmpOp::LessOrEqual, true) => LLVMIntPredicate::LLVMIntSLE,
@@ -102,21 +107,19 @@ impl LlvmModule {
                                 (CmpOp::NotEqual, _) => LLVMIntPredicate::LLVMIntNE,
                             },
                         ),
-                        ir::InstructionKind::Arithmetic { op, lhs, rhs } => {
-                            let signed = lhs.ty().is_signed_int();
+                        ir::InstructionKind::Arithmetic { op, signed, lhs, rhs } => {
                             let lhs = ctx.build_value(lhs);
                             let rhs = ctx.build_value(rhs);
                             match op {
                                 ArithmeticOp::Add => builder.add(lhs, rhs),
                                 ArithmeticOp::Sub => builder.sub(lhs, rhs),
                                 ArithmeticOp::Mul => builder.mul(lhs, rhs),
-                                ArithmeticOp::Div => builder.div(signed, lhs, rhs),
+                                ArithmeticOp::Div => builder.div(*signed, lhs, rhs),
                             }
                         }
-                        ir::InstructionKind::Not { value } => builder.xor(
-                            ctx.build_value(value),
-                            ctx.build_value(&ir::Value::Constant(ir::Constant::Bool(true))),
-                        ),
+                        ir::InstructionKind::Not { value } => {
+                            builder.xor(ctx.build_value(value), ctx.build_value(&ir::Value::Bool(true)))
+                        }
                         ir::InstructionKind::OffsetPtr { ptr, offset } => unsafe {
                             let offset = ctx.build_value(offset);
                             LLVMBuildGEP2(
@@ -128,26 +131,24 @@ impl LlvmModule {
                                 c"".as_ptr(),
                             )
                         },
-                        ir::InstructionKind::CastPtr { ptr } => ctx.build_value(ptr),
-                        ir::InstructionKind::CastInt { int } => {
-                            let int_val = ctx.build_value(int);
-                            let target_ty = ctx.build_type(instruction.definition_id.ty());
-                            match (int.ty().expect_int(), instruction.definition_id.ty().expect_int()) {
-                                (a, b) if a.bits() == b.bits() => int_val,
-                                (a, b) if a.bits() > b.bits() => builder.trunc(int_val, target_ty),
-                                (a, _) if a.is_signed() => builder.sext(int_val, target_ty),
-                                _ => builder.zext(int_val, target_ty),
-                            }
+                        ir::InstructionKind::Zext { int } => {
+                            builder.zext(ctx.build_value(int), ctx.build_type(instruction.definition_id.ty()))
+                        }
+                        ir::InstructionKind::Sext { int } => {
+                            builder.sext(ctx.build_value(int), ctx.build_type(instruction.definition_id.ty()))
+                        }
+                        ir::InstructionKind::Truncate { int } => {
+                            builder.trunc(ctx.build_value(int), ctx.build_type(instruction.definition_id.ty()))
                         }
                     };
-                    ctx.value_map.insert(instruction.definition_id, value);
+                    ctx.value_map.insert(instruction.definition_id.clone(), value);
                 }
                 match &basic_block_ir.terminator {
                     ir::Terminator::Jump { to, args } => {
                         builder.jump(basic_blocks_map[to]);
-                        for (&arg, arg_value) in fn_ir.basic_blokcs[to].args.iter().zip(args) {
+                        for (arg, arg_value) in body.basic_blokcs[to].args.iter().zip(args) {
                             phi_add_incoming(
-                                ctx.value_map[&arg],
+                                ctx.value_map[arg],
                                 basic_blocks_map[&basic_block_id],
                                 ctx.build_value(arg_value),
                             );
@@ -165,22 +166,22 @@ impl LlvmModule {
                             basic_blocks_map[if_true],
                             basic_blocks_map[if_false],
                         );
-                        for (&arg, arg_value) in fn_ir.basic_blokcs[if_true].args.iter().zip(if_true_args) {
+                        for (arg, arg_value) in body.basic_blokcs[if_true].args.iter().zip(if_true_args) {
                             phi_add_incoming(
-                                ctx.value_map[&arg],
+                                ctx.value_map[arg],
                                 basic_blocks_map[&basic_block_id],
                                 ctx.build_value(arg_value),
                             );
                         }
-                        for (&arg, arg_value) in fn_ir.basic_blokcs[if_false].args.iter().zip(if_false_args) {
+                        for (arg, arg_value) in body.basic_blokcs[if_false].args.iter().zip(if_false_args) {
                             phi_add_incoming(
-                                ctx.value_map[&arg],
+                                ctx.value_map[arg],
                                 basic_blocks_map[&basic_block_id],
                                 ctx.build_value(arg_value),
                             );
                         }
                     }
-                    ir::Terminator::Return { value } => {
+                    ir::Terminator::Return(value) => {
                         builder.ret(ctx.build_value(value));
                     }
                     ir::Terminator::Unreachable => {
@@ -364,7 +365,7 @@ impl LlvmBuilder {
     }
 
     /// Build the `alloca` instruction
-    fn alloca(&self, layout: ir::Layout) -> LLVMValueRef {
+    fn alloca(&self, layout: Layout) -> LLVMValueRef {
         unsafe {
             let alloca = LLVMBuildAlloca(self.raw, LLVMArrayType2(LLVMInt8Type(), layout.size), c"".as_ptr());
             LLVMSetAlignment(alloca, layout.align as u32);
@@ -480,17 +481,16 @@ impl Drop for LlvmBuilder {
 
 struct BuildCtx<'a> {
     module: &'a LlvmModule,
-    typesystem: &'a ir::TypeSystem,
     value_map: HashMap<ir::DefinitionId, LLVMValueRef>,
 }
 
 impl BuildCtx<'_> {
     /// Construct an LLVM function type for the given declaration
-    fn build_function_type(&self, decl: &ir::FunctionDecl) -> LLVMTypeRef {
-        let mut args_ty: Vec<_> = decl.args.iter().map(|arg| self.build_type(arg.ty)).collect();
+    fn build_function_type(&self, decl: &ir::Function) -> LLVMTypeRef {
+        let mut args_ty: Vec<_> = decl.args.iter().map(|ty| self.build_type(ty)).collect();
         unsafe {
             LLVMFunctionType(
-                self.build_type(decl.return_ty),
+                self.build_type(&decl.return_ty),
                 args_ty.as_mut_ptr(),
                 args_ty.len() as u32,
                 decl.is_variadic as i32,
@@ -499,52 +499,42 @@ impl BuildCtx<'_> {
     }
 
     /// Construct an LLVM type for the given IR type
-    fn build_type(&self, ty: ir::Type) -> LLVMTypeRef {
+    fn build_type(&self, ty: &ir::Type) -> LLVMTypeRef {
         unsafe {
             match ty {
-                ir::Type::Never | ir::Type::Void => LLVMStructType([].as_mut_ptr(), 0, 0),
+                ir::Type::Zst => LLVMStructType([].as_mut_ptr(), 0, 0),
                 ir::Type::Bool => LLVMInt1Type(),
-                ir::Type::Int(i) => LLVMIntType(i.bits() as u32),
-                ir::Type::Ptr { pointee: _ } => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
-                ir::Type::Struct(sid) => {
-                    let mut tys: Vec<_> = self
-                        .typesystem
-                        .get_struct(sid)
-                        .fields
-                        .iter()
-                        .map(|f| self.build_type(f.ty))
-                        .collect();
-                    LLVMStructType(tys.as_mut_ptr(), tys.len() as u32, 0)
+                ir::Type::I8 => LLVMInt8Type(),
+                ir::Type::I32 => LLVMInt32Type(),
+                ir::Type::I64 => LLVMInt64Type(),
+                ir::Type::Ptr => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
+                ir::Type::Struct(fields) => {
+                    let mut fields: Vec<_> = fields.iter().map(|ty| self.build_type(ty)).collect();
+                    LLVMStructType(fields.as_mut_ptr(), fields.len() as u32, 0)
                 }
-                ir::Type::Array { element, length } => {
-                    LLVMArrayType2(self.build_type(self.typesystem.get_type(element)), length)
-                }
+                ir::Type::Array(element, length) => LLVMArrayType2(self.build_type(element), *length),
             }
         }
     }
 
     /// Convert IR value into LLVM value
     fn build_value(&self, value: &ir::Value) -> LLVMValueRef {
-        match value {
-            ir::Value::Definition(definition_id) => self.value_map[definition_id],
-            ir::Value::Constant(constant) => unsafe {
-                match constant {
-                    ir::Constant::Undefined(ty) => LLVMGetUndef(self.build_type(*ty)),
-                    ir::Constant::Void => LLVMConstStruct([].as_mut_ptr(), 0, 0),
-                    ir::Constant::Bool(bool) => LLVMConstInt(LLVMInt1Type(), *bool as u64, 0),
-                    ir::Constant::String(string) => {
-                        let data = CString::new(string.clone()).unwrap();
-                        let global = self
-                            .module
-                            .add_global(LLVMArrayType2(LLVMInt8Type(), (string.len() + 1) as u64));
-                        LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), string.len() as u32, 0));
-                        global
-                    }
-                    ir::Constant::Number { data, ty } => {
-                        LLVMConstInt(LLVMIntType(ty.bits() as u32), *data as u64, ty.is_signed() as i32)
-                    }
+        unsafe {
+            match value {
+                ir::Value::Zst => LLVMConstStruct([].as_mut_ptr(), 0, 0),
+                ir::Value::Undefined(ty) => LLVMGetUndef(self.build_type(ty)),
+                ir::Value::Bool(bool) => LLVMConstInt(LLVMInt1Type(), *bool as u64, 0),
+                ir::Value::String(string) => {
+                    let data = CString::new(string.clone()).unwrap();
+                    let global = self
+                        .module
+                        .add_global(LLVMArrayType2(LLVMInt8Type(), (string.len() + 1) as u64));
+                    LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), string.len() as u32, 0));
+                    global
                 }
-            },
+                ir::Value::Number { data, ty } => LLVMConstInt(LLVMIntType(ty.int_bits().unwrap()), *data as u64, 0),
+                ir::Value::Definition(definition_id) => self.value_map[definition_id],
+            }
         }
     }
 }

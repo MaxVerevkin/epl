@@ -300,8 +300,8 @@ impl<'a> FunctionLoweringCtx<'a> {
                                             cond: Box::new(Expr::R(RExpr {
                                                 ty: Type::Bool,
                                                 span: None,
-                                                kind: RExprKind::BinOp(
-                                                    BinaryOp::Cmp(CmpOp::Less),
+                                                kind: RExprKind::Cmp(
+                                                    CmpOp::Less,
                                                     Box::new(Expr::get_var(var_id, var_type)),
                                                     Box::new(Expr::get_var(target_id, var_type)),
                                                 ),
@@ -319,8 +319,8 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                             Expr::R(RExpr {
                                                                 ty: var_type,
                                                                 span: None,
-                                                                kind: RExprKind::BinOp(
-                                                                    BinaryOp::Arithmetic(ArithmeticOp::Add),
+                                                                kind: RExprKind::Arithmetic(
+                                                                    ArithmeticOp::Add,
                                                                     Box::new(Expr::get_var(var_id, var_type)),
                                                                     Box::new(Expr::const_number(1, var_type)),
                                                                 ),
@@ -439,7 +439,19 @@ impl<'a> FunctionLoweringCtx<'a> {
                 }
                 let mut lowered_fields = Vec::new();
                 for field in &e.fields {
-                    let (_offset, f_ty) = self.typesystem.get_struct_field(sid, &field.name)?;
+                    let struct_def = self.typesystem.get_struct(sid);
+                    let f_ty = struct_def
+                        .fields
+                        .iter()
+                        .find(|f| f.name.value == field.name.value)
+                        .map(|f| f.ty)
+                        .ok_or_else(|| {
+                            Error::new(format!(
+                                "struct {} has no field {}",
+                                struct_def.name.value, field.name.value
+                            ))
+                            .with_span(field.name.span)
+                        })?;
                     let expr = self.lower_expr(&field.value, Some(f_ty))?;
                     lowered_fields.push((field.name.value.clone(), expr));
                 }
@@ -648,8 +660,8 @@ impl<'a> FunctionLoweringCtx<'a> {
                                     Box::new(Expr::R(RExpr {
                                         ty: operands_ty,
                                         span: None,
-                                        kind: RExprKind::BinOp(
-                                            BinaryOp::Arithmetic(e.op),
+                                        kind: RExprKind::Arithmetic(
+                                            e.op,
                                             Box::new(Expr::L(LExpr::dereference(
                                                 Expr::get_var(tmp_var_id, place_ptr_ty),
                                                 operands_ty,
@@ -664,7 +676,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 }))
             }
             ast::Expr::Binary(binary_expr) => match binary_expr.op {
-                BinaryOp::Cmp(_) => {
+                BinaryOp::Cmp(cmp_op) => {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
@@ -682,10 +694,10 @@ impl<'a> FunctionLoweringCtx<'a> {
                     Ok(Expr::R(RExpr {
                         ty: Type::Bool,
                         span,
-                        kind: RExprKind::BinOp(binary_expr.op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
+                        kind: RExprKind::Cmp(cmp_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
                     }))
                 }
-                BinaryOp::Arithmetic(_) => {
+                BinaryOp::Arithmetic(arithmetic_op) => {
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty()))?;
                     let operands_ty = coalesce_types(lowered_lhs.ty(), lowered_rhs.ty());
@@ -703,7 +715,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     Ok(Expr::R(RExpr {
                         ty: operands_ty,
                         span,
-                        kind: RExprKind::BinOp(binary_expr.op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
+                        kind: RExprKind::Arithmetic(arithmetic_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
                     }))
                 }
                 BinaryOp::LogicalOr => {
@@ -761,8 +773,8 @@ impl<'a> FunctionLoweringCtx<'a> {
                     Ok(Expr::R(RExpr {
                         ty: Type::Int(int_ty),
                         span,
-                        kind: RExprKind::BinOp(
-                            BinaryOp::Arithmetic(ArithmeticOp::Sub),
+                        kind: RExprKind::Arithmetic(
+                            ArithmeticOp::Sub,
                             Box::new(Expr::const_number(0, Type::Int(int_ty))),
                             Box::new(lowered_rhs),
                         ),
@@ -826,6 +838,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .scope
                     .lookup_variable(&ident.value)
                     .ok_or_else(|| Error::new(format!("variable {:?} not found", ident.value)).with_span(ident.span))?;
+                if let Some(expect_type) = expect_type
+                    && expect_type != ty
+                {
+                    return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                }
                 Ok(Expr::L(LExpr {
                     ty,
                     span,
@@ -890,7 +907,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         return Err(Error::new(format!("expected an array, got {:?}", other)).with_span(e.lhs.span()));
                     }
                 };
-                let lowered_index = self.lower_expr(&e.index, Some(Type::Int(IntType::I32)))?;
+                let lowered_index = self.lower_expr(&e.index, Some(Type::Int(IntType::U64)))?;
                 Ok(match lowered_lhs {
                     Expr::R(lowered_lhs) => Expr::R(RExpr {
                         ty: element_ty,

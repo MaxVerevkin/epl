@@ -1,13 +1,17 @@
 mod dump;
 mod lower_ast;
 mod opt;
-pub mod types;
+mod types;
 mod visit;
 
 use std::collections::HashMap;
 
-use crate::{ast, common::BinaryOp, lex, make_entity_id};
-use types::{IntType, Type, TypeSystem};
+use crate::{
+    ast,
+    common::{ArithmeticOp, BinaryOp, CmpOp},
+    lex, make_entity_id,
+};
+pub use types::{IntType, Type, TypeSystem};
 
 /// An error during IR construction and typechecking
 #[derive(Debug)]
@@ -219,7 +223,8 @@ pub enum RExprKind {
     Block(BlockExpr),
     Return(Box<Expr>),
     Break(LoopId, Box<Expr>),
-    BinOp(BinaryOp, Box<Expr>, Box<Expr>),
+    Arithmetic(ArithmeticOp, Box<Expr>, Box<Expr>),
+    Cmp(CmpOp, Box<Expr>, Box<Expr>),
     If { cond: Box<Expr>, if_true: Box<Expr>, if_false: Box<Expr> },
     Loop(LoopId, Box<Expr>),
     ArrayInitializer(Vec<Expr>),
@@ -259,7 +264,7 @@ impl Expr {
         kind: RExprKind::ConstUnit,
     });
 
-    fn ty(&self) -> Type {
+    pub fn ty(&self) -> Type {
         match self {
             Self::R(e) => e.ty,
             Self::L(e) => e.ty,

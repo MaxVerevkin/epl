@@ -3,24 +3,25 @@ use super::*;
 /// Render the CFG of a program into a DOT graph
 pub fn graph(ir: &Ir) -> String {
     let mut retval = String::from("digraph {\n");
-    for (name, function) in &ir.functions {
-        let decl = &ir.function_decls[name];
-        retval.push_str(&function_subgraph(decl, function));
+    for function in &ir.functions {
+        if let Some(body) = &function.body {
+            retval.push_str(&function_subgraph(function, body));
+        }
     }
     retval.push_str("}\n");
     retval
 }
 
 /// Render the CFG of a function into a DOT subgraph cluster
-pub fn function_subgraph(decl: &FunctionDecl, ir: &Function) -> String {
-    let subgraph_name = format!("function_{}", decl.name.value);
+pub fn function_subgraph(function: &Function, body: &FunctionBody) -> String {
+    let subgraph_name = format!("function_{}", function.mangled_name);
     let entry_name = format!("{subgraph_name}_entry");
     let mut retval = format!(
         "subgraph cluster_{subgraph_name} {{\nlabel = \"{}\"\n{entry_name} [label=\"Entry\"]\nnode [shape=record];\n{entry_name} -> {:?}\n",
-        decl.name.value, ir.entry,
+        function.mangled_name, body.entry,
     );
 
-    for (&basic_block_id, basic_block) in &ir.basic_blokcs {
+    for (&basic_block_id, basic_block) in &body.basic_blokcs {
         retval.push_str(&format!(
             "{basic_block_id:?} [label=\"{}\"]\n",
             escape_label(&make_basic_block_label(basic_block_id, basic_block))
@@ -91,7 +92,7 @@ fn make_basic_block_label(id: BasicBlockId, basic_block: &BasicBlock) -> String 
         } => {
             label.push_str(&format!("if {cond:?}\n"));
         }
-        Terminator::Return { value } => {
+        Terminator::Return(value) => {
             label.push_str(&format!("return {value:?}\n"));
         }
         Terminator::Unreachable => {

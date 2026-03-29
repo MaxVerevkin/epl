@@ -1,6 +1,5 @@
-mod builder;
 pub mod graphviz;
-mod types;
+mod lower_ir_tree;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -9,20 +8,79 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::num::NonZeroU64;
 
-use crate::ast;
 use crate::common::ArithmeticOp;
 use crate::common::CmpOp;
-use crate::ir::types::TypeId;
+use crate::common::Layout;
+use crate::ir_tree;
 use crate::lex;
 use crate::make_entity_id;
-pub use types::{IntType, Layout, Type, TypeSystem};
 
 /// An intermediate representation of a program
 #[derive(Debug)]
 pub struct Ir {
-    pub typesystem: TypeSystem,
-    pub function_decls: HashMap<String, FunctionDecl>,
-    pub functions: HashMap<String, Function>,
+    pub functions: Vec<Function>,
+}
+
+/// The set of data types
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Type {
+    Zst,
+    Bool,
+    I8,
+    I32,
+    I64,
+    Ptr,
+    Struct(Vec<Self>),
+    Array(Box<Self>, u64),
+}
+
+impl Type {
+    fn layout(&self, module: &ir_tree::Module) -> Layout {
+        match self {
+            Type::Zst => Layout { size: 0, align: 1 },
+            Type::Bool | Type::I8 => Layout { size: 1, align: 1 },
+            Type::I32 => Layout { size: 4, align: 4 },
+            Type::I64 => Layout { size: 8, align: 8 },
+            Type::Ptr => Layout {
+                size: module.typesystem.ptr_size(),
+                align: module.typesystem.ptr_size(),
+            },
+            Type::Struct(fields) => {
+                let mut layout = Layout { size: 0, align: 1 };
+                for field in fields {
+                    let field_layout = field.layout(module);
+                    layout.align = layout.align.max(field_layout.align);
+                    layout.size = layout.size.next_multiple_of(field_layout.align);
+                    layout.size += field_layout.size;
+                }
+                layout.size = layout.size.next_multiple_of(layout.align);
+                layout
+            }
+            Type::Array(element, length) => {
+                let element_layout = element.layout(module);
+                Layout {
+                    size: element_layout.size * length,
+                    align: element_layout.align,
+                }
+            }
+        }
+    }
+
+    fn array_element_type(&self) -> Option<&Self> {
+        match self {
+            Self::Array(element, _) => Some(element),
+            _ => None,
+        }
+    }
+
+    pub fn int_bits(&self) -> Option<u32> {
+        match self {
+            Type::I8 => Some(8),
+            Type::I32 => Some(32),
+            Type::I64 => Some(64),
+            Type::Zst | Type::Bool | Type::Ptr | Type::Struct(_) | Type::Array(_, _) => None,
+        }
+    }
 }
 
 /// An error during IR construction and typechecking
@@ -41,14 +99,6 @@ impl Error {
         }
     }
 
-    /// Create a new 'type missmatch' error with a given span
-    pub fn expr_type_missmatch(expected: Type, found: Type, span: lex::Span) -> Self {
-        Self {
-            span: Some(span),
-            message: format!("expectd expr of type {expected:?}, found {found:?}"),
-        }
-    }
-
     /// Assign a span to this error
     pub fn with_span(mut self, span: lex::Span) -> Self {
         self.span = Some(span);
@@ -57,125 +107,39 @@ impl Error {
 }
 
 impl Ir {
-    /// Construct an IR from AST
-    pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
-        let mut typesystem = TypeSystem::new(8); // TODO: use target arch ptr size!
-        let mut function_decls = HashMap::new();
-
-        let mut type_namespace = HashMap::new();
-        type_namespace.insert(String::from("void"), Type::Void);
-        type_namespace.insert(String::from("bool"), Type::Bool);
-        type_namespace.insert(String::from("i8"), Type::Int(IntType::I8));
-        type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
-        type_namespace.insert(String::from("i32"), Type::Int(IntType::I32));
-        type_namespace.insert(String::from("u32"), Type::Int(IntType::U32));
-        type_namespace.insert(String::from("i64"), Type::Int(IntType::I64));
-        type_namespace.insert(String::from("u64"), Type::Int(IntType::U64));
-        type_namespace.insert(String::from("ptr"), Type::OPAQUE_PTR);
-
-        for item in &ast.items {
-            match item {
-                ast::Item::Function(function) => {
-                    function_decls.insert(
-                        function.name.value.clone(),
-                        FunctionDecl::from_ast(&mut typesystem, &type_namespace, function)?,
-                    );
-                }
-                ast::Item::Struct(s) => {
-                    let name = s.name.value.clone();
-                    let s = typesystem.struct_from_ast(&type_namespace, s)?;
-                    type_namespace.insert(name, s);
-                }
-            }
-        }
-
-        let mut functions = HashMap::new();
-        for item in &ast.items {
-            match item {
-                ast::Item::Function(function) => {
-                    if let Some(body) = &function.body {
-                        let decl = &function_decls[&function.name.value];
-                        let ir_function =
-                            builder::build_function(decl, body, &function_decls, &mut typesystem, &type_namespace)?;
-                        functions.insert(function.name.value.clone(), ir_function);
-                    }
-                }
-                ast::Item::Struct(_) => (),
-            }
-        }
-
+    /// Construct an IR from IR_TREE
+    pub fn from_ir_tree(ir_tree: &ir_tree::Module) -> Result<Self, Error> {
         Ok(Self {
-            typesystem,
-            function_decls,
-            functions,
+            functions: ir_tree
+                .functions
+                .values()
+                .map(|function| lower_ir_tree::lower_function(function, ir_tree))
+                .collect::<Result<_, _>>()?,
         })
     }
 }
 
 /// A function declaration
 #[derive(Debug)]
-pub struct FunctionDecl {
-    pub name: ast::Ident,
-    pub args: Vec<FunctionArg>,
+pub struct Function {
+    pub mangled_name: String,
+    pub args: Vec<Type>,
     pub is_variadic: bool,
+    #[expect(unused)]
+    pub never_returs: bool,
     pub return_ty: Type,
-}
-
-/// A function declaration argument
-#[derive(Debug)]
-pub struct FunctionArg {
-    pub name: ast::Ident,
-    pub ty: Type,
-}
-
-impl FunctionDecl {
-    /// Construct a function declaration from its AST
-    fn from_ast(
-        typesystem: &mut TypeSystem,
-        type_namespace: &HashMap<String, Type>,
-        ast: &ast::Function,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            name: ast.name.clone(),
-            args: ast
-                .args
-                .iter()
-                .map(|a| FunctionArg::from_ast(typesystem, type_namespace, a))
-                .collect::<Result<_, _>>()?,
-            is_variadic: ast.is_variadic,
-            return_ty: ast
-                .return_ty
-                .as_ref()
-                .map(|ty| typesystem.type_from_ast(type_namespace, ty))
-                .transpose()?
-                .unwrap_or(Type::Void),
-        })
-    }
-}
-
-impl FunctionArg {
-    /// Create a function argument representation from its AST
-    fn from_ast(
-        typesystem: &mut TypeSystem,
-        type_namespace: &HashMap<String, Type>,
-        ast: &ast::FunctionArg,
-    ) -> Result<Self, Error> {
-        Ok(Self {
-            name: ast.name.clone(),
-            ty: typesystem.type_from_ast(type_namespace, &ast.ty)?,
-        })
-    }
+    pub body: Option<FunctionBody>,
 }
 
 /// An intermediate representation of a function
 #[derive(Debug)]
-pub struct Function {
+pub struct FunctionBody {
     pub allocas: Vec<Alloca>,
     pub entry: BasicBlockId,
     pub basic_blokcs: HashMap<BasicBlockId, BasicBlock>,
 }
 
-impl Function {
+impl FunctionBody {
     /// Return the basick blocks IDs in post order
     pub fn postorder(&self) -> Vec<BasicBlockId> {
         fn visit(
@@ -203,7 +167,7 @@ impl Function {
 
 make_entity_id!(BasicBlockId, "bb_{}");
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DefinitionId(NonZeroU64, Type);
 
 impl DefinitionId {
@@ -214,8 +178,8 @@ impl DefinitionId {
         Self(NonZeroU64::new(id).unwrap(), ty)
     }
 
-    pub fn ty(self) -> Type {
-        self.1
+    pub fn ty(&self) -> &Type {
+        &self.1
     }
 }
 
@@ -232,7 +196,7 @@ impl fmt::Debug for DefinitionId {
 }
 
 /// A static allocation slot
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Alloca {
     pub definition_id: DefinitionId,
     pub layout: Layout,
@@ -258,12 +222,13 @@ pub enum InstructionKind {
     Load { ptr: Value },
     Store { ptr: Value, value: Value },
     FunctionCall { name: String, args: Vec<Value> },
-    Cmp { op: CmpOp, lhs: Value, rhs: Value },
-    Arithmetic { op: ArithmeticOp, lhs: Value, rhs: Value },
+    Cmp { op: CmpOp, signed: bool, lhs: Value, rhs: Value },
+    Arithmetic { op: ArithmeticOp, signed: bool, lhs: Value, rhs: Value },
     Not { value: Value },
     OffsetPtr { ptr: Value, offset: Value },
-    CastPtr { ptr: Value },
-    CastInt { int: Value },
+    Zext { int: Value },
+    Sext { int: Value },
+    Truncate { int: Value },
 }
 
 /// The terminator of a basic block
@@ -280,9 +245,7 @@ pub enum Terminator {
         if_false: BasicBlockId,
         if_false_args: Vec<Value>,
     },
-    Return {
-        value: Value,
-    },
+    Return(Value),
     Unreachable,
 }
 
@@ -330,7 +293,7 @@ impl Terminator {
                 if_false,
                 if_false_args: _,
             } => vec![*if_true, *if_false],
-            Self::Return { value: _ } | Self::Unreachable => vec![],
+            Self::Return(_) | Self::Unreachable => vec![],
         }
     }
 }
@@ -338,58 +301,42 @@ impl Terminator {
 /// An abstract value
 #[derive(Clone)]
 pub enum Value {
+    Zst,
+    Undefined(Type),
+    Bool(bool),
+    String(String),
+    Number { data: i64, ty: Type },
     Definition(DefinitionId),
-    Constant(Constant),
 }
 
 impl Value {
     /// Get the type of this constant
     pub fn ty(&self) -> Type {
         match self {
-            Self::Definition(definition_id) => definition_id.ty(),
-            Self::Constant(constant) => constant.ty(),
-        }
-    }
-}
-
-/// A primitive constant
-#[derive(Debug, Clone)]
-pub enum Constant {
-    Undefined(Type),
-    Void,
-    Bool(bool),
-    String(String),
-    Number { data: i64, ty: IntType },
-}
-
-impl Constant {
-    /// Get the type of this constant
-    pub fn ty(&self) -> Type {
-        match self {
-            Self::Undefined(ty) => *ty,
-            Self::Void => Type::Void,
+            Self::Zst => Type::Zst,
+            Self::Undefined(ty) => ty.clone(),
             Self::Bool(_) => Type::Bool,
-            Self::String(_) => Type::Ptr {
-                pointee: Some(TypeId::I8),
-            },
-            Self::Number { data: _, ty } => Type::Int(*ty),
+            Self::String(_) => Type::Ptr,
+            Self::Number { data: _, ty } => ty.clone(),
+            Self::Definition(definition_id) => definition_id.ty().clone(),
         }
     }
 
     /// Create a new constant with a given value
-    pub fn new_u64(value: u64) -> Self {
-        Self::Number {
-            data: value as i64,
-            ty: IntType::U64,
-        }
+    pub fn new_i64(data: i64) -> Self {
+        Self::Number { data, ty: Type::I64 }
     }
 }
 
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Zst => f.write_str("ZST"),
+            Self::Undefined(_) => f.write_str("undefined"),
+            Self::Bool(bool) => bool.fmt(f),
+            Self::String(str) => str.fmt(f),
+            Self::Number { data, ty: _ } => data.fmt(f),
             Self::Definition(def) => def.fmt(f),
-            Self::Constant(c) => c.fmt(f),
         }
     }
 }
