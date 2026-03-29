@@ -204,13 +204,7 @@ impl TypeSystem {
                 .get(&ident.value)
                 .copied()
                 .ok_or_else(|| Error::new(format!("unknown type {:?}", ident.value)).with_span(ident.span)),
-            ast::Type::Ptr { star_span: _, pointee } => {
-                let pointee = self.type_from_ast(type_namespace, pointee)?;
-                let pointee_id = self.get_type_id(pointee);
-                Ok(Type::Ptr {
-                    pointee: Some(pointee_id),
-                })
-            }
+            ast::Type::Ptr { star_span: _, pointee } => Ok(self.type_from_ast(type_namespace, pointee)?.make_ptr(self)),
             ast::Type::Array {
                 element_type,
                 length,

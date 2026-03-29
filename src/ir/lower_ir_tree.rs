@@ -193,11 +193,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                let element_layout = array
-                    .ty
-                    .array_element_type(&self.module.typesystem)
-                    .unwrap()
-                    .layout(&self.module.typesystem);
+                let element_layout = ty.layout(self.module);
                 let ptr_offset = self.cursor().arithmetic(
                     ArithmeticOp::Mul,
                     false,
@@ -471,11 +467,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                let element_layout = array
-                    .ty
-                    .array_element_type(&self.module.typesystem)
-                    .unwrap()
-                    .layout(&self.module.typesystem);
+                let element_layout = ty.layout(self.module);
                 let ptr_offset = self.cursor().arithmetic(
                     ArithmeticOp::Mul,
                     false,
