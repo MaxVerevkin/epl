@@ -1,5 +1,6 @@
 pub mod graphviz;
 mod lower_ir_tree;
+mod opt;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -109,13 +110,19 @@ impl Error {
 impl Ir {
     /// Construct an IR from IR_TREE
     pub fn from_ir_tree(ir_tree: &ir_tree::Module) -> Result<Self, Error> {
-        Ok(Self {
+        let mut this = Self {
             functions: ir_tree
                 .functions
                 .values()
                 .map(|function| lower_ir_tree::lower_function(function, ir_tree))
                 .collect::<Result<_, _>>()?,
-        })
+        };
+
+        for function in &mut this.functions {
+            opt::simplify_cfg::pass(function);
+        }
+
+        Ok(this)
     }
 }
 
@@ -249,37 +256,39 @@ pub enum Terminator {
     Unreachable,
 }
 
-// impl InstructionKind {
-//     pub fn visit_values(&self, mut cb: impl FnMut(&Value)) {
-//         match self {
-//             Self::Load { ptr } => cb(ptr),
-//             Self::Store { ptr, value } => {
-//                 cb(ptr);
-//                 cb(value);
-//             }
-//             Self::FunctionCall { name: _, args } => {
-//                 for arg in args {
-//                     cb(arg);
-//                 }
-//             }
-//             Self::CmpSL { lhs, rhs }
-//             | Self::CmpUL { lhs, rhs }
-//             | Self::Add { lhs, rhs }
-//             | Self::Sub { lhs, rhs }
-//             | Self::Mul { lhs, rhs } => {
-//                 cb(lhs);
-//                 cb(rhs);
-//             }
-//         }
-//     }
-
-//     pub fn visit_used_definitions(&self, mut cb: impl FnMut(DefinitionId)) {
-//         self.visit_values(|value| match value {
-//             Value::Definition(definition_id) => cb(*definition_id),
-//             Value::Constant(_) => (),
-//         });
-//     }
-// }
+impl InstructionKind {
+    pub fn visit_operands_mut(&mut self, mut cb: impl FnMut(&mut Value)) {
+        match self {
+            Self::Load { ptr: x }
+            | Self::Not { value: x }
+            | Self::Zext { int: x }
+            | Self::Sext { int: x }
+            | Self::Truncate { int: x } => cb(x),
+            Self::Store { ptr: x, value: y }
+            | Self::Arithmetic {
+                op: _,
+                signed: _,
+                lhs: x,
+                rhs: y,
+            }
+            | Self::Cmp {
+                op: _,
+                signed: _,
+                lhs: x,
+                rhs: y,
+            }
+            | Self::OffsetPtr { ptr: x, offset: y } => {
+                cb(x);
+                cb(y);
+            }
+            Self::FunctionCall { name: _, args } => {
+                for arg in args {
+                    cb(arg);
+                }
+            }
+        }
+    }
+}
 
 impl Terminator {
     /// Return the list of this block's successors
@@ -296,10 +305,36 @@ impl Terminator {
             Self::Return(_) | Self::Unreachable => vec![],
         }
     }
+
+    pub fn visit_operands_mut(&mut self, mut cb: impl FnMut(&mut Value)) {
+        match self {
+            Self::Jump { to: _, args } => {
+                for arg in args {
+                    cb(arg);
+                }
+            }
+            Self::CondJump {
+                cond,
+                if_true: _,
+                if_true_args,
+                if_false: _,
+                if_false_args,
+            } => {
+                cb(cond);
+                for arg in if_true_args {
+                    cb(arg);
+                }
+                for arg in if_false_args {
+                    cb(arg);
+                }
+            }
+            Self::Return(_) | Self::Unreachable => (),
+        }
+    }
 }
 
 /// An abstract value
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Value {
     Zst,
     Undefined(Type),
