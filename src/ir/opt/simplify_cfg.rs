@@ -39,8 +39,8 @@ pub fn pass(function: &mut Function) {
         }
 
         if block_id != body.entry
-            && predecessor_map[&block_id].len() == 1
             && body.basic_blokcs[&block_id].instructions.is_empty()
+            && body.basic_blokcs[&block_id].args.is_empty()
             && let &Terminator::Jump { to, .. } = &body.basic_blokcs[&block_id].terminator
             && to != block_id
         {
@@ -48,38 +48,36 @@ pub fn pass(function: &mut Function) {
             removed.insert(block_id);
 
             let Terminator::Jump {
-                to: this_to,
-                args: this_args,
+                to: jump_to,
+                args: jump_args,
             } = block.terminator
             else {
                 unreachable!()
             };
 
-            let pred_id = predecessor_map[&block_id][0];
-            match &mut body.basic_blokcs.get_mut(&pred_id).unwrap().terminator {
-                Terminator::Jump { to, args } => {
-                    rename_map.map_args(&block.args, args);
-                    *to = this_to;
-                    *args = this_args;
-                }
-                Terminator::CondJump {
-                    cond: _,
-                    if_true,
-                    if_true_args,
-                    if_false,
-                    if_false_args,
-                } => {
-                    if *if_true == block_id {
-                        rename_map.map_args(&block.args, if_true_args);
-                        *if_true = this_to;
-                        *if_true_args = this_args;
-                    } else if *if_false == block_id {
-                        rename_map.map_args(&block.args, if_false_args);
-                        *if_false = this_to;
-                        *if_false_args = this_args;
+            for pred_id in &predecessor_map[&block_id] {
+                match &mut body.basic_blokcs.get_mut(&pred_id).unwrap().terminator {
+                    Terminator::Jump { to, args } => {
+                        *to = jump_to;
+                        *args = jump_args.clone();
                     }
+                    Terminator::CondJump {
+                        cond: _,
+                        if_true,
+                        if_true_args,
+                        if_false,
+                        if_false_args,
+                    } => {
+                        if *if_true == block_id {
+                            *if_true = jump_to;
+                            *if_true_args = jump_args.clone();
+                        } else if *if_false == block_id {
+                            *if_false = jump_to;
+                            *if_false_args = jump_args.clone();
+                        }
+                    }
+                    Terminator::Return(_) | Terminator::Unreachable => unreachable!(),
                 }
-                Terminator::Return(_) | Terminator::Unreachable => unreachable!(),
             }
             continue;
         }
