@@ -4,7 +4,7 @@ mod opt;
 mod types;
 mod visit;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     ast,
@@ -50,7 +50,7 @@ make_entity_id!(LoopId, "loop_{}");
 
 #[derive(Debug)]
 pub struct Module {
-    pub functions: HashMap<FunctionId, Function>,
+    pub functions: BTreeMap<FunctionId, Function>,
     pub typesystem: TypeSystem,
 }
 
@@ -59,7 +59,7 @@ impl Module {
     pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
         let mut typesystem = TypeSystem::new(8); // TODO: use target arch ptr size!
         let mut functions_namespace = HashMap::new();
-        let mut functions = HashMap::new();
+        let mut functions = BTreeMap::new();
 
         let mut type_namespace = HashMap::new();
         type_namespace.insert(String::from("unit"), Type::Unit);

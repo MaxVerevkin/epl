@@ -11,7 +11,7 @@ pub fn lower_function_body(
     decl: &Function,
     body: &ast::BlockExpr,
     functions_namespace: &HashMap<String, FunctionId>,
-    functions: &HashMap<FunctionId, Function>,
+    functions: &BTreeMap<FunctionId, Function>,
     typesystem: &mut TypeSystem,
     type_namespace: &HashMap<String, Type>,
 ) -> Result<Expr, Error> {
@@ -51,7 +51,7 @@ pub fn lower_function_body(
 struct FunctionLoweringCtx<'a> {
     decl: &'a Function,
     functions_namespace: &'a HashMap<String, FunctionId>,
-    functions: &'a HashMap<FunctionId, Function>,
+    functions: &'a BTreeMap<FunctionId, Function>,
     typesystem: &'a mut TypeSystem,
     type_namespace: &'a HashMap<String, Type>,
     scope: Scope,
@@ -118,7 +118,7 @@ impl<'a> FunctionLoweringCtx<'a> {
     fn new(
         decl: &'a Function,
         functions_namespace: &'a HashMap<String, FunctionId>,
-        functions: &'a HashMap<FunctionId, Function>,
+        functions: &'a BTreeMap<FunctionId, Function>,
         typesystem: &'a mut TypeSystem,
         type_namespace: &'a HashMap<String, Type>,
     ) -> Self {

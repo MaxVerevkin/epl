@@ -1,0 +1,118 @@
+fn main() -> unit
+    FUNCTION_CALL("print_array") TYPE=unit
+    |   FUNCTION_CALL("fib_array") TYPE=[i32; 10]
+
+fn fib_array() -> [i32; 10]
+    BLOCK TYPE=[i32; 10]
+    |   DECLARE var_1 : [i32; 10]
+    |   STORE TYPE=unit
+    |   |   ARRAY_ELEMENT [LVALUE] TYPE=i32
+    |   |   |   VARIABLE(var_1) [LVALUE] TYPE=[i32; 10]
+    |   |   |   CONST_NUMBER(0) TYPE=u64
+    |   |   CONST_NUMBER(0) TYPE=i32
+    |   STORE TYPE=unit
+    |   |   ARRAY_ELEMENT [LVALUE] TYPE=i32
+    |   |   |   VARIABLE(var_1) [LVALUE] TYPE=[i32; 10]
+    |   |   |   CONST_NUMBER(1) TYPE=u64
+    |   |   CONST_NUMBER(1) TYPE=i32
+    |   BLOCK TYPE=unit
+    |   |   DECLARE var_2 : i32
+    |   |   DECLARE var_3 : i32
+    |   |   DECLARE var_4 : i32
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_2) [LVALUE] TYPE=i32
+    |   |   |   CONST_NUMBER(2) TYPE=i32
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_3) [LVALUE] TYPE=i32
+    |   |   |   CONST_NUMBER(10) TYPE=i32
+    |   |   LOOP(loop_1) TYPE=unit
+    |   |   |   IF TYPE=unit
+    |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   VARIABLE(var_2) [LVALUE] TYPE=i32
+    |   |   |   |   |   VARIABLE(var_3) [LVALUE] TYPE=i32
+    |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_4) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   VARIABLE(var_2) [LVALUE] TYPE=i32
+    |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   ARRAY_ELEMENT [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   VARIABLE(var_1) [LVALUE] TYPE=[i32; 10]
+    |   |   |   |   |   |   |   CAST TYPE=u64
+    |   |   |   |   |   |   |   |   VARIABLE(var_4) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   ARITHMETIC(Add) TYPE=i32
+    |   |   |   |   |   |   |   ARRAY_ELEMENT [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   VARIABLE(var_1) [LVALUE] TYPE=[i32; 10]
+    |   |   |   |   |   |   |   |   ARITHMETIC(Sub) TYPE=u64
+    |   |   |   |   |   |   |   |   |   CAST TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_4) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   |   CONST_NUMBER(1) TYPE=u64
+    |   |   |   |   |   |   |   ARRAY_ELEMENT [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   VARIABLE(var_1) [LVALUE] TYPE=[i32; 10]
+    |   |   |   |   |   |   |   |   ARITHMETIC(Sub) TYPE=u64
+    |   |   |   |   |   |   |   |   |   CAST TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_4) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   |   CONST_NUMBER(2) TYPE=u64
+    |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_2) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   ARITHMETIC(Add) TYPE=i32
+    |   |   |   |   |   |   |   VARIABLE(var_2) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   CONST_NUMBER(1) TYPE=i32
+    |   |   |   |   BREAK(loop_1) TYPE=!
+    |   |   |   |   |   UNIT TYPE=unit
+    |   VARIABLE(var_1) [LVALUE] TYPE=[i32; 10]
+
+fn print_array(array: [i32; 10]) -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_5 : [i32; 10]
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_5) [LVALUE] TYPE=[i32; 10]
+    |   |   ARGUMENT("array") TYPE=[i32; 10]
+    |   BLOCK TYPE=unit
+    |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   CONST_STRING("[") TYPE=*i8
+    |   |   BLOCK TYPE=unit
+    |   |   |   DECLARE var_6 : i32
+    |   |   |   DECLARE var_7 : i32
+    |   |   |   DECLARE var_8 : i32
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_6) [LVALUE] TYPE=i32
+    |   |   |   |   CONST_NUMBER(0) TYPE=i32
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_7) [LVALUE] TYPE=i32
+    |   |   |   |   CONST_NUMBER(10) TYPE=i32
+    |   |   |   LOOP(loop_2) TYPE=unit
+    |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   VARIABLE(var_6) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   VARIABLE(var_7) [LVALUE] TYPE=i32
+    |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_8) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   VARIABLE(var_6) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   |   CONST_STRING("%i") TYPE=*i8
+    |   |   |   |   |   |   |   |   ARRAY_ELEMENT [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   |   VARIABLE(var_5) [LVALUE] TYPE=[i32; 10]
+    |   |   |   |   |   |   |   |   |   CAST TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   |   |   |   CMP(NotEqual) TYPE=bool
+    |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   |   CONST_NUMBER(9) TYPE=i32
+    |   |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   |   |   CONST_STRING(", ") TYPE=*i8
+    |   |   |   |   |   |   |   |   UNIT TYPE=unit
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_6) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   ARITHMETIC(Add) TYPE=i32
+    |   |   |   |   |   |   |   |   VARIABLE(var_6) [LVALUE] TYPE=i32
+    |   |   |   |   |   |   |   |   CONST_NUMBER(1) TYPE=i32
+    |   |   |   |   |   BREAK(loop_2) TYPE=!
+    |   |   |   |   |   |   UNIT TYPE=unit
+    |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   CONST_STRING("]\n") TYPE=*i8
+
+fn printf(fmt: *i8, ...) -> unit
+
+

@@ -1,0 +1,7 @@
+fn main() -> i32
+    FUNCTION_CALL("exit") TYPE=!
+    |   CONST_NUMBER(1) TYPE=i32
+
+fn exit(code: i32) -> !
+
+

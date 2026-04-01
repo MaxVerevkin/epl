@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "epl_test"]
+resolver = "3"
+
 [package]
 name = "epl"
 version = "0.1.0"
