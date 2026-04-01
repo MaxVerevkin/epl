@@ -502,7 +502,7 @@ impl BuildCtx<'_> {
     fn build_type(&self, ty: &ir::Type) -> LLVMTypeRef {
         unsafe {
             match ty {
-                ir::Type::Zst => LLVMStructType([].as_mut_ptr(), 0, 0),
+                ir::Type::Unit => LLVMStructType([].as_mut_ptr(), 0, 0),
                 ir::Type::Bool => LLVMInt1Type(),
                 ir::Type::I8 => LLVMInt8Type(),
                 ir::Type::I32 => LLVMInt32Type(),

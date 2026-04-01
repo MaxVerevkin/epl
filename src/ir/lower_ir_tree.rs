@@ -31,7 +31,7 @@ pub fn lower_function(function: &ir_tree::Function, module: &ir_tree::Module) ->
 /// Lower IR_TREE type to IR type
 fn lower_type(module: &ir_tree::Module, ty: ir_tree::Type) -> Type {
     match ty {
-        ir_tree::Type::Never | ir_tree::Type::Unit => Type::Zst,
+        ir_tree::Type::Never | ir_tree::Type::Unit => Type::Unit,
         ir_tree::Type::Bool => Type::Bool,
         ir_tree::Type::Ptr { .. } => Type::Ptr,
         ir_tree::Type::Int(int_type) => match int_type {
@@ -536,7 +536,7 @@ impl InstructionCursor<'_> {
     /// Generate a `Store` instruction
     fn store(&mut self, ptr: Value, value: Value) {
         self.buf.push(Instruction {
-            definition_id: DefinitionId::new(Type::Zst),
+            definition_id: DefinitionId::new(Type::Unit),
             kind: InstructionKind::Store { ptr, value },
         });
     }

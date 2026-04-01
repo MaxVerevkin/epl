@@ -25,7 +25,7 @@ pub struct Ir {
 /// The set of data types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
-    Zst,
+    Unit,
     Bool,
     I8,
     I32,
@@ -38,7 +38,7 @@ pub enum Type {
 impl Type {
     fn layout(&self, module: &ir_tree::Module) -> Layout {
         match self {
-            Type::Zst => Layout { size: 0, align: 1 },
+            Type::Unit => Layout { size: 0, align: 1 },
             Type::Bool | Type::I8 => Layout { size: 1, align: 1 },
             Type::I32 => Layout { size: 4, align: 4 },
             Type::I64 => Layout { size: 8, align: 8 },
@@ -67,6 +67,15 @@ impl Type {
         }
     }
 
+    fn is_zst(&self) -> bool {
+        match self {
+            Self::Unit => true,
+            Self::Bool | Self::I8 | Self::I32 | Self::I64 | Self::Ptr => false,
+            Self::Struct(items) => items.iter().all(Self::is_zst),
+            Self::Array(element, length) => *length == 0 || element.is_zst(),
+        }
+    }
+
     fn array_element_type(&self) -> Option<&Self> {
         match self {
             Self::Array(element, _) => Some(element),
@@ -79,7 +88,7 @@ impl Type {
             Type::I8 => Some(8),
             Type::I32 => Some(32),
             Type::I64 => Some(64),
-            Type::Zst | Type::Bool | Type::Ptr | Type::Struct(_) | Type::Array(_, _) => None,
+            Type::Unit | Type::Bool | Type::Ptr | Type::Struct(_) | Type::Array(_, _) => None,
         }
     }
 }
@@ -119,7 +128,7 @@ impl Ir {
         };
 
         for function in &mut this.functions {
-            opt::simplify_cfg::pass(function);
+            opt::basic_passes(function);
         }
 
         Ok(this)
@@ -348,7 +357,7 @@ impl Value {
     /// Get the type of this constant
     pub fn ty(&self) -> Type {
         match self {
-            Self::Zst => Type::Zst,
+            Self::Zst => Type::Unit,
             Self::Undefined(ty) => ty.clone(),
             Self::Bool(_) => Type::Bool,
             Self::String(_) => Type::Ptr,
