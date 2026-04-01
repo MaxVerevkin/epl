@@ -429,7 +429,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     self.cursor().store(ptr, element);
                 }
 
-                EvalResult::Value(Value::Definition(self.cursor().load(alloca, ty)))
+                EvalResult::Value(alloca)
             }
             ir_tree::RExprKind::StructInitializer(fields) => {
                 let mut exprs = Vec::new();
@@ -455,7 +455,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     self.cursor().store(ptr, value);
                 }
 
-                EvalResult::Value(Value::Definition(self.cursor().load(alloca, ty)))
+                EvalResult::Value(alloca)
             }
             _ => {
                 let value = match self.eval_rexpr(expr)? {
