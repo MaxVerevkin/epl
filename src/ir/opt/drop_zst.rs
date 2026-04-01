@@ -1,6 +1,7 @@
 //! Drop usages of ZST definitions
 //!
-//! - Removes ZSTs from function arguments, replaces ZST return type with Unit.
+//! - Removes ZSTs from function arguments, replaces ZST return type with Unit
+//! - Removes ZSTs from basic block arguments
 //! - Drop ZST allocas, loads and stores
 
 use super::*;
