@@ -56,7 +56,7 @@ pub fn pass(function: &mut Function) {
             };
 
             for pred_id in &predecessor_map[&block_id] {
-                match &mut body.basic_blokcs.get_mut(&pred_id).unwrap().terminator {
+                match &mut body.basic_blokcs.get_mut(pred_id).unwrap().terminator {
                     Terminator::Jump { to, args } => {
                         *to = jump_to;
                         *args = jump_args.clone();
