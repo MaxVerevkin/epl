@@ -17,6 +17,7 @@ use crate::ir;
 
 /// An LLVM module
 pub struct LlvmModule {
+    context: LLVMContextRef,
     raw: LLVMModuleRef,
 }
 
@@ -24,7 +25,7 @@ impl LlvmModule {
     /// Construct an LLVM module from IR
     pub fn from_ir(ir: &ir::Ir) -> Result<Self, CString> {
         let module = Self::new(c"epl_module");
-        let builder = LlvmBuilder::new();
+        let builder = module.new_builder();
         let mut fn_type_map = HashMap::new();
         let mut fn_map = HashMap::new();
 
@@ -124,7 +125,7 @@ impl LlvmModule {
                             let offset = ctx.build_value(offset);
                             LLVMBuildGEP2(
                                 builder.raw,
-                                LLVMInt8Type(),
+                                LLVMInt8TypeInContext(module.context),
                                 ctx.build_value(ptr),
                                 [offset].as_mut_ptr(),
                                 1,
@@ -275,15 +276,21 @@ impl LlvmModule {
             LLVM_InitializeAllAsmPrinters();
         }
 
+        let context = unsafe { LLVMContextCreate() };
+
         Self {
-            raw: unsafe { LLVMModuleCreateWithName(name.as_ptr()) },
+            context,
+            raw: unsafe { LLVMModuleCreateWithNameInContext(name.as_ptr(), context) },
         }
     }
 
     /// Add a function to this module
     fn add_function(&self, name: &CStr, ty: LLVMTypeRef) -> LlvmFunction {
         let raw = unsafe { LLVMAddFunction(self.raw, name.as_ptr(), ty) };
-        LlvmFunction { raw }
+        LlvmFunction {
+            context: self.context,
+            raw,
+        }
     }
 
     /// Verify the module
@@ -310,6 +317,14 @@ impl LlvmModule {
     fn add_global(&self, ty: LLVMTypeRef) -> LLVMValueRef {
         unsafe { LLVMAddGlobal(self.raw, ty, c"".as_ptr()) }
     }
+
+    /// Create a new instruction builder
+    fn new_builder(&self) -> LlvmBuilder {
+        LlvmBuilder {
+            context: self.context,
+            raw: unsafe { LLVMCreateBuilderInContext(self.context) },
+        }
+    }
 }
 
 impl Drop for LlvmModule {
@@ -332,13 +347,14 @@ impl fmt::Display for LlvmModule {
 }
 
 struct LlvmFunction {
+    context: LLVMContextRef,
     raw: LLVMValueRef,
 }
 
 impl LlvmFunction {
     /// Append a new basic block to this function
     fn append_basic_block(&self) -> LLVMBasicBlockRef {
-        unsafe { LLVMAppendBasicBlock(self.raw, c"".as_ptr()) }
+        unsafe { LLVMAppendBasicBlockInContext(self.context, self.raw, c"".as_ptr()) }
     }
 
     /// Get the value of the ith parameter
@@ -348,17 +364,11 @@ impl LlvmFunction {
 }
 
 struct LlvmBuilder {
+    context: LLVMContextRef,
     raw: LLVMBuilderRef,
 }
 
 impl LlvmBuilder {
-    /// Create a new instruction builder
-    fn new() -> Self {
-        Self {
-            raw: unsafe { LLVMCreateBuilder() },
-        }
-    }
-
     /// Position this builder at the end of a given basic block
     fn position_at_end(&self, of: LLVMBasicBlockRef) {
         unsafe { LLVMPositionBuilderAtEnd(self.raw, of) };
@@ -367,7 +377,11 @@ impl LlvmBuilder {
     /// Build the `alloca` instruction
     fn alloca(&self, layout: Layout) -> LLVMValueRef {
         unsafe {
-            let alloca = LLVMBuildAlloca(self.raw, LLVMArrayType2(LLVMInt8Type(), layout.size), c"".as_ptr());
+            let alloca = LLVMBuildAlloca(
+                self.raw,
+                LLVMArrayType2(LLVMInt8TypeInContext(self.context), layout.size),
+                c"".as_ptr(),
+            );
             LLVMSetAlignment(alloca, layout.align as u32);
             alloca
         }
@@ -502,15 +516,15 @@ impl BuildCtx<'_> {
     fn build_type(&self, ty: &ir::Type) -> LLVMTypeRef {
         unsafe {
             match ty {
-                ir::Type::Unit => LLVMStructType([].as_mut_ptr(), 0, 0),
-                ir::Type::Bool => LLVMInt1Type(),
-                ir::Type::I8 => LLVMInt8Type(),
-                ir::Type::I32 => LLVMInt32Type(),
-                ir::Type::I64 => LLVMInt64Type(),
-                ir::Type::Ptr => LLVMPointerTypeInContext(LLVMGetGlobalContext(), 0),
+                ir::Type::Unit => LLVMStructTypeInContext(self.module.context, [].as_mut_ptr(), 0, 0),
+                ir::Type::Bool => LLVMInt1TypeInContext(self.module.context),
+                ir::Type::I8 => LLVMInt8TypeInContext(self.module.context),
+                ir::Type::I32 => LLVMInt32TypeInContext(self.module.context),
+                ir::Type::I64 => LLVMInt64TypeInContext(self.module.context),
+                ir::Type::Ptr => LLVMPointerTypeInContext(self.module.context, 0),
                 ir::Type::Struct(fields) => {
                     let mut fields: Vec<_> = fields.iter().map(|ty| self.build_type(ty)).collect();
-                    LLVMStructType(fields.as_mut_ptr(), fields.len() as u32, 0)
+                    LLVMStructTypeInContext(self.module.context, fields.as_mut_ptr(), fields.len() as u32, 0)
                 }
                 ir::Type::Array(element, length) => LLVMArrayType2(self.build_type(element), *length),
             }
@@ -521,18 +535,26 @@ impl BuildCtx<'_> {
     fn build_value(&self, value: &ir::Value) -> LLVMValueRef {
         unsafe {
             match value {
-                ir::Value::Zst => LLVMConstStruct([].as_mut_ptr(), 0, 0),
+                ir::Value::Zst => LLVMConstStructInContext(self.module.context, [].as_mut_ptr(), 0, 0),
                 ir::Value::Undefined(ty) => LLVMGetUndef(self.build_type(ty)),
-                ir::Value::Bool(bool) => LLVMConstInt(LLVMInt1Type(), *bool as u64, 0),
+                ir::Value::Bool(bool) => LLVMConstInt(LLVMInt1TypeInContext(self.module.context), *bool as u64, 0),
                 ir::Value::String(string) => {
                     let data = CString::new(string.clone()).unwrap();
-                    let global = self
-                        .module
-                        .add_global(LLVMArrayType2(LLVMInt8Type(), (string.len() + 1) as u64));
-                    LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), string.len() as u32, 0));
+                    let global = self.module.add_global(LLVMArrayType2(
+                        LLVMInt8TypeInContext(self.module.context),
+                        (string.len() + 1) as u64,
+                    ));
+                    LLVMSetInitializer(
+                        global,
+                        LLVMConstStringInContext2(self.module.context, data.as_ptr(), string.len(), 0),
+                    );
                     global
                 }
-                ir::Value::Number { data, ty } => LLVMConstInt(LLVMIntType(ty.int_bits().unwrap()), *data as u64, 0),
+                ir::Value::Number { data, ty } => LLVMConstInt(
+                    LLVMIntTypeInContext(self.module.context, ty.int_bits().unwrap()),
+                    *data as u64,
+                    0,
+                ),
                 ir::Value::Definition(definition_id) => self.value_map[definition_id],
             }
         }
