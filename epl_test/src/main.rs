@@ -20,17 +20,17 @@ struct Stats {
 }
 
 impl Stats {
-    fn ok(&mut self, test: TestCase) {
+    fn mark_ok(&mut self, test: TestCase) {
         println!("OK {test}");
         self.ok += 1;
     }
 
-    fn fail(&mut self, test: TestCase, reason: &'static str) {
+    fn mark_fail(&mut self, test: TestCase, reason: &'static str) {
         println!("FAIL {test}: {reason}");
         self.fail.push((test, reason));
     }
 
-    fn new(&mut self, test: TestCase) {
+    fn mark_new(&mut self, test: TestCase) {
         println!("NEW {test}");
         self.new.push(test);
     }
@@ -106,12 +106,12 @@ fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
         .expect("compiler invocation failed");
 
     if !result.status.success() {
-        stats.fail(test_case, "compiler existed with non zero exit code");
+        stats.mark_fail(test_case, "compiler existed with non zero exit code");
         return;
     }
 
     let Ok(result_str) = String::from_utf8(result.stdout) else {
-        stats.fail(test_case, "compiler produced non-utf8 output");
+        stats.mark_fail(test_case, "compiler produced non-utf8 output");
         return;
     };
 
@@ -119,14 +119,14 @@ fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
     match std::fs::read_to_string(&ir_tree_path) {
         Ok(expected_ir_tree) => {
             if expected_ir_tree == result_str {
-                stats.ok(test_case);
+                stats.mark_ok(test_case);
             } else {
-                stats.fail(test_case, "output does not match");
+                stats.mark_fail(test_case, "output does not match");
             }
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             std::fs::write(ir_tree_path, result_str).expect("could not write expcted ir_tree output");
-            stats.new(test_case);
+            stats.mark_new(test_case);
         }
         Err(e) => {
             panic!("could not read expected ir_tree output: {e:?}");
