@@ -1,0 +1,46 @@
+name: Build with LLVM 22.1
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    env:
+      LLVM_VERSION: "22.1.2"
+      LLVM_DIR: ${{ github.workspace }}/llvm-22.1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LLVM
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          mkdir -p "$LLVM_DIR"
+
+          LLVM_ARCHIVE_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz"
+
+          curl -L "$LLVM_ARCHIVE_URL" -o /tmp/llvm.tar.xz
+          tar -xJf /tmp/llvm.tar.xz -C "$LLVM_DIR" --strip-components=1
+
+      - name: Verify LLVM install
+        run: |
+          sh -c "$LLVM_DIR/bin/llvm-config --version"
+          sh -c "$LLVM_DIR/bin/clang --version"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compile EPL
+        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo build --release
+
+      - name: Compile epl_test
+        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo build --release -p epl_test
+
+      - name: Run tests
+        run: ./target/release/epl_test ./target/release/epl ./examples
