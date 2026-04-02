@@ -4,7 +4,7 @@ mod opt;
 mod types;
 mod visit;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::{
     ast,
@@ -73,23 +73,23 @@ impl Module {
         type_namespace.insert(String::from("ptr"), Type::OPAQUE_PTR);
 
         for item in &ast.items {
-            match item {
-                ast::Item::Function(function) => {
-                    let decl = Function::decl_from_ast(&mut typesystem, &type_namespace, function)?;
+            match &item.kind {
+                ast::ItemKind::Function(function) => {
+                    let decl = Function::decl_from_ast(&mut typesystem, &type_namespace, function, &item.annotations)?;
                     functions_namespace.insert(function.name.value.clone(), decl.id);
                     functions.insert(decl.id, decl);
                 }
-                ast::Item::Struct(s) => {
+                ast::ItemKind::Struct(s) => {
                     let name = s.name.value.clone();
-                    let s = typesystem.struct_from_ast(&type_namespace, s)?;
+                    let s = typesystem.struct_from_ast(&type_namespace, s, &item.annotations)?;
                     type_namespace.insert(name, s);
                 }
             }
         }
 
         for item in &ast.items {
-            match item {
-                ast::Item::Function(function) => {
+            match &item.kind {
+                ast::ItemKind::Function(function) => {
                     if let Some(body) = &function.body {
                         let function_id = functions_namespace[&function.name.value];
                         let decl = &functions[&function_id];
@@ -105,7 +105,7 @@ impl Module {
                         functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
                 }
-                ast::Item::Struct(_) => (),
+                ast::ItemKind::Struct(_) => (),
             }
         }
 
@@ -137,7 +137,18 @@ impl Function {
         typesystem: &mut TypeSystem,
         type_namespace: &HashMap<String, Type>,
         ast: &ast::Function,
+        annotations: &BTreeSet<ast::Annotation>,
     ) -> Result<Self, Error> {
+        if let Some(annotation) = annotations.iter().next() {
+            match annotation.ident.value.as_str() {
+                "pure" => {
+                    return Err(Error::new("pure functions are not supported yet").with_span(annotation.span()));
+                }
+                other => {
+                    return Err(Error::new(format!("unknown annotation: {other:?}")).with_span(annotation.span()));
+                }
+            }
+        }
         Ok(Self {
             id: FunctionId::new(),
             name: ast.name.clone(),

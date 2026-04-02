@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
 
 use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
@@ -11,8 +11,29 @@ pub struct Ast {
 }
 
 /// A top level item
+#[derive(Clone, Debug)]
+pub struct Item {
+    pub annotations: BTreeSet<Annotation>,
+    pub kind: ItemKind,
+}
+
+/// An annotation
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Annotation {
+    pub at_symbol_span: lex::Span,
+    pub ident: Ident,
+}
+
+impl Annotation {
+    /// Get the span of this annotation
+    pub fn span(&self) -> lex::Span {
+        self.at_symbol_span.join(self.ident.span)
+    }
+}
+
+/// A top level item kind
 #[derive(Clone)]
-pub enum Item {
+pub enum ItemKind {
     Function(Function),
     Struct(Struct),
 }
@@ -49,7 +70,7 @@ pub struct StructField {
 }
 
 /// An identifier with its span
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Ident {
     pub span: lex::Span,
     pub value: String,
@@ -401,6 +422,7 @@ pub enum ErrorKind {
     UnexpectedToken { expected: String, got: Option<lex::Token> },
     LetNoValueNoType,
     VariadicIsNotLast,
+    DuplicateAnnotation,
 }
 
 impl<'a> Parser<'a> {
@@ -538,16 +560,32 @@ impl Parser<'_> {
 
     /// Parse item
     fn next_item(&mut self) -> Result<Option<Item>, Error> {
+        let mut annotations = BTreeSet::new();
+
+        while self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::At)) {
+            let (at_symbol_span, _) = self.consume_token()?.unwrap();
+            let ident = self.next_ident()?;
+            let annotation = Annotation { at_symbol_span, ident };
+            let span = annotation.span();
+            let duplicate = !annotations.insert(annotation);
+            if duplicate {
+                return Err(Error {
+                    span: Some(span),
+                    kind: ErrorKind::DuplicateAnnotation,
+                });
+            }
+        }
+
         match self.peek_token()? {
-            Some(lex::Token::Keyword(lex::Keyword::Fn)) => self.next_function().map(Some),
-            Some(lex::Token::Keyword(lex::Keyword::Struct)) => self.next_struct().map(Some),
+            Some(lex::Token::Keyword(lex::Keyword::Fn)) => self.next_function(annotations).map(Some),
+            Some(lex::Token::Keyword(lex::Keyword::Struct)) => self.next_struct(annotations).map(Some),
             None => Ok(None),
             _ => self.consume_unexpected_token("an item (function or struct)"),
         }
     }
 
     /// Parse function
-    fn next_function(&mut self) -> Result<Item, Error> {
+    fn next_function(&mut self, annotations: BTreeSet<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Fn)?;
         let name = self.next_ident()?;
         self.expect_punct(lex::Punct::LeftParen)?;
@@ -615,17 +653,20 @@ impl Parser<'_> {
                 }
             }
         };
-        Ok(Item::Function(Function {
-            name,
-            args,
-            is_variadic,
-            return_ty,
-            body,
-        }))
+        Ok(Item {
+            annotations,
+            kind: ItemKind::Function(Function {
+                name,
+                args,
+                is_variadic,
+                return_ty,
+                body,
+            }),
+        })
     }
 
     /// Parse struct
-    fn next_struct(&mut self) -> Result<Item, Error> {
+    fn next_struct(&mut self, annotations: BTreeSet<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Struct)?;
         let name = self.next_ident()?;
         self.expect_punct(lex::Punct::LeftBrace)?;
@@ -636,7 +677,10 @@ impl Parser<'_> {
             Ok(StructField { name, ty })
         })?;
         self.expect_punct(lex::Punct::RightBrace)?;
-        Ok(Item::Struct(Struct { name, fields }))
+        Ok(Item {
+            annotations,
+            kind: ItemKind::Struct(Struct { name, fields }),
+        })
     }
 
     /// Parse block expression
@@ -1186,7 +1230,7 @@ impl Parser<'_> {
     }
 }
 
-impl fmt::Debug for Item {
+impl fmt::Debug for ItemKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Function(function) => {

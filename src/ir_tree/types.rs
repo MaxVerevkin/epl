@@ -233,7 +233,13 @@ impl TypeSystem {
         &mut self,
         type_namespace: &HashMap<String, Type>,
         ast: &ast::Struct,
+        annotations: &BTreeSet<ast::Annotation>,
     ) -> Result<Type, Error> {
+        if let Some(annotation) = annotations.iter().next() {
+            return Err(
+                Error::new(format!("unknown annotation: {:?}", annotation.ident.value)).with_span(annotation.span())
+            );
+        }
         let fields = ast
             .fields
             .iter()

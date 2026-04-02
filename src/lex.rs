@@ -14,7 +14,7 @@ impl<'a> Lexer<'a> {
 }
 
 /// A span represents a slice of the input source code
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -154,6 +154,8 @@ pub enum Punct {
     Exclam,
     /// &
     Ampersand,
+    /// @
+    At,
 }
 
 /// A mapping from strings to punct tokens
@@ -191,6 +193,7 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     ("/", Punct::Slash),
     ("!", Punct::Exclam),
     ("&", Punct::Ampersand),
+    ("@", Punct::At),
 ];
 
 /// An error during lexing

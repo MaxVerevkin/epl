@@ -26,7 +26,11 @@ Everything after `#` is treated as a comment.
 
 ## Items
 
-- item = function | struct_def
+- item = annotation* (function | struct_def)
+
+## Annotations
+
+annotation = '@' ident
 
 ## Fuctions
 
