@@ -37,10 +37,18 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Compile EPL
-        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo build --release
+        run: |
+          LLVM_SYS_221_PREFIX=$LLVM_DIR cargo build --release
+          LLVM_SYS_221_PREFIX=$LLVM_DIR cargo build --release -p epl_test
 
-      - name: Compile epl_test
-        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo build --release -p epl_test
+      - name: Fmt Check
+        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo fmt --all --check
+
+      - name: Rust Check
+        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo check --all --all-features
+
+      - name: Clippy
+        run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo clippy --all --all-features -- -D warnings -A unknown-lints
 
       - name: Run tests
         run: ./target/release/epl_test ./target/release/epl ./examples
