@@ -1,9 +1,39 @@
-use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::{fmt, io};
 
+struct TestCase {
+    path: PathBuf,
+    test_name: String,
+}
+
+impl fmt::Display for TestCase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} [{}]", self.path.display(), self.test_name)
+    }
+}
+
+#[derive(Default)]
 struct Stats {
-    success: u32,
-    failed: u32,
+    ok: u32,
+    fail: Vec<(TestCase, &'static str)>,
+    new: Vec<TestCase>,
+}
+
+impl Stats {
+    fn ok(&mut self, test: TestCase) {
+        println!("OK {test}");
+        self.ok += 1;
+    }
+
+    fn fail(&mut self, test: TestCase, reason: &'static str) {
+        println!("FAIL {test}: {reason}");
+        self.fail.push((test, reason));
+    }
+
+    fn new(&mut self, test: TestCase) {
+        println!("NEW {test}");
+        self.new.push(test);
+    }
 }
 
 fn main() {
@@ -17,15 +47,31 @@ fn main() {
         usage(&arg0);
     }
 
-    let mut stats = Stats { success: 0, failed: 0 };
+    let mut stats = Stats::default();
     run_tests_in_dir(&mut stats, Path::new(&test_dir), &epl_exe);
 
-    println!("DONE:");
-    println!("passed: {}", stats.success);
-    println!("failed: {}", stats.failed);
-    println!("tatal: {}", stats.success + stats.failed);
+    println!(
+        "\nDONE ({} passed, {} failed, {} new)",
+        stats.ok,
+        stats.fail.len(),
+        stats.new.len()
+    );
 
-    if stats.failed > 0 {
+    if !stats.new.is_empty() {
+        println!("\nNew tests:");
+        for test in &stats.new {
+            println!("- {}/{}", test.path.display(), test.test_name);
+        }
+    }
+
+    if !stats.fail.is_empty() {
+        println!("\nFailed tests:");
+        for (test, reason) in &stats.fail {
+            println!("- {}/{}: {reason}", test.path.display(), test.test_name);
+        }
+    }
+
+    if !stats.fail.is_empty() {
         std::process::exit(1);
     }
 }
@@ -48,6 +94,11 @@ fn run_tests_in_dir(stats: &mut Stats, dir: &Path, epl_exe: &str) {
 }
 
 fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
+    let test_case = TestCase {
+        path: path.to_path_buf(),
+        test_name: String::from("ir_tree"),
+    };
+
     let result = std::process::Command::new(epl_exe)
         .arg("ir_tree")
         .arg(path)
@@ -55,17 +106,12 @@ fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
         .expect("compiler invocation failed");
 
     if !result.status.success() {
-        stats.failed += 1;
-        println!(
-            "{}/IR_TREE FAIL: compiler existed with non zero exit code",
-            path.display()
-        );
+        stats.fail(test_case, "compiler existed with non zero exit code");
         return;
     }
 
     let Ok(result_str) = String::from_utf8(result.stdout) else {
-        stats.failed += 1;
-        println!("{}/IR_TREE FAIL: compiler produced non-utf8 output", path.display());
+        stats.fail(test_case, "compiler produced non-utf8 output");
         return;
     };
 
@@ -73,15 +119,14 @@ fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
     match std::fs::read_to_string(&ir_tree_path) {
         Ok(expected_ir_tree) => {
             if expected_ir_tree == result_str {
-                stats.success += 1;
-                println!("{}/IR_TREE PASS", path.display());
+                stats.ok(test_case);
             } else {
-                stats.failed += 1;
-                println!("{}/IR_TREE FAIL: outptu does not match", path.display());
+                stats.fail(test_case, "output does not match");
             }
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             std::fs::write(ir_tree_path, result_str).expect("could not write expcted ir_tree output");
+            stats.new(test_case);
         }
         Err(e) => {
             panic!("could not read expected ir_tree output: {e:?}");
