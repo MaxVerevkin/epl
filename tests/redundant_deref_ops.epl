@@ -1,0 +1,9 @@
+fn main() -> i32 {
+	let a = 42;
+	let a_ptr = &a;
+
+	let b = (&a).*;
+	let c = &(a_ptr.*);
+
+	0
+}
