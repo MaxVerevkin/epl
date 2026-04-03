@@ -30,9 +30,7 @@ fn inc(num: *i32) -> unit
     |   |   DECLARE var_3 : *i32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_3) [LVALUE] TYPE=*i32
-    |   |   |   GET_POINTER TYPE=*i32
-    |   |   |   |   DEREFERENCE [LVALUE] TYPE=i32
-    |   |   |   |   |   VARIABLE(var_2) [LVALUE] TYPE=*i32
+    |   |   |   VARIABLE(var_2) [LVALUE] TYPE=*i32
     |   |   STORE TYPE=unit
     |   |   |   DEREFERENCE [LVALUE] TYPE=i32
     |   |   |   |   VARIABLE(var_3) [LVALUE] TYPE=*i32

@@ -13,14 +13,10 @@ fn main() -> i32
     |   |   |   VARIABLE(var_1) [LVALUE] TYPE=i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_3) [LVALUE] TYPE=i32
-    |   |   DEREFERENCE [LVALUE] TYPE=i32
-    |   |   |   GET_POINTER TYPE=*i32
-    |   |   |   |   VARIABLE(var_1) [LVALUE] TYPE=i32
+    |   |   VARIABLE(var_1) [LVALUE] TYPE=i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_4) [LVALUE] TYPE=*i32
-    |   |   GET_POINTER TYPE=*i32
-    |   |   |   DEREFERENCE [LVALUE] TYPE=i32
-    |   |   |   |   VARIABLE(var_2) [LVALUE] TYPE=*i32
+    |   |   VARIABLE(var_2) [LVALUE] TYPE=*i32
     |   CONST_NUMBER(0) TYPE=i32
 
 

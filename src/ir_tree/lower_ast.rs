@@ -867,7 +867,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         ))
                     })?;
                 Ok(match lowered_lhs {
-                    Expr::R(lowered_lhs) => Expr::R(RExpr {
+                    lowered_lhs @ Expr::R(_) => Expr::R(RExpr {
                         ty: field.ty,
                         span,
                         kind: RExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
@@ -909,7 +909,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 };
                 let lowered_index = self.lower_expr(&e.index, Some(Type::Int(IntType::U64)))?;
                 Ok(match lowered_lhs {
-                    Expr::R(lowered_lhs) => Expr::R(RExpr {
+                    lowered_lhs @ Expr::R(_) => Expr::R(RExpr {
                         ty: element_ty,
                         span,
                         kind: RExprKind::ArrayElement(Box::new(lowered_lhs), Box::new(lowered_index)),

@@ -5,19 +5,38 @@ impl ExprMutRef<'_> {
     pub fn basic_optimize(&mut self) {
         self.visit_children(|mut expr| expr.basic_optimize());
 
-        if let ExprMutRef::R(rexpr) = self
-            && let RExprKind::Block(block) = &mut rexpr.kind
+        if let Some(this_lexpr) = self.as_lexpr()
+            && let LExprKind::Dereference(ptr_expr) = &mut this_lexpr.kind
+            && let Expr::R(ptr_rexpr) = ptr_expr.as_mut()
+            && let RExprKind::GetPointer(place_expr) = &mut ptr_rexpr.kind
+        {
+            let place_expr = std::mem::replace(place_expr.as_mut(), LExpr::DUMMY);
+            *this_lexpr = place_expr;
+        }
+
+        if let ExprMutRef::Any(this_expr) = self
+            && let Expr::R(this_rexpr) = this_expr
+            && let RExprKind::GetPointer(place_lexpr) = &mut this_rexpr.kind
+            && let LExprKind::Dereference(ptr_expr) = &mut place_lexpr.kind
+        {
+            let ptr_expr = std::mem::replace(ptr_expr.as_mut(), Expr::DUMMY);
+            **this_expr = ptr_expr;
+        }
+
+        if let ExprMutRef::Any(this_expr) = self
+            && let Expr::R(this_rexpr) = this_expr
+            && let RExprKind::Block(block) = &mut this_rexpr.kind
         {
             block.eliminate_dead_code();
             if block.variables.is_empty() {
                 if block.exprs.is_empty() {
-                    rexpr.kind = RExprKind::ConstUnit;
+                    this_rexpr.kind = RExprKind::ConstUnit;
                 } else if block.exprs.len() == 1 && matches!(block.exprs[0], Expr::R(_)) {
                     // TODO: convert lexprs into rexprs
                     let Some(Expr::R(expr)) = block.exprs.pop() else {
                         unreachable!()
                     };
-                    **rexpr = expr;
+                    *this_rexpr = expr;
                 }
             }
         }

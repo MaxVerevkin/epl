@@ -3,23 +3,23 @@ use super::*;
 impl ExprRef<'_> {
     pub fn visit_children(&self, mut visitor: impl FnMut(Self)) {
         match self {
-            Self::R(e) => match &e.kind {
+            Self::Any(Expr::R(e)) => match &e.kind {
                 RExprKind::Undefined
                 | RExprKind::ConstUnit
                 | RExprKind::ConstNumber(_)
                 | RExprKind::ConstString(_)
                 | RExprKind::ConstBool(_)
                 | RExprKind::Argument(_) => (),
-                RExprKind::Field(rexpr, _) => visitor(Self::R(rexpr)),
-                RExprKind::ArrayElement(rexpr, expr) => {
-                    visitor(Self::R(rexpr));
-                    visitor(expr.as_ref().as_ref());
+                RExprKind::Field(expr, _) => visitor(expr.as_ref().as_ref()),
+                RExprKind::ArrayElement(array, index) => {
+                    visitor(array.as_ref().as_ref());
+                    visitor(index.as_ref().as_ref());
                 }
                 RExprKind::Store(lexpr, expr) => {
-                    visitor(Self::L(lexpr));
+                    visitor(ExprRef::L(lexpr.as_ref()));
                     visitor(expr.as_ref().as_ref());
                 }
-                RExprKind::GetPointer(lexpr) => visitor(Self::L(lexpr)),
+                RExprKind::GetPointer(lexpr) => visitor(ExprRef::L(lexpr.as_ref())),
                 RExprKind::Block(bexpr) => {
                     for expr in &bexpr.exprs {
                         visitor(expr.as_ref());
@@ -54,7 +54,7 @@ impl ExprRef<'_> {
                     }
                 }
             },
-            Self::L(e) => match &e.kind {
+            Self::Any(Expr::L(e)) | &Self::L(e) => match &e.kind {
                 LExprKind::Dereference(expr) => visitor(expr.as_ref().as_ref()),
                 LExprKind::Variable(_) => (),
                 LExprKind::Field(lexpr, _) => visitor(Self::L(lexpr)),
@@ -70,17 +70,17 @@ impl ExprRef<'_> {
 impl ExprMutRef<'_> {
     pub fn visit_children(&mut self, mut visitor: impl FnMut(ExprMutRef<'_>)) {
         match self {
-            Self::R(e) => match &mut e.kind {
+            Self::Any(Expr::R(e)) => match &mut e.kind {
                 RExprKind::Undefined
                 | RExprKind::ConstUnit
                 | RExprKind::ConstNumber(_)
                 | RExprKind::ConstString(_)
                 | RExprKind::ConstBool(_)
                 | RExprKind::Argument(_) => (),
-                RExprKind::Field(rexpr, _) => visitor(ExprMutRef::R(rexpr.as_mut())),
-                RExprKind::ArrayElement(rexpr, expr) => {
-                    visitor(ExprMutRef::R(rexpr.as_mut()));
-                    visitor(expr.as_mut().as_mut());
+                RExprKind::Field(expr, _) => visitor(expr.as_mut().as_mut()),
+                RExprKind::ArrayElement(array, index) => {
+                    visitor(array.as_mut().as_mut());
+                    visitor(index.as_mut().as_mut());
                 }
                 RExprKind::Store(lexpr, expr) => {
                     visitor(ExprMutRef::L(lexpr.as_mut()));
@@ -121,15 +121,20 @@ impl ExprMutRef<'_> {
                     }
                 }
             },
-            Self::L(e) => match &mut e.kind {
-                LExprKind::Dereference(expr) => visitor(expr.as_mut().as_mut()),
-                LExprKind::Variable(_) => (),
-                LExprKind::Field(lexpr, _) => visitor(ExprMutRef::L(lexpr.as_mut())),
-                LExprKind::ArrayElement(lexpr, expr) => {
-                    visitor(ExprMutRef::L(lexpr.as_mut()));
-                    visitor(expr.as_mut().as_mut());
-                }
-            },
+            Self::Any(Expr::L(e)) => visit_children_lexpr_mut(e, visitor),
+            Self::L(e) => visit_children_lexpr_mut(e, visitor),
+        }
+    }
+}
+
+fn visit_children_lexpr_mut(lexpr: &mut LExpr, mut visitor: impl FnMut(ExprMutRef<'_>)) {
+    match &mut lexpr.kind {
+        LExprKind::Dereference(expr) => visitor(expr.as_mut().as_mut()),
+        LExprKind::Variable(_) => (),
+        LExprKind::Field(lexpr, _) => visitor(ExprMutRef::L(lexpr)),
+        LExprKind::ArrayElement(lexpr, expr) => {
+            visitor(ExprMutRef::L(lexpr));
+            visitor(expr.as_mut().as_mut());
         }
     }
 }

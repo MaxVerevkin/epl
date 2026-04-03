@@ -5,6 +5,9 @@ macro_rules! make_entity_id {
         pub struct $name(::std::num::NonZeroU64);
 
         impl $name {
+            #[allow(unused)]
+            pub const DUMMY: Self = Self(::std::num::NonZeroU64::new(u64::MAX).unwrap());
+
             pub fn new() -> Self {
                 use std::sync::atomic;
                 static NEXT: atomic::AtomicU64 = atomic::AtomicU64::new(1);

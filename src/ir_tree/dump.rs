@@ -66,11 +66,11 @@ fn dump_type(output: &mut String, ty: Type, module: &Module) {
 fn dump_expr(output: &mut String, expr: ExprRef, module: &Module, indent_level: u32) {
     indent(output, indent_level);
     match expr {
-        ExprRef::R(expr) => dump_rexpr(output, expr, module),
-        ExprRef::L(expr) => dump_lexpr(output, expr, module),
+        ExprRef::Any(Expr::R(expr)) => dump_rexpr(output, expr, module),
+        ExprRef::Any(Expr::L(expr)) | ExprRef::L(expr) => dump_lexpr(output, expr, module),
     }
     output.push('\n');
-    if let ExprRef::R(expr) = expr
+    if let ExprRef::Any(Expr::R(expr)) = expr
         && let RExprKind::Block(bexpr) = &expr.kind
     {
         for (var_id, var_ty) in &bexpr.variables {

@@ -17,7 +17,7 @@ The current pipeline is as follows:
 
 1. Source file is lexically analyzed and parsed into an abstract syntax tree (AST).
 2. AST is lowered to IR_TREE. Name resolution and type checking is performed in this step. IR_TREE resembles the original source code  but is fully typed and certain constructs are expressed in simpler building blocks (such as for loop -> regular loop, logical and/or -> if expression).
-3. Basic optimizations are performed on IR_TREE: some nested blocks are flattened and trivial dead code elimination is performed.
+3. Very basic optimizations are performed on IR_TREE.
 4. IR_TREE is lowered to IR, whith is a low-level, single static assignment (SSA), basic-block-based reperesentation.
 5. The following optimization passes are run on the IR:
     - `drop_zst` - Operations on zero sized types (ZSTs) are eliminated.

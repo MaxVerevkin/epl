@@ -175,6 +175,10 @@ pub enum Expr {
     L(LExpr),
 }
 
+impl Expr {
+    pub const DUMMY: Self = Self::L(LExpr::DUMMY);
+}
+
 #[derive(Debug)]
 pub struct RExpr {
     pub ty: Type,
@@ -189,30 +193,42 @@ pub struct LExpr {
     pub kind: LExprKind,
 }
 
+impl LExpr {
+    pub const DUMMY: Self = Self {
+        ty: Type::Never,
+        span: None,
+        kind: LExprKind::Variable(VariableId::DUMMY),
+    };
+}
+
 #[derive(Clone, Copy)]
 pub enum ExprRef<'a> {
-    R(&'a RExpr),
+    Any(&'a Expr),
     L(&'a LExpr),
 }
 
 pub enum ExprMutRef<'a> {
-    R(&'a mut RExpr),
+    Any(&'a mut Expr),
     L(&'a mut LExpr),
+}
+
+impl ExprMutRef<'_> {
+    pub fn as_lexpr(&mut self) -> Option<&mut LExpr> {
+        match self {
+            ExprMutRef::L(lexpr) => Some(lexpr),
+            ExprMutRef::Any(Expr::L(lexpr)) => Some(lexpr),
+            _ => None,
+        }
+    }
 }
 
 impl Expr {
     pub fn as_ref(&self) -> ExprRef<'_> {
-        match self {
-            Self::R(e) => ExprRef::R(e),
-            Self::L(e) => ExprRef::L(e),
-        }
+        ExprRef::Any(self)
     }
 
     pub fn as_mut(&mut self) -> ExprMutRef<'_> {
-        match self {
-            Self::R(e) => ExprMutRef::R(e),
-            Self::L(e) => ExprMutRef::L(e),
-        }
+        ExprMutRef::Any(self)
     }
 }
 
@@ -224,8 +240,8 @@ pub enum RExprKind {
     ConstString(String),
     ConstBool(bool),
 
-    Field(Box<RExpr>, String),
-    ArrayElement(Box<RExpr>, Box<Expr>),
+    Field(Box<Expr>, String),
+    ArrayElement(Box<Expr>, Box<Expr>),
 
     Store(Box<LExpr>, Box<Expr>),
     GetPointer(Box<LExpr>),

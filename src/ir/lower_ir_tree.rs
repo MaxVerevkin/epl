@@ -179,7 +179,7 @@ impl<'a> BodyLoweringCtx<'a> {
             ir_tree::RExprKind::Field(..)
             | ir_tree::RExprKind::ArrayElement(..)
             | ir_tree::RExprKind::StructInitializer(..)
-            | ir_tree::RExprKind::ArrayInitializer(..) => match self.eval_rexpr_as_tmp_ptr(expr)? {
+            | ir_tree::RExprKind::ArrayInitializer(..) => match self.eval_rexpr_as_readonly_ptr(expr)? {
                 EvalResult::Never => EvalResult::Never,
                 EvalResult::Value(ptr) => EvalResult::Value(Value::Definition(self.cursor().load(ptr, ty))),
             },
@@ -382,19 +382,26 @@ impl<'a> BodyLoweringCtx<'a> {
         })
     }
 
-    fn eval_rexpr_as_tmp_ptr(&mut self, expr: &ir_tree::RExpr) -> Result<EvalResult, Error> {
+    fn eval_expr_as_readonly_ptr(&mut self, expr: &ir_tree::Expr) -> Result<EvalResult, Error> {
+        match expr {
+            ir_tree::Expr::R(rexpr) => self.eval_rexpr_as_readonly_ptr(rexpr),
+            ir_tree::Expr::L(lexpr) => self.eval_lexpr_as_ptr(lexpr), // TODO: mark as readonly when this is a thing
+        }
+    }
+
+    fn eval_rexpr_as_readonly_ptr(&mut self, expr: &ir_tree::RExpr) -> Result<EvalResult, Error> {
         let ty = lower_type(self.module, expr.ty);
         Ok(match &expr.kind {
             ir_tree::RExprKind::Field(lhs, field) => {
-                let field_offset = lhs.ty.get_field_offset(field, &self.module.typesystem).unwrap();
-                let lhs_ptr = match self.eval_rexpr_as_tmp_ptr(lhs)? {
+                let field_offset = lhs.ty().get_field_offset(field, &self.module.typesystem).unwrap();
+                let lhs_ptr = match self.eval_expr_as_readonly_ptr(lhs)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
                 EvalResult::Value(self.cursor().offset_ptr(lhs_ptr, Value::new_i64(field_offset as i64)))
             }
             ir_tree::RExprKind::ArrayElement(array, index) => {
-                let array_ptr = match self.eval_rexpr_as_tmp_ptr(array)? {
+                let array_ptr = match self.eval_expr_as_readonly_ptr(array)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
