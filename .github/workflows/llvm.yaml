@@ -50,5 +50,8 @@ jobs:
       - name: Clippy
         run: LLVM_SYS_221_PREFIX=$LLVM_DIR cargo clippy --all --all-features -- -D warnings -A unknown-lints
 
-      - name: Run tests
+      - name: Run tests (examples)
         run: ./target/release/epl_test ./target/release/epl ./examples
+
+      - name: Run tests
+        run: ./target/release/epl_test ./target/release/epl ./tests
