@@ -1,0 +1,5 @@
+fn main() -> i32 {
+	let retval = 0;
+	{ 0; 1; 2; }
+	{ {} {} retval }
+}
