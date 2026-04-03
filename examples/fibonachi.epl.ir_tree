@@ -8,8 +8,7 @@ fn fib(n: u32) -> u32
     |   |   CMP(Less) TYPE=bool
     |   |   |   VARIABLE(var_1) [LVALUE] TYPE=u32
     |   |   |   CONST_NUMBER(2) TYPE=u32
-    |   |   BLOCK TYPE=u32
-    |   |   |   VARIABLE(var_1) [LVALUE] TYPE=u32
+    |   |   VARIABLE(var_1) [LVALUE] TYPE=u32
     |   |   ARITHMETIC(Add) TYPE=u32
     |   |   |   FUNCTION_CALL("fib") TYPE=u32
     |   |   |   |   ARITHMETIC(Sub) TYPE=u32

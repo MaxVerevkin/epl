@@ -4,7 +4,6 @@ fn main() -> i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [LVALUE] TYPE=i32
     |   |   CONST_NUMBER(0) TYPE=i32
-    |   BLOCK TYPE=i32
-    |   |   VARIABLE(var_1) [LVALUE] TYPE=i32
+    |   VARIABLE(var_1) [LVALUE] TYPE=i32
 
 

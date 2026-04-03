@@ -31,12 +31,8 @@ impl ExprMutRef<'_> {
             if block.variables.is_empty() {
                 if block.exprs.is_empty() {
                     this_rexpr.kind = RExprKind::ConstUnit;
-                } else if block.exprs.len() == 1 && matches!(block.exprs[0], Expr::R(_)) {
-                    // TODO: convert lexprs into rexprs
-                    let Some(Expr::R(expr)) = block.exprs.pop() else {
-                        unreachable!()
-                    };
-                    *this_rexpr = expr;
+                } else if block.exprs.len() == 1 {
+                    **this_expr = block.exprs.pop().unwrap();
                 }
             }
         }
