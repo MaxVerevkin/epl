@@ -189,11 +189,35 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                let value = match self.eval_expr(value)? {
-                    EvalResult::Never => return Ok(EvalResult::Never),
-                    EvalResult::Value(val) => val,
-                };
-                self.cursor().store(place_ptr, value);
+                match value.as_ref() {
+                    ir_tree::Expr::R(ir_tree::RExpr {
+                        kind: ir_tree::RExprKind::ArrayInitializer(elements),
+                        ..
+                    }) => {
+                        let array_element_ty = lower_type(
+                            self.module,
+                            value.ty().array_element_type(&self.module.typesystem).unwrap(),
+                        );
+                        match self.eval_array_initializer_into(place_ptr, elements, &array_element_ty)? {
+                            EvalResult::Never => return Ok(EvalResult::Never),
+                            EvalResult::Value(_) => (),
+                        }
+                    }
+                    ir_tree::Expr::R(ir_tree::RExpr {
+                        kind: ir_tree::RExprKind::StructInitializer(fields),
+                        ..
+                    }) => match self.eval_struct_initializer_into(place_ptr, fields, &value.ty())? {
+                        EvalResult::Never => return Ok(EvalResult::Never),
+                        EvalResult::Value(_) => (),
+                    },
+                    _ => {
+                        let value = match self.eval_expr(value)? {
+                            EvalResult::Never => return Ok(EvalResult::Never),
+                            EvalResult::Value(val) => val,
+                        };
+                        self.cursor().store(place_ptr, value);
+                    }
+                }
                 EvalResult::Value(Value::Zst)
             }
             ir_tree::RExprKind::GetPointer(lexpr) => self.eval_lexpr_as_ptr(lexpr)?,
@@ -419,50 +443,13 @@ impl<'a> BodyLoweringCtx<'a> {
                 EvalResult::Value(self.cursor().offset_ptr(array_ptr, Value::Definition(ptr_offset)))
             }
             ir_tree::RExprKind::ArrayInitializer(exprs) => {
-                let mut elements = Vec::new();
-                for expr in exprs {
-                    match self.eval_expr(expr)? {
-                        EvalResult::Never => return Ok(EvalResult::Never),
-                        EvalResult::Value(element) => elements.push(element),
-                    }
-                }
-
                 let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
-                let element_layout = ty.array_element_type().unwrap().layout(self.module);
-                for (i, element) in elements.into_iter().enumerate() {
-                    let ptr = self
-                        .cursor()
-                        .offset_ptr(alloca.clone(), Value::new_i64(i as i64 * element_layout.size as i64));
-                    self.cursor().store(ptr, element);
-                }
-
-                EvalResult::Value(alloca)
+                let element_ty = ty.array_element_type().unwrap();
+                self.eval_array_initializer_into(alloca, exprs, element_ty)?
             }
             ir_tree::RExprKind::StructInitializer(fields) => {
-                let mut exprs = Vec::new();
-                for (field_name, field_expr) in fields {
-                    match self.eval_expr(field_expr)? {
-                        EvalResult::Never => return Ok(EvalResult::Never),
-                        EvalResult::Value(val) => {
-                            let offset = expr.ty.get_field_offset(field_name, &self.module.typesystem).unwrap();
-                            exprs.push((offset, val));
-                        }
-                    }
-                }
-
                 let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
-                for (offset, value) in exprs {
-                    let ptr = self.cursor().offset_ptr(
-                        alloca.clone(),
-                        Value::Number {
-                            data: offset as i64,
-                            ty: Type::I64,
-                        },
-                    );
-                    self.cursor().store(ptr, value);
-                }
-
-                EvalResult::Value(alloca)
+                self.eval_struct_initializer_into(alloca, fields, &expr.ty)?
             }
             _ => {
                 let value = match self.eval_rexpr(expr)? {
@@ -474,6 +461,64 @@ impl<'a> BodyLoweringCtx<'a> {
                 EvalResult::Value(Value::Definition(alloca))
             }
         })
+    }
+
+    /// Evaluate array initializer and store the elements into provided array place. Returns `place_ptr`.
+    fn eval_array_initializer_into(
+        &mut self,
+        place_ptr: Value,
+        exprs: &[ir_tree::Expr],
+        element_ty: &Type,
+    ) -> Result<EvalResult, Error> {
+        let mut elements = Vec::new();
+        for expr in exprs {
+            match self.eval_expr(expr)? {
+                EvalResult::Never => return Ok(EvalResult::Never),
+                EvalResult::Value(element) => elements.push(element),
+            }
+        }
+
+        let element_layout = element_ty.layout(self.module);
+        for (i, element) in elements.into_iter().enumerate() {
+            let ptr = self
+                .cursor()
+                .offset_ptr(place_ptr.clone(), Value::new_i64(i as i64 * element_layout.size as i64));
+            self.cursor().store(ptr, element);
+        }
+
+        Ok(EvalResult::Value(place_ptr))
+    }
+
+    /// Evaluate struct initializer and store the fields into provided struct place. Returns `place_ptr`.
+    fn eval_struct_initializer_into(
+        &mut self,
+        place_ptr: Value,
+        fields: &[(String, ir_tree::Expr)],
+        struct_ty: &ir_tree::Type,
+    ) -> Result<EvalResult, Error> {
+        let mut exprs = Vec::new();
+        for (field_name, field_expr) in fields {
+            match self.eval_expr(field_expr)? {
+                EvalResult::Never => return Ok(EvalResult::Never),
+                EvalResult::Value(val) => {
+                    let offset = struct_ty.get_field_offset(field_name, &self.module.typesystem).unwrap();
+                    exprs.push((offset, val));
+                }
+            }
+        }
+
+        for (offset, value) in exprs {
+            let ptr = self.cursor().offset_ptr(
+                place_ptr.clone(),
+                Value::Number {
+                    data: offset as i64,
+                    ty: Type::I64,
+                },
+            );
+            self.cursor().store(ptr, value);
+        }
+
+        Ok(EvalResult::Value(place_ptr))
     }
 
     fn eval_lexpr(&mut self, expr: &ir_tree::LExpr) -> Result<EvalResult, Error> {
