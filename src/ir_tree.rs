@@ -175,10 +175,6 @@ pub enum Expr {
     L(LExpr),
 }
 
-impl Expr {
-    pub const DUMMY: Self = Self::L(LExpr::DUMMY);
-}
-
 #[derive(Debug)]
 pub struct RExpr {
     pub ty: Type,
@@ -222,16 +218,6 @@ impl ExprMutRef<'_> {
     }
 }
 
-impl Expr {
-    pub fn as_ref(&self) -> ExprRef<'_> {
-        ExprRef::Any(self)
-    }
-
-    pub fn as_mut(&mut self) -> ExprMutRef<'_> {
-        ExprMutRef::Any(self)
-    }
-}
-
 #[derive(Debug)]
 pub enum RExprKind {
     Undefined,
@@ -269,15 +255,6 @@ pub enum LExprKind {
     ArrayElement(Box<LExpr>, Box<Expr>),
 }
 
-impl Expr {
-    pub fn expect_lvalue(self) -> Result<LExpr, Error> {
-        match self {
-            Self::L(lvalue) => Ok(lvalue),
-            Self::R(rvalue) => Err(Error::new("expected an l-value expression").with_span(rvalue.span.unwrap())),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct BlockExpr {
     pub variables: Vec<(VariableId, Type)>,
@@ -290,6 +267,23 @@ impl Expr {
         span: None,
         kind: RExprKind::ConstUnit,
     });
+
+    pub const DUMMY: Self = Self::L(LExpr::DUMMY);
+
+    pub fn as_ref(&self) -> ExprRef<'_> {
+        ExprRef::Any(self)
+    }
+
+    pub fn as_mut(&mut self) -> ExprMutRef<'_> {
+        ExprMutRef::Any(self)
+    }
+
+    pub fn expect_lvalue(self) -> Result<LExpr, Error> {
+        match self {
+            Self::L(lvalue) => Ok(lvalue),
+            Self::R(rvalue) => Err(Error::new("expected an l-value expression").with_span(rvalue.span.unwrap())),
+        }
+    }
 
     pub fn ty(&self) -> Type {
         match self {
