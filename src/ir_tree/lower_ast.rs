@@ -30,21 +30,21 @@ pub fn lower_function_body(
         variables.push((arg_var_id, *arg_ty));
         exprs.push(Expr::set_var(
             arg_var_id,
-            Expr::R(RExpr {
+            Expr {
                 ty: *arg_ty,
                 span: None,
-                kind: RExprKind::Argument(arg_name.clone()),
-            }),
+                kind: ExprKind::Argument(arg_name.clone()),
+            },
         ));
     }
 
     exprs.push(builder.lower_block_expr(body, Some(decl.return_ty))?);
 
-    Ok(Expr::R(RExpr {
+    Ok(Expr {
         ty: decl.return_ty,
         span: Some(body.span()),
-        kind: RExprKind::Block(BlockExpr { variables, exprs }),
-    }))
+        kind: ExprKind::Block(BlockExpr { variables, exprs }),
+    })
 }
 
 /// A function's AST -> IR_TREE lowering context
@@ -159,8 +159,8 @@ impl<'a> FunctionLoweringCtx<'a> {
 
                 let if_true = self.lower_block_expr(&if_expr.if_true, expect_type)?;
 
-                let expect_type = if if_true.ty() != Type::Never {
-                    Some(if_true.ty())
+                let expect_type = if if_true.ty != Type::Never {
+                    Some(if_true.ty)
                 } else {
                     expect_type
                 };
@@ -172,23 +172,23 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .transpose()?
                     .unwrap_or(Expr::UNIT);
 
-                Ok(Expr::R(RExpr {
-                    ty: coalesce_types(if_true.ty(), if_false.ty()),
+                Ok(Expr {
+                    ty: coalesce_types(if_true.ty, if_false.ty),
                     span,
-                    kind: RExprKind::If {
+                    kind: ExprKind::If {
                         cond: Box::new(cond),
                         if_true: Box::new(if_true),
                         if_false: Box::new(if_false),
                     },
-                }))
+                })
             }
             ast::Expr::Loop(loop_expr) => {
                 let lowered_body = self.lower_loop_body(&loop_expr.body, expect_type)?;
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: lowered_body.break_used_with_type.unwrap_or(Type::Never),
                     span,
-                    kind: RExprKind::Loop(lowered_body.loop_id, Box::new(lowered_body.body)),
-                }))
+                    kind: ExprKind::Loop(lowered_body.loop_id, Box::new(lowered_body.body)),
+                })
             }
             ast::Expr::While(while_expr) => {
                 // transform
@@ -207,26 +207,26 @@ impl<'a> FunctionLoweringCtx<'a> {
                 }
                 let cond = self.lower_expr(&while_expr.cond, Some(Type::Bool))?;
                 let lowered_body = self.lower_loop_body(&while_expr.body, Some(Type::Unit))?;
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: Type::Unit,
                     span,
-                    kind: RExprKind::Loop(
+                    kind: ExprKind::Loop(
                         lowered_body.loop_id,
-                        Box::new(Expr::R(RExpr {
+                        Box::new(Expr {
                             ty: Type::Unit,
                             span,
-                            kind: RExprKind::If {
+                            kind: ExprKind::If {
                                 cond: Box::new(cond),
                                 if_true: Box::new(lowered_body.body),
-                                if_false: Box::new(Expr::R(RExpr {
+                                if_false: Box::new(Expr {
                                     ty: Type::Never,
                                     span: None,
-                                    kind: RExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
-                                })),
+                                    kind: ExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
+                                }),
                             },
-                        })),
+                        }),
                     ),
-                }))
+                })
             }
             ast::Expr::For(e) => {
                 // transform
@@ -280,67 +280,67 @@ impl<'a> FunctionLoweringCtx<'a> {
                 let lowered_body = self.lower_loop_body(&e.body, Some(Type::Unit))?;
                 self.scope.pop();
 
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: Type::Unit,
                     span,
-                    kind: RExprKind::Block(BlockExpr {
+                    kind: ExprKind::Block(BlockExpr {
                         variables: vec![(var_id, var_type), (target_id, var_type), (shadowed_var_id, var_type)],
                         exprs: vec![
                             Expr::set_var(var_id, from_expr),
                             Expr::set_var(target_id, to_expr),
-                            Expr::R(RExpr {
+                            Expr {
                                 ty: Type::Unit,
                                 span: None,
-                                kind: RExprKind::Loop(
+                                kind: ExprKind::Loop(
                                     lowered_body.loop_id,
-                                    Box::new(Expr::R(RExpr {
+                                    Box::new(Expr {
                                         ty: Type::Unit,
                                         span: None,
-                                        kind: RExprKind::If {
-                                            cond: Box::new(Expr::R(RExpr {
+                                        kind: ExprKind::If {
+                                            cond: Box::new(Expr {
                                                 ty: Type::Bool,
                                                 span: None,
-                                                kind: RExprKind::Cmp(
+                                                kind: ExprKind::Cmp(
                                                     CmpOp::Less,
                                                     Box::new(Expr::get_var(var_id, var_type)),
                                                     Box::new(Expr::get_var(target_id, var_type)),
                                                 ),
-                                            })),
-                                            if_true: Box::new(Expr::R(RExpr {
+                                            }),
+                                            if_true: Box::new(Expr {
                                                 ty: Type::Unit,
                                                 span: None,
-                                                kind: RExprKind::Block(BlockExpr {
+                                                kind: ExprKind::Block(BlockExpr {
                                                     variables: Vec::new(),
                                                     exprs: vec![
                                                         Expr::set_var(shadowed_var_id, Expr::get_var(var_id, var_type)),
                                                         lowered_body.body,
                                                         Expr::set_var(
                                                             var_id,
-                                                            Expr::R(RExpr {
+                                                            Expr {
                                                                 ty: var_type,
                                                                 span: None,
-                                                                kind: RExprKind::Arithmetic(
+                                                                kind: ExprKind::Arithmetic(
                                                                     ArithmeticOp::Add,
                                                                     Box::new(Expr::get_var(var_id, var_type)),
                                                                     Box::new(Expr::const_number(1, var_type)),
                                                                 ),
-                                                            }),
+                                                            },
                                                         ),
                                                     ],
                                                 }),
-                                            })),
-                                            if_false: Box::new(Expr::R(RExpr {
+                                            }),
+                                            if_false: Box::new(Expr {
                                                 ty: Type::Never,
                                                 span: None,
-                                                kind: RExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
-                                            })),
+                                                kind: ExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
+                                            }),
                                         },
-                                    })),
+                                    }),
                                 ),
-                            }),
+                            },
                         ],
                     }),
-                }))
+                })
             }
             ast::Expr::ArrayInitializer(e) => {
                 let length = e.elements.len() as u64;
@@ -373,7 +373,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 let element_ty = expect_element_type.unwrap_or_else(|| {
                     lowered_elements
                         .iter()
-                        .map(|expr| expr.ty())
+                        .map(|expr| expr.ty)
                         .find(|ty| *ty != Type::Never)
                         .unwrap_or(Type::Never)
                 });
@@ -383,15 +383,15 @@ impl<'a> FunctionLoweringCtx<'a> {
                     length,
                 };
                 for expr in &lowered_elements {
-                    if expr.ty() != Type::Never && expr.ty() != element_ty {
-                        return Err(Error::expr_type_missmatch(element_ty, expr.ty(), expr.span().unwrap()));
+                    if expr.ty != Type::Never && expr.ty != element_ty {
+                        return Err(Error::expr_type_missmatch(element_ty, expr.ty, expr.span.unwrap()));
                     }
                 }
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: array_ty,
                     span,
-                    kind: RExprKind::ArrayInitializer(lowered_elements),
-                }))
+                    kind: ExprKind::ArrayInitializer(lowered_elements),
+                })
             }
             ast::Expr::StructInitializer(e) => {
                 let (ty, sid) = match &e.struct_name {
@@ -455,11 +455,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     let expr = self.lower_expr(&field.value, Some(f_ty))?;
                     lowered_fields.push((field.name.value.clone(), expr));
                 }
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty,
                     span,
-                    kind: RExprKind::StructInitializer(lowered_fields),
-                }))
+                    kind: ExprKind::StructInitializer(lowered_fields),
+                })
             }
             ast::Expr::Return(return_expr) => {
                 if return_expr.value.is_none() && self.decl.return_ty != Type::Unit {
@@ -474,11 +474,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .map(|expr| self.lower_expr(expr, Some(self.decl.return_ty)))
                     .transpose()?
                     .unwrap_or(Expr::UNIT);
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: Type::Never,
                     span,
-                    kind: RExprKind::Return(Box::new(lowered_value)),
-                }))
+                    kind: ExprKind::Return(Box::new(lowered_value)),
+                })
             }
             ast::Expr::Break(break_expr) => {
                 if break_expr.value.is_none()
@@ -500,12 +500,12 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .map(|expr| self.lower_expr(expr, expect_type))
                     .transpose()?
                     .unwrap_or(Expr::UNIT);
-                self.scope.loop_context().unwrap().break_used_with_type = Some(lowered_value.ty());
-                Ok(Expr::R(RExpr {
+                self.scope.loop_context().unwrap().break_used_with_type = Some(lowered_value.ty);
+                Ok(Expr {
                     ty: Type::Never,
                     span,
-                    kind: RExprKind::Break(break_from, Box::new(lowered_value)),
-                }))
+                    kind: ExprKind::Break(break_from, Box::new(lowered_value)),
+                })
             }
             ast::Expr::Literal(literal_expr) => match &literal_expr.value {
                 ast::LiteralExprValue::Number(number) => {
@@ -520,11 +520,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                             ));
                         }
                     };
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: Type::Int(int_ty),
                         span,
-                        kind: RExprKind::ConstNumber(*number),
-                    }))
+                        kind: ExprKind::ConstNumber(*number),
+                    })
                 }
                 ast::LiteralExprValue::String(string) => {
                     if let Some(expect_type) = expect_type
@@ -532,11 +532,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     {
                         Err(Error::expr_type_missmatch(expect_type, Type::I8_PTR, literal_expr.span))
                     } else {
-                        Ok(Expr::R(RExpr {
+                        Ok(Expr {
                             ty: Type::I8_PTR,
                             span,
-                            kind: RExprKind::ConstString(string.clone()),
-                        }))
+                            kind: ExprKind::ConstString(string.clone()),
+                        })
                     }
                 }
                 ast::LiteralExprValue::Bool(bool) => {
@@ -545,21 +545,21 @@ impl<'a> FunctionLoweringCtx<'a> {
                     {
                         Err(Error::expr_type_missmatch(expect_type, Type::Bool, literal_expr.span))
                     } else {
-                        Ok(Expr::R(RExpr {
+                        Ok(Expr {
                             ty: Type::Bool,
                             span,
-                            kind: RExprKind::ConstBool(*bool),
-                        }))
+                            kind: ExprKind::ConstBool(*bool),
+                        })
                     }
                 }
                 ast::LiteralExprValue::Undefined => {
                     let ty = expect_type
                         .ok_or_else(|| Error::new("type annotations needed").with_span(literal_expr.span))?;
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty,
                         span,
-                        kind: RExprKind::Undefined,
-                    }))
+                        kind: ExprKind::Undefined,
+                    })
                 }
             },
             ast::Expr::FunctionCallExpr(function_call_expr) => {
@@ -603,11 +603,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                         function_call_expr.span(),
                     ));
                 }
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: callee.return_ty,
                     span,
-                    kind: RExprKind::FunctionCall(*callee_id, args_exprs),
-                }))
+                    kind: ExprKind::FunctionCall(*callee_id, args_exprs),
+                })
             }
             ast::Expr::Assignment(e) => {
                 if let Some(expect_type) = expect_type
@@ -615,13 +615,13 @@ impl<'a> FunctionLoweringCtx<'a> {
                 {
                     return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
                 }
-                let lowered_place = self.lower_expr(&e.place, None)?.expect_lvalue()?;
+                let lowered_place = self.lower_expr(&e.place, None)?.expect_place()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: Type::Unit,
                     span,
-                    kind: RExprKind::Store(Box::new(lowered_place), Box::new(lowered_value)),
-                }))
+                    kind: ExprKind::Store(Box::new(lowered_place), Box::new(lowered_value)),
+                })
             }
             ast::Expr::CompoundAssignment(e) => {
                 if let Some(expect_type) = expect_type
@@ -629,7 +629,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 {
                     return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
                 }
-                let lowered_place = self.lower_expr(&e.place, None)?.expect_lvalue()?;
+                let lowered_place = self.lower_expr(&e.place, None)?.expect_place()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
                 let operands_ty = lowered_place.ty;
                 if !operands_ty.is_int() {
@@ -639,41 +639,45 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .with_span(e.op_span));
                 }
                 let place_ptr_ty = operands_ty.make_ptr(self.typesystem);
-                let place_ptr_expr = Expr::R(RExpr {
+                let place_ptr_expr = Expr {
                     ty: place_ptr_ty,
                     span: None,
-                    kind: RExprKind::GetPointer(Box::new(lowered_place)),
-                });
+                    kind: ExprKind::GetPointer(Box::new(lowered_place)),
+                };
                 let tmp_var_id = VariableId::new();
-                Ok(Expr::R(RExpr {
+                Ok(Expr {
                     ty: Type::Unit,
                     span,
-                    kind: RExprKind::Block(BlockExpr {
+                    kind: ExprKind::Block(BlockExpr {
                         variables: vec![(tmp_var_id, place_ptr_ty)],
                         exprs: vec![
                             Expr::set_var(tmp_var_id, place_ptr_expr),
-                            Expr::R(RExpr {
+                            Expr {
                                 ty: Type::Unit,
                                 span: None,
-                                kind: RExprKind::Store(
-                                    Box::new(LExpr::dereference(Expr::get_var(tmp_var_id, place_ptr_ty), operands_ty)),
-                                    Box::new(Expr::R(RExpr {
+                                kind: ExprKind::Store(
+                                    Box::new(Place::dereference(Expr::get_var(tmp_var_id, place_ptr_ty), operands_ty)),
+                                    Box::new(Expr {
                                         ty: operands_ty,
                                         span: None,
-                                        kind: RExprKind::Arithmetic(
+                                        kind: ExprKind::Arithmetic(
                                             e.op,
-                                            Box::new(Expr::L(LExpr::dereference(
-                                                Expr::get_var(tmp_var_id, place_ptr_ty),
-                                                operands_ty,
-                                            ))),
+                                            Box::new(Expr {
+                                                ty: operands_ty,
+                                                span: None,
+                                                kind: ExprKind::Load(Box::new(Place::dereference(
+                                                    Expr::get_var(tmp_var_id, place_ptr_ty),
+                                                    operands_ty,
+                                                ))),
+                                            }),
                                             Box::new(lowered_value),
                                         ),
-                                    })),
+                                    }),
                                 ),
-                            }),
+                            },
                         ],
                     }),
-                }))
+                })
             }
             ast::Expr::Binary(binary_expr) => match binary_expr.op {
                 BinaryOp::Cmp(cmp_op) => {
@@ -683,24 +687,24 @@ impl<'a> FunctionLoweringCtx<'a> {
                         return Err(Error::expr_type_missmatch(expect_type, Type::Bool, expr.span()));
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
-                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty()))?;
-                    let operands_ty = coalesce_types(lowered_lhs.ty(), lowered_rhs.ty());
+                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
+                    let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
                     if !operands_ty.is_int() {
                         return Err(
                             Error::new(format!("only integer types can be compared, not {operands_ty:?}"))
                                 .with_span(binary_expr.op_span),
                         );
                     }
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: Type::Bool,
                         span,
-                        kind: RExprKind::Cmp(cmp_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
-                    }))
+                        kind: ExprKind::Cmp(cmp_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
+                    })
                 }
                 BinaryOp::Arithmetic(arithmetic_op) => {
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
-                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty()))?;
-                    let operands_ty = coalesce_types(lowered_lhs.ty(), lowered_rhs.ty());
+                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
+                    let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
                     if !operands_ty.is_int() {
                         return Err(Error::new(format!(
                             "arithemitc can only be performed on integers, not {operands_ty:?}"
@@ -712,11 +716,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     {
                         return Err(Error::expr_type_missmatch(expect_type, operands_ty, expr.span()));
                     }
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: operands_ty,
                         span,
-                        kind: RExprKind::Arithmetic(arithmetic_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
-                    }))
+                        kind: ExprKind::Arithmetic(arithmetic_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
+                    })
                 }
                 BinaryOp::LogicalOr => {
                     if let Some(expect_type) = expect_type
@@ -726,15 +730,15 @@ impl<'a> FunctionLoweringCtx<'a> {
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(Type::Bool))?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(Type::Bool))?;
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: Type::Bool,
                         span,
-                        kind: RExprKind::If {
+                        kind: ExprKind::If {
                             cond: Box::new(lowered_lhs),
                             if_true: Box::new(Expr::const_bool(true)),
                             if_false: Box::new(lowered_rhs),
                         },
-                    }))
+                    })
                 }
                 BinaryOp::LogicalAnd => {
                     if let Some(expect_type) = expect_type
@@ -744,21 +748,21 @@ impl<'a> FunctionLoweringCtx<'a> {
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(Type::Bool))?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(Type::Bool))?;
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: Type::Bool,
                         span,
-                        kind: RExprKind::If {
+                        kind: ExprKind::If {
                             cond: Box::new(lowered_lhs),
                             if_true: Box::new(lowered_rhs),
                             if_false: Box::new(Expr::const_bool(false)),
                         },
-                    }))
+                    })
                 }
             },
             ast::Expr::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
                     let lowered_rhs = self.lower_expr(&unary_expr.rhs, None)?;
-                    let int_ty = match lowered_rhs.ty() {
+                    let int_ty = match lowered_rhs.ty {
                         Type::Int(i) if i.is_signed() => i,
                         other => {
                             return Err(Error::new(format!("only signed integer can be negated, not {other:?}"))
@@ -770,15 +774,15 @@ impl<'a> FunctionLoweringCtx<'a> {
                     {
                         return Err(Error::expr_type_missmatch(expect_type, Type::Int(int_ty), expr.span()));
                     }
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: Type::Int(int_ty),
                         span,
-                        kind: RExprKind::Arithmetic(
+                        kind: ExprKind::Arithmetic(
                             ArithmeticOp::Sub,
                             Box::new(Expr::const_number(0, Type::Int(int_ty))),
                             Box::new(lowered_rhs),
                         ),
-                    }))
+                    })
                 }
                 ast::UnaryOp::Not => {
                     if let Some(expect_type) = expect_type
@@ -787,25 +791,25 @@ impl<'a> FunctionLoweringCtx<'a> {
                         return Err(Error::expr_type_missmatch(expect_type, Type::Bool, expr.span()));
                     }
                     let lowered_rhs = self.lower_expr(&unary_expr.rhs, Some(Type::Bool))?;
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty: Type::Bool,
                         span,
-                        kind: RExprKind::Not(Box::new(lowered_rhs)),
-                    }))
+                        kind: ExprKind::Not(Box::new(lowered_rhs)),
+                    })
                 }
                 ast::UnaryOp::AddressOf => {
-                    let lowered_rhs = self.lower_expr(&unary_expr.rhs, None)?.expect_lvalue()?;
+                    let lowered_rhs = self.lower_expr(&unary_expr.rhs, None)?.expect_place()?;
                     let ty = lowered_rhs.ty.make_ptr(self.typesystem);
                     if let Some(expect_type) = expect_type
                         && expect_type != ty
                     {
                         return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
                     }
-                    Ok(Expr::R(RExpr {
+                    Ok(Expr {
                         ty,
                         span,
-                        kind: RExprKind::GetPointer(Box::new(lowered_rhs)),
-                    }))
+                        kind: ExprKind::GetPointer(Box::new(lowered_rhs)),
+                    })
                 }
             },
             ast::Expr::AsCast(as_cast_expr) => {
@@ -816,12 +820,12 @@ impl<'a> FunctionLoweringCtx<'a> {
                     return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
                 }
                 let lowered_expr = self.lower_expr(&as_cast_expr.expr, None)?; // TODO: pass ty as a hint (but not a requirement!)
-                match (lowered_expr.ty(), ty) {
-                    (Type::Int(_), Type::Int(_)) | (Type::Ptr { .. }, Type::Ptr { .. }) => Ok(Expr::R(RExpr {
+                match (lowered_expr.ty, ty) {
+                    (Type::Int(_), Type::Int(_)) | (Type::Ptr { .. }, Type::Ptr { .. }) => Ok(Expr {
                         ty,
                         span,
-                        kind: RExprKind::Cast(Box::new(lowered_expr)),
-                    })),
+                        kind: ExprKind::Cast(Box::new(lowered_expr)),
+                    }),
                     (from, to) => {
                         Err(Error::new(format!("cannot cast from {from:?} to {to:?}")).with_span(as_cast_expr.as_span))
                     }
@@ -843,15 +847,19 @@ impl<'a> FunctionLoweringCtx<'a> {
                 {
                     return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
                 }
-                Ok(Expr::L(LExpr {
+                Ok(Expr {
                     ty,
                     span,
-                    kind: LExprKind::Variable(var_id),
-                }))
+                    kind: ExprKind::Load(Box::new(Place {
+                        ty,
+                        span,
+                        kind: PlaceKind::Variable(var_id),
+                    })),
+                })
             }
             ast::Expr::FieldAccess(e) => {
                 let lowered_lhs = self.lower_expr(&e.lhs, None)?;
-                let struct_id = match lowered_lhs.ty() {
+                let struct_id = match lowered_lhs.ty {
                     Type::Struct(struct_id) => struct_id,
                     _ => return Err(Error::new("only structs have fields").with_span(e.dot_span)),
                 };
@@ -866,23 +874,16 @@ impl<'a> FunctionLoweringCtx<'a> {
                             struct_ty.name.value, e.field.value
                         ))
                     })?;
-                Ok(match lowered_lhs {
-                    lowered_lhs @ Expr::R(_) => Expr::R(RExpr {
-                        ty: field.ty,
-                        span,
-                        kind: RExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
-                    }),
-                    Expr::L(lowered_lhs) => Expr::L(LExpr {
-                        ty: field.ty,
-                        span,
-                        kind: LExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
-                    }),
+                Ok(Expr {
+                    ty: field.ty,
+                    span,
+                    kind: ExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
                 })
             }
             ast::Expr::Dereference(e) => {
                 let expect_ptr_ty = expect_type.map(|ty| ty.make_ptr(self.typesystem));
                 let lowered_ptr = self.lower_expr(&e.ptr, expect_ptr_ty)?;
-                let ty = match lowered_ptr.ty() {
+                let ty = match lowered_ptr.ty {
                     Type::Ptr { pointee } => pointee
                         .map(|id| self.typesystem.get_type(id))
                         .ok_or_else(|| Error::new("cannot dereference an opaque pointer").with_span(expr.span()))?,
@@ -893,32 +894,29 @@ impl<'a> FunctionLoweringCtx<'a> {
                         );
                     }
                 };
-                Ok(Expr::L(LExpr {
+                Ok(Expr {
                     ty,
                     span,
-                    kind: LExprKind::Dereference(Box::new(lowered_ptr)),
-                }))
+                    kind: ExprKind::Load(Box::new(Place {
+                        ty,
+                        span,
+                        kind: PlaceKind::Dereference(Box::new(lowered_ptr)),
+                    })),
+                })
             }
             ast::Expr::Index(e) => {
                 let lowered_lhs = self.lower_expr(&e.lhs, None)?;
-                let element_ty = match lowered_lhs.ty() {
+                let element_ty = match lowered_lhs.ty {
                     Type::Array { element, length: _ } => self.typesystem.get_type(element),
                     other => {
                         return Err(Error::new(format!("expected an array, got {:?}", other)).with_span(e.lhs.span()));
                     }
                 };
                 let lowered_index = self.lower_expr(&e.index, Some(Type::Int(IntType::U64)))?;
-                Ok(match lowered_lhs {
-                    lowered_lhs @ Expr::R(_) => Expr::R(RExpr {
-                        ty: element_ty,
-                        span,
-                        kind: RExprKind::ArrayElement(Box::new(lowered_lhs), Box::new(lowered_index)),
-                    }),
-                    Expr::L(lowered_lhs) => Expr::L(LExpr {
-                        ty: element_ty,
-                        span,
-                        kind: LExprKind::ArrayElement(Box::new(lowered_lhs), Box::new(lowered_index)),
-                    }),
+                Ok(Expr {
+                    ty: element_ty,
+                    span,
+                    kind: ExprKind::ArrayElement(Box::new(lowered_lhs), Box::new(lowered_index)),
                 })
             }
         }
@@ -951,10 +949,8 @@ impl<'a> FunctionLoweringCtx<'a> {
                             .map(|ty| self.typesystem.type_from_ast(self.type_namespace, ty))
                             .transpose()?;
                         let value_eval = self.lower_expr(value, var_ty)?;
-                        variables.push((var_id, value_eval.ty()));
-                        self.scope
-                            .variables
-                            .insert(name.value.clone(), (var_id, value_eval.ty()));
+                        variables.push((var_id, value_eval.ty));
+                        self.scope.variables.insert(name.value.clone(), (var_id, value_eval.ty));
                         exprs.push(Expr::set_var(var_id, value_eval));
                     }
                     ast::LetStatement::WithoutValue { name, ty } => {
@@ -983,11 +979,11 @@ impl<'a> FunctionLoweringCtx<'a> {
 
         self.scope.pop();
 
-        Ok(Expr::R(RExpr {
-            ty: exprs.last().map_or(Type::Unit, |expr| expr.ty()),
+        Ok(Expr {
+            ty: exprs.last().map_or(Type::Unit, |expr| expr.ty),
             span: Some(expr.span()),
-            kind: RExprKind::Block(BlockExpr { variables, exprs }),
-        }))
+            kind: ExprKind::Block(BlockExpr { variables, exprs }),
+        })
     }
 
     fn lower_loop_body(

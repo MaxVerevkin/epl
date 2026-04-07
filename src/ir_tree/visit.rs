@@ -1,140 +1,169 @@
 use super::*;
 
-impl ExprRef<'_> {
-    pub fn visit_children(&self, mut visitor: impl FnMut(Self)) {
-        match self {
-            Self::Any(Expr::R(e)) => match &e.kind {
-                RExprKind::Undefined
-                | RExprKind::ConstUnit
-                | RExprKind::ConstNumber(_)
-                | RExprKind::ConstString(_)
-                | RExprKind::ConstBool(_)
-                | RExprKind::Argument(_) => (),
-                RExprKind::Field(expr, _) => visitor(expr.as_ref().as_ref()),
-                RExprKind::ArrayElement(array, index) => {
-                    visitor(array.as_ref().as_ref());
-                    visitor(index.as_ref().as_ref());
+pub trait ExprVisitor: Sized {
+    fn visit_expr(&mut self, expr: &Expr) {
+        expr.visit_children(self);
+    }
+
+    fn visit_place(&mut self, place: &Place) {
+        place.visit_children(self);
+    }
+}
+
+pub trait ExprVisitorMut: Sized {
+    fn visit_expr(&mut self, expr: &mut Expr) {
+        expr.visit_children_mut(self);
+    }
+
+    fn visit_place(&mut self, place: &mut Place) {
+        place.visit_children_mut(self);
+    }
+}
+
+impl Expr {
+    pub fn visit_children(&self, visitor: &mut impl ExprVisitor) {
+        match &self.kind {
+            ExprKind::Undefined
+            | ExprKind::ConstUnit
+            | ExprKind::ConstNumber(_)
+            | ExprKind::ConstString(_)
+            | ExprKind::ConstBool(_)
+            | ExprKind::Argument(_) => (),
+
+            ExprKind::Field(expr, _)
+            | ExprKind::Return(expr)
+            | ExprKind::Break(_, expr)
+            | ExprKind::Loop(_, expr)
+            | ExprKind::Cast(expr)
+            | ExprKind::Not(expr) => visitor.visit_expr(expr),
+
+            ExprKind::ArrayElement(expr1, expr2)
+            | ExprKind::Arithmetic(_, expr1, expr2)
+            | ExprKind::Cmp(_, expr1, expr2) => {
+                visitor.visit_expr(expr1);
+                visitor.visit_expr(expr2);
+            }
+
+            ExprKind::Store(place, value) => {
+                visitor.visit_place(place);
+                visitor.visit_expr(value);
+            }
+
+            ExprKind::Load(place) | ExprKind::GetPointer(place) => visitor.visit_place(place),
+
+            ExprKind::Block(bexpr) => {
+                for expr in &bexpr.exprs {
+                    visitor.visit_expr(expr);
                 }
-                RExprKind::Store(lexpr, expr) => {
-                    visitor(ExprRef::L(lexpr.as_ref()));
-                    visitor(expr.as_ref().as_ref());
+            }
+
+            ExprKind::If {
+                cond,
+                if_true,
+                if_false,
+            } => {
+                visitor.visit_expr(cond);
+                visitor.visit_expr(if_true);
+                visitor.visit_expr(if_false);
+            }
+
+            ExprKind::ArrayInitializer(exprs) | ExprKind::FunctionCall(_, exprs) => {
+                for expr in exprs {
+                    visitor.visit_expr(expr);
                 }
-                RExprKind::GetPointer(lexpr) => visitor(ExprRef::L(lexpr.as_ref())),
-                RExprKind::Block(bexpr) => {
-                    for expr in &bexpr.exprs {
-                        visitor(expr.as_ref());
-                    }
+            }
+
+            ExprKind::StructInitializer(items) => {
+                for (_, expr) in items {
+                    visitor.visit_expr(expr);
                 }
-                RExprKind::Return(expr)
-                | RExprKind::Break(_, expr)
-                | RExprKind::Loop(_, expr)
-                | RExprKind::Cast(expr)
-                | RExprKind::Not(expr) => visitor(expr.as_ref().as_ref()),
-                RExprKind::Arithmetic(_, expr, expr1) | RExprKind::Cmp(_, expr, expr1) => {
-                    visitor(expr.as_ref().as_ref());
-                    visitor(expr1.as_ref().as_ref());
+            }
+        }
+    }
+
+    pub fn visit_children_mut(&mut self, visitor: &mut impl ExprVisitorMut) {
+        match &mut self.kind {
+            ExprKind::Undefined
+            | ExprKind::ConstUnit
+            | ExprKind::ConstNumber(_)
+            | ExprKind::ConstString(_)
+            | ExprKind::ConstBool(_)
+            | ExprKind::Argument(_) => (),
+
+            ExprKind::Field(expr, _)
+            | ExprKind::Return(expr)
+            | ExprKind::Break(_, expr)
+            | ExprKind::Loop(_, expr)
+            | ExprKind::Cast(expr)
+            | ExprKind::Not(expr) => visitor.visit_expr(&mut *expr),
+
+            ExprKind::ArrayElement(expr1, expr2)
+            | ExprKind::Arithmetic(_, expr1, expr2)
+            | ExprKind::Cmp(_, expr1, expr2) => {
+                visitor.visit_expr(&mut *expr1);
+                visitor.visit_expr(&mut *expr2);
+            }
+
+            ExprKind::Store(place, value) => {
+                visitor.visit_place(&mut *place);
+                visitor.visit_expr(&mut *value);
+            }
+
+            ExprKind::Load(place) | ExprKind::GetPointer(place) => visitor.visit_place(&mut *place),
+
+            ExprKind::Block(bexpr) => {
+                for expr in &mut bexpr.exprs {
+                    visitor.visit_expr(&mut *expr);
                 }
-                RExprKind::If {
-                    cond,
-                    if_true,
-                    if_false,
-                } => {
-                    visitor(cond.as_ref().as_ref());
-                    visitor(if_true.as_ref().as_ref());
-                    visitor(if_false.as_ref().as_ref());
+            }
+
+            ExprKind::If {
+                cond,
+                if_true,
+                if_false,
+            } => {
+                visitor.visit_expr(&mut *cond);
+                visitor.visit_expr(&mut *if_true);
+                visitor.visit_expr(&mut *if_false);
+            }
+
+            ExprKind::ArrayInitializer(exprs) | ExprKind::FunctionCall(_, exprs) => {
+                for expr in exprs {
+                    visitor.visit_expr(expr);
                 }
-                RExprKind::ArrayInitializer(exprs) | RExprKind::FunctionCall(_, exprs) => {
-                    for expr in exprs {
-                        visitor(expr.as_ref());
-                    }
+            }
+
+            ExprKind::StructInitializer(items) => {
+                for (_, expr) in items {
+                    visitor.visit_expr(expr);
                 }
-                RExprKind::StructInitializer(items) => {
-                    for (_, expr) in items {
-                        visitor(expr.as_ref());
-                    }
-                }
-            },
-            Self::Any(Expr::L(e)) | &Self::L(e) => match &e.kind {
-                LExprKind::Dereference(expr) => visitor(expr.as_ref().as_ref()),
-                LExprKind::Variable(_) => (),
-                LExprKind::Field(lexpr, _) => visitor(Self::L(lexpr)),
-                LExprKind::ArrayElement(lexpr, expr) => {
-                    visitor(Self::L(lexpr));
-                    visitor(expr.as_ref().as_ref());
-                }
-            },
+            }
         }
     }
 }
 
-impl ExprMutRef<'_> {
-    pub fn visit_children(&mut self, mut visitor: impl FnMut(ExprMutRef<'_>)) {
-        match self {
-            Self::Any(Expr::R(e)) => match &mut e.kind {
-                RExprKind::Undefined
-                | RExprKind::ConstUnit
-                | RExprKind::ConstNumber(_)
-                | RExprKind::ConstString(_)
-                | RExprKind::ConstBool(_)
-                | RExprKind::Argument(_) => (),
-                RExprKind::Field(expr, _) => visitor(expr.as_mut().as_mut()),
-                RExprKind::ArrayElement(array, index) => {
-                    visitor(array.as_mut().as_mut());
-                    visitor(index.as_mut().as_mut());
-                }
-                RExprKind::Store(lexpr, expr) => {
-                    visitor(ExprMutRef::L(lexpr.as_mut()));
-                    visitor(expr.as_mut().as_mut());
-                }
-                RExprKind::GetPointer(lexpr) => visitor(ExprMutRef::L(lexpr.as_mut())),
-                RExprKind::Block(bexpr) => {
-                    for expr in &mut bexpr.exprs {
-                        visitor(expr.as_mut());
-                    }
-                }
-                RExprKind::Return(expr)
-                | RExprKind::Break(_, expr)
-                | RExprKind::Loop(_, expr)
-                | RExprKind::Cast(expr)
-                | RExprKind::Not(expr) => visitor(expr.as_mut().as_mut()),
-                RExprKind::Arithmetic(_, expr, expr1) | RExprKind::Cmp(_, expr, expr1) => {
-                    visitor(expr.as_mut().as_mut());
-                    visitor(expr1.as_mut().as_mut());
-                }
-                RExprKind::If {
-                    cond,
-                    if_true,
-                    if_false,
-                } => {
-                    visitor(cond.as_mut().as_mut());
-                    visitor(if_true.as_mut().as_mut());
-                    visitor(if_false.as_mut().as_mut());
-                }
-                RExprKind::ArrayInitializer(exprs) | RExprKind::FunctionCall(_, exprs) => {
-                    for expr in exprs {
-                        visitor(expr.as_mut());
-                    }
-                }
-                RExprKind::StructInitializer(items) => {
-                    for (_, expr) in items {
-                        visitor(expr.as_mut());
-                    }
-                }
-            },
-            Self::Any(Expr::L(e)) => visit_children_lexpr_mut(e, visitor),
-            Self::L(e) => visit_children_lexpr_mut(e, visitor),
+impl Place {
+    pub fn visit_children(&self, visitor: &mut impl ExprVisitor) {
+        match &self.kind {
+            PlaceKind::Variable(_) => (),
+            PlaceKind::Dereference(ptr) => visitor.visit_expr(ptr),
+            PlaceKind::Field(place, _) => visitor.visit_place(place),
+            PlaceKind::ArrayElement(array, index) => {
+                visitor.visit_place(array);
+                visitor.visit_expr(index);
+            }
         }
     }
-}
 
-fn visit_children_lexpr_mut(lexpr: &mut LExpr, mut visitor: impl FnMut(ExprMutRef<'_>)) {
-    match &mut lexpr.kind {
-        LExprKind::Dereference(expr) => visitor(expr.as_mut().as_mut()),
-        LExprKind::Variable(_) => (),
-        LExprKind::Field(lexpr, _) => visitor(ExprMutRef::L(lexpr)),
-        LExprKind::ArrayElement(lexpr, expr) => {
-            visitor(ExprMutRef::L(lexpr));
-            visitor(expr.as_mut().as_mut());
+    pub fn visit_children_mut(&mut self, visitor: &mut impl ExprVisitorMut) {
+        match &mut self.kind {
+            PlaceKind::Variable(_) => (),
+            PlaceKind::Dereference(ptr) => visitor.visit_expr(&mut *ptr),
+            PlaceKind::Field(place, _) => visitor.visit_place(&mut *place),
+            PlaceKind::ArrayElement(array, index) => {
+                visitor.visit_place(&mut *array);
+                visitor.visit_expr(&mut *index);
+            }
         }
     }
 }

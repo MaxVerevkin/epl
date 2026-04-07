@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::{
     ast,
     common::{ArithmeticOp, BinaryOp, CmpOp},
+    ir_tree::visit::ExprVisitorMut,
     lex, make_entity_id,
 };
 pub use types::{IntType, Type, TypeSystem};
@@ -101,7 +102,7 @@ impl Module {
                             &mut typesystem,
                             &type_namespace,
                         )?;
-                        body.as_mut().basic_optimize();
+                        opt::BasicOptVisitor.visit_expr(&mut body);
                         functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
                 }
@@ -170,67 +171,42 @@ impl Function {
 }
 
 #[derive(Debug)]
-pub enum Expr {
-    R(RExpr),
-    L(LExpr),
+pub struct Expr {
+    pub ty: Type,
+    pub span: Option<lex::Span>,
+    pub kind: ExprKind,
 }
 
 #[derive(Debug)]
-pub struct RExpr {
+pub struct Place {
     pub ty: Type,
+    #[expect(unused)]
     pub span: Option<lex::Span>,
-    pub kind: RExprKind,
+    pub kind: PlaceKind,
 }
 
-#[derive(Debug)]
-pub struct LExpr {
-    pub ty: Type,
-    pub span: Option<lex::Span>,
-    pub kind: LExprKind,
-}
-
-impl LExpr {
+impl Place {
     pub const DUMMY: Self = Self {
         ty: Type::Never,
         span: None,
-        kind: LExprKind::Variable(VariableId::DUMMY),
+        kind: PlaceKind::Variable(VariableId::DUMMY),
     };
 }
 
-#[derive(Clone, Copy)]
-pub enum ExprRef<'a> {
-    Any(&'a Expr),
-    L(&'a LExpr),
-}
-
-pub enum ExprMutRef<'a> {
-    Any(&'a mut Expr),
-    L(&'a mut LExpr),
-}
-
-impl ExprMutRef<'_> {
-    pub fn as_lexpr(&mut self) -> Option<&mut LExpr> {
-        match self {
-            ExprMutRef::L(lexpr) => Some(lexpr),
-            ExprMutRef::Any(Expr::L(lexpr)) => Some(lexpr),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug)]
-pub enum RExprKind {
+pub enum ExprKind {
     Undefined,
     ConstUnit,
     ConstNumber(i64),
     ConstString(String),
     ConstBool(bool),
 
+    Load(Box<Place>),
     Field(Box<Expr>, String),
     ArrayElement(Box<Expr>, Box<Expr>),
 
-    Store(Box<LExpr>, Box<Expr>),
-    GetPointer(Box<LExpr>),
+    Store(Box<Place>, Box<Expr>), // TODO: remove box?
+    GetPointer(Box<Place>),
 
     Argument(String),
     Block(BlockExpr),
@@ -248,11 +224,11 @@ pub enum RExprKind {
 }
 
 #[derive(Debug)]
-pub enum LExprKind {
+pub enum PlaceKind {
     Dereference(Box<Expr>),
     Variable(VariableId),
-    Field(Box<LExpr>, String),
-    ArrayElement(Box<LExpr>, Box<Expr>),
+    Field(Box<Place>, String),
+    ArrayElement(Box<Place>, Box<Expr>),
 }
 
 #[derive(Debug)]
@@ -262,89 +238,111 @@ pub struct BlockExpr {
 }
 
 impl Expr {
-    const UNIT: Self = Self::R(RExpr {
+    const UNIT: Self = Self {
         ty: Type::Unit,
         span: None,
-        kind: RExprKind::ConstUnit,
-    });
+        kind: ExprKind::ConstUnit,
+    };
 
-    pub const DUMMY: Self = Self::L(LExpr::DUMMY);
-
-    pub fn as_ref(&self) -> ExprRef<'_> {
-        ExprRef::Any(self)
-    }
-
-    pub fn as_mut(&mut self) -> ExprMutRef<'_> {
-        ExprMutRef::Any(self)
-    }
-
-    pub fn expect_lvalue(self) -> Result<LExpr, Error> {
-        match self {
-            Self::L(lvalue) => Ok(lvalue),
-            Self::R(rvalue) => Err(Error::new("expected an l-value expression").with_span(rvalue.span.unwrap())),
+    pub fn into_place(self) -> Option<Place> {
+        match self.kind {
+            ExprKind::Load(place) => Some(*place),
+            ExprKind::Field(place, field) => Some(Place {
+                ty: self.ty,
+                span: self.span,
+                kind: PlaceKind::Field(Box::new(place.into_place()?), field),
+            }),
+            ExprKind::ArrayElement(place, index) => Some(Place {
+                ty: self.ty,
+                span: self.span,
+                kind: PlaceKind::ArrayElement(Box::new(place.into_place()?), index),
+            }),
+            ExprKind::Undefined
+            | ExprKind::ConstUnit
+            | ExprKind::ConstNumber(..)
+            | ExprKind::ConstString(..)
+            | ExprKind::ConstBool(..)
+            | ExprKind::Store(..)
+            | ExprKind::GetPointer(..)
+            | ExprKind::Argument(..)
+            | ExprKind::Block(..)
+            | ExprKind::Return(..)
+            | ExprKind::Break(..)
+            | ExprKind::Arithmetic(..)
+            | ExprKind::Cmp(..)
+            | ExprKind::If { .. }
+            | ExprKind::Loop(..)
+            | ExprKind::ArrayInitializer(..)
+            | ExprKind::StructInitializer(..)
+            | ExprKind::FunctionCall(..)
+            | ExprKind::Cast(..)
+            | ExprKind::Not(..) => None,
         }
     }
 
-    pub fn ty(&self) -> Type {
-        match self {
-            Self::R(e) => e.ty,
-            Self::L(e) => e.ty,
-        }
+    pub fn expect_place(self) -> Result<Place, Error> {
+        let span = self.span.unwrap();
+        self.into_place()
+            .ok_or_else(|| Error::new("expected a place expression").with_span(span))
     }
 
-    fn span(&self) -> Option<lex::Span> {
-        match self {
-            Self::R(e) => e.span,
-            Self::L(e) => e.span,
-        }
-    }
+    // pub fn expect_lvalue(self) -> Result<Place, Error> {
+    //     match self {
+    //         Self::L(lvalue) => Ok(lvalue),
+    //         Self::R(rvalue) => Err(Error::new("expected an l-value expression").with_span(rvalue.span.unwrap())),
+    //     }
+    // }
 
     fn get_var(var: VariableId, ty: Type) -> Self {
-        Self::L(LExpr {
+        Self {
             ty,
             span: None,
-            kind: LExprKind::Variable(var),
-        })
+            kind: ExprKind::Load(Box::new(Place {
+                ty,
+                span: None,
+                kind: PlaceKind::Variable(var),
+            })),
+        }
     }
 
     fn set_var(var: VariableId, expr: Expr) -> Self {
-        Self::R(RExpr {
+        Self {
             ty: Type::Unit,
             span: None,
-            kind: RExprKind::Store(
-                Box::new(LExpr {
-                    ty: expr.ty(),
+            kind: ExprKind::Store(
+                Box::new(Place {
+                    ty: expr.ty,
                     span: None,
-                    kind: LExprKind::Variable(var),
+                    kind: PlaceKind::Variable(var),
                 }),
                 Box::new(expr),
             ),
-        })
+        }
     }
 
     fn const_number(number: i64, ty: Type) -> Self {
-        Self::R(RExpr {
+        Self {
             ty,
             span: None,
-            kind: RExprKind::ConstNumber(number),
-        })
+            kind: ExprKind::ConstNumber(number),
+        }
     }
 
     fn const_bool(bool: bool) -> Self {
-        Self::R(RExpr {
+        Self {
             ty: Type::Bool,
             span: None,
-            kind: RExprKind::ConstBool(bool),
-        })
+            kind: ExprKind::ConstBool(bool),
+        }
     }
 }
 
-impl LExpr {
+impl Place {
     fn dereference(expr: Expr, ty: Type) -> Self {
         Self {
             ty,
             span: None,
-            kind: LExprKind::Dereference(Box::new(expr)),
+            kind: PlaceKind::Dereference(Box::new(expr)),
         }
     }
 }

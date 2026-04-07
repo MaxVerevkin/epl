@@ -159,54 +159,52 @@ impl<'a> BodyLoweringCtx<'a> {
         alloca
     }
 
+    /// Evaluate an expression
     fn eval_expr(&mut self, expr: &ir_tree::Expr) -> Result<EvalResult, Error> {
-        match expr {
-            ir_tree::Expr::R(rexpr) => self.eval_rexpr(rexpr),
-            ir_tree::Expr::L(lexpr) => self.eval_lexpr(lexpr),
-        }
-    }
-
-    /// Evaluate an r-value expression
-    fn eval_rexpr(&mut self, expr: &ir_tree::RExpr) -> Result<EvalResult, Error> {
         let ty = lower_type(self.module, expr.ty);
         Ok(match &expr.kind {
-            ir_tree::RExprKind::Undefined => EvalResult::Value(Value::Undefined(ty)),
-            ir_tree::RExprKind::ConstUnit => EvalResult::Value(Value::Zst),
-            ir_tree::RExprKind::ConstNumber(num) => EvalResult::Value(Value::Number { data: *num, ty }),
-            ir_tree::RExprKind::ConstString(str) => EvalResult::Value(Value::String(str.clone())),
-            ir_tree::RExprKind::ConstBool(bool) => EvalResult::Value(Value::Bool(*bool)),
+            ir_tree::ExprKind::Undefined => EvalResult::Value(Value::Undefined(ty)),
+            ir_tree::ExprKind::ConstUnit => EvalResult::Value(Value::Zst),
+            ir_tree::ExprKind::ConstNumber(num) => EvalResult::Value(Value::Number { data: *num, ty }),
+            ir_tree::ExprKind::ConstString(str) => EvalResult::Value(Value::String(str.clone())),
+            ir_tree::ExprKind::ConstBool(bool) => EvalResult::Value(Value::Bool(*bool)),
 
-            ir_tree::RExprKind::Field(..)
-            | ir_tree::RExprKind::ArrayElement(..)
-            | ir_tree::RExprKind::StructInitializer(..)
-            | ir_tree::RExprKind::ArrayInitializer(..) => match self.eval_rexpr_as_readonly_ptr(expr)? {
+            ir_tree::ExprKind::Load(place) => match self.eval_place_as_ptr(place)? {
                 EvalResult::Never => EvalResult::Never,
                 EvalResult::Value(ptr) => EvalResult::Value(Value::Definition(self.cursor().load(ptr, ty))),
             },
 
-            ir_tree::RExprKind::Store(place, value) => {
-                let place_ptr = match self.eval_lexpr_as_ptr(place)? {
+            ir_tree::ExprKind::Field(..)
+            | ir_tree::ExprKind::ArrayElement(..)
+            | ir_tree::ExprKind::StructInitializer(..)
+            | ir_tree::ExprKind::ArrayInitializer(..) => match self.eval_expr_as_readonly_ptr(expr)? {
+                EvalResult::Never => EvalResult::Never,
+                EvalResult::Value(ptr) => EvalResult::Value(Value::Definition(self.cursor().load(ptr, ty))),
+            },
+
+            ir_tree::ExprKind::Store(place, value) => {
+                let place_ptr = match self.eval_place_as_ptr(place)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
                 match value.as_ref() {
-                    ir_tree::Expr::R(ir_tree::RExpr {
-                        kind: ir_tree::RExprKind::ArrayInitializer(elements),
+                    ir_tree::Expr {
+                        kind: ir_tree::ExprKind::ArrayInitializer(elements),
                         ..
-                    }) => {
+                    } => {
                         let array_element_ty = lower_type(
                             self.module,
-                            value.ty().array_element_type(&self.module.typesystem).unwrap(),
+                            value.ty.array_element_type(&self.module.typesystem).unwrap(),
                         );
                         match self.eval_array_initializer_into(place_ptr, elements, &array_element_ty)? {
                             EvalResult::Never => return Ok(EvalResult::Never),
                             EvalResult::Value(_) => (),
                         }
                     }
-                    ir_tree::Expr::R(ir_tree::RExpr {
-                        kind: ir_tree::RExprKind::StructInitializer(fields),
+                    ir_tree::Expr {
+                        kind: ir_tree::ExprKind::StructInitializer(fields),
                         ..
-                    }) => match self.eval_struct_initializer_into(place_ptr, fields, &value.ty())? {
+                    } => match self.eval_struct_initializer_into(place_ptr, fields, &value.ty)? {
                         EvalResult::Never => return Ok(EvalResult::Never),
                         EvalResult::Value(_) => (),
                     },
@@ -220,13 +218,13 @@ impl<'a> BodyLoweringCtx<'a> {
                 }
                 EvalResult::Value(Value::Zst)
             }
-            ir_tree::RExprKind::GetPointer(lexpr) => self.eval_lexpr_as_ptr(lexpr)?,
+            ir_tree::ExprKind::GetPointer(lexpr) => self.eval_place_as_ptr(lexpr)?,
 
-            ir_tree::RExprKind::Argument(arg_name) => {
+            ir_tree::ExprKind::Argument(arg_name) => {
                 let arg_def_id = self.argument_map[arg_name].clone();
                 EvalResult::Value(Value::Definition(arg_def_id))
             }
-            ir_tree::RExprKind::Block(block_expr) => {
+            ir_tree::ExprKind::Block(block_expr) => {
                 for (var_id, var_ty) in &block_expr.variables {
                     let var_ty = lower_type(self.module, *var_ty);
                     let alloca = self.alloca(var_ty.layout(self.module));
@@ -241,14 +239,14 @@ impl<'a> BodyLoweringCtx<'a> {
                 }
                 EvalResult::Value(Value::Zst)
             }
-            ir_tree::RExprKind::Return(return_expr) => match self.eval_expr(return_expr)? {
+            ir_tree::ExprKind::Return(return_expr) => match self.eval_expr(return_expr)? {
                 EvalResult::Never => EvalResult::Never,
                 EvalResult::Value(value) => {
                     self.finalize_block(Terminator::Return(value));
                     EvalResult::Never
                 }
             },
-            ir_tree::RExprKind::Break(break_from, value) => match self.eval_expr(value)? {
+            ir_tree::ExprKind::Break(break_from, value) => match self.eval_expr(value)? {
                 EvalResult::Never => EvalResult::Never,
                 EvalResult::Value(value) => {
                     let to = self.break_target_map[break_from];
@@ -256,8 +254,8 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never
                 }
             },
-            ir_tree::RExprKind::Arithmetic(op, lhs, rhs) => {
-                let signed = lhs.ty().is_signed_int();
+            ir_tree::ExprKind::Arithmetic(op, lhs, rhs) => {
+                let signed = lhs.ty.is_signed_int();
                 let lhs = match self.eval_expr(lhs)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
@@ -268,8 +266,8 @@ impl<'a> BodyLoweringCtx<'a> {
                 };
                 EvalResult::Value(Value::Definition(self.cursor().arithmetic(*op, signed, lhs, rhs)))
             }
-            ir_tree::RExprKind::Cmp(op, lhs, rhs) => {
-                let signed = lhs.ty().is_signed_int();
+            ir_tree::ExprKind::Cmp(op, lhs, rhs) => {
+                let signed = lhs.ty.is_signed_int();
                 let lhs = match self.eval_expr(lhs)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
@@ -280,7 +278,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 };
                 EvalResult::Value(Value::Definition(self.cursor().cmp(*op, signed, lhs, rhs)))
             }
-            ir_tree::RExprKind::If {
+            ir_tree::ExprKind::If {
                 cond,
                 if_true,
                 if_false,
@@ -325,7 +323,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 self.current_block_args.push(value.clone());
                 EvalResult::Value(Value::Definition(value))
             }
-            ir_tree::RExprKind::Loop(loop_id, body) => {
+            ir_tree::ExprKind::Loop(loop_id, body) => {
                 let body_id = BasicBlockId::new();
                 let continuation_id = BasicBlockId::new();
 
@@ -352,7 +350,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Value(Value::Definition(value))
                 }
             }
-            ir_tree::RExprKind::FunctionCall(function_id, args) => {
+            ir_tree::ExprKind::FunctionCall(function_id, args) => {
                 let mut arg_vals = Vec::new();
                 for arg_expr in args {
                     match self.eval_expr(arg_expr)? {
@@ -369,8 +367,8 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Value(Value::Definition(val_def_id))
                 }
             }
-            ir_tree::RExprKind::Cast(value) => {
-                let from_ty = value.ty();
+            ir_tree::ExprKind::Cast(value) => {
+                let from_ty = value.ty;
                 let to_ty = expr.ty;
                 let value = match self.eval_expr(value)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
@@ -396,7 +394,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     unimplemented!("cast from {from_ty:?} to {to_ty:?} is not handled")
                 }
             }
-            ir_tree::RExprKind::Not(value) => {
+            ir_tree::ExprKind::Not(value) => {
                 let value = match self.eval_expr(value)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
@@ -407,24 +405,17 @@ impl<'a> BodyLoweringCtx<'a> {
     }
 
     fn eval_expr_as_readonly_ptr(&mut self, expr: &ir_tree::Expr) -> Result<EvalResult, Error> {
-        match expr {
-            ir_tree::Expr::R(rexpr) => self.eval_rexpr_as_readonly_ptr(rexpr),
-            ir_tree::Expr::L(lexpr) => self.eval_lexpr_as_ptr(lexpr), // TODO: mark as readonly when this is a thing
-        }
-    }
-
-    fn eval_rexpr_as_readonly_ptr(&mut self, expr: &ir_tree::RExpr) -> Result<EvalResult, Error> {
         let ty = lower_type(self.module, expr.ty);
         Ok(match &expr.kind {
-            ir_tree::RExprKind::Field(lhs, field) => {
-                let field_offset = lhs.ty().get_field_offset(field, &self.module.typesystem).unwrap();
+            ir_tree::ExprKind::Field(lhs, field) => {
+                let field_offset = lhs.ty.get_field_offset(field, &self.module.typesystem).unwrap();
                 let lhs_ptr = match self.eval_expr_as_readonly_ptr(lhs)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
                 EvalResult::Value(self.cursor().offset_ptr(lhs_ptr, Value::new_i64(field_offset as i64)))
             }
-            ir_tree::RExprKind::ArrayElement(array, index) => {
+            ir_tree::ExprKind::ArrayElement(array, index) => {
                 let array_ptr = match self.eval_expr_as_readonly_ptr(array)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
@@ -442,17 +433,17 @@ impl<'a> BodyLoweringCtx<'a> {
                 );
                 EvalResult::Value(self.cursor().offset_ptr(array_ptr, Value::Definition(ptr_offset)))
             }
-            ir_tree::RExprKind::ArrayInitializer(exprs) => {
+            ir_tree::ExprKind::ArrayInitializer(exprs) => {
                 let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
                 let element_ty = ty.array_element_type().unwrap();
                 self.eval_array_initializer_into(alloca, exprs, element_ty)?
             }
-            ir_tree::RExprKind::StructInitializer(fields) => {
+            ir_tree::ExprKind::StructInitializer(fields) => {
                 let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
                 self.eval_struct_initializer_into(alloca, fields, &expr.ty)?
             }
             _ => {
-                let value = match self.eval_rexpr(expr)? {
+                let value = match self.eval_expr(expr)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
@@ -521,30 +512,22 @@ impl<'a> BodyLoweringCtx<'a> {
         Ok(EvalResult::Value(place_ptr))
     }
 
-    fn eval_lexpr(&mut self, expr: &ir_tree::LExpr) -> Result<EvalResult, Error> {
-        let ty = lower_type(self.module, expr.ty);
-        Ok(match self.eval_lexpr_as_ptr(expr)? {
-            EvalResult::Never => EvalResult::Never,
-            EvalResult::Value(ptr) => EvalResult::Value(Value::Definition(self.cursor().load(ptr, ty))),
-        })
-    }
-
-    fn eval_lexpr_as_ptr(&mut self, expr: &ir_tree::LExpr) -> Result<EvalResult, Error> {
+    fn eval_place_as_ptr(&mut self, expr: &ir_tree::Place) -> Result<EvalResult, Error> {
         Ok(match &expr.kind {
-            ir_tree::LExprKind::Dereference(ptr) => self.eval_expr(ptr)?,
-            ir_tree::LExprKind::Variable(var_id) => {
+            ir_tree::PlaceKind::Dereference(ptr) => self.eval_expr(ptr)?,
+            ir_tree::PlaceKind::Variable(var_id) => {
                 EvalResult::Value(Value::Definition(self.variable_map[var_id].clone()))
             }
-            ir_tree::LExprKind::Field(place, field_name) => {
+            ir_tree::PlaceKind::Field(place, field_name) => {
                 let field_offset = place.ty.get_field_offset(field_name, &self.module.typesystem).unwrap();
-                let place_ptr = match self.eval_lexpr_as_ptr(place)? {
+                let place_ptr = match self.eval_place_as_ptr(place)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
                 EvalResult::Value(self.cursor().offset_ptr(place_ptr, Value::new_i64(field_offset as i64)))
             }
-            ir_tree::LExprKind::ArrayElement(array, index) => {
-                let array_ptr = match self.eval_lexpr_as_ptr(array)? {
+            ir_tree::PlaceKind::ArrayElement(array, index) => {
+                let array_ptr = match self.eval_place_as_ptr(array)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
