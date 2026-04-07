@@ -201,12 +201,12 @@ pub enum ExprKind {
     ConstString(String),
     ConstBool(bool),
 
-    Load(Box<Place>),
+    Load(Place),
     Field(Box<Expr>, String),
     ArrayElement(Box<Expr>, Box<Expr>),
 
-    Store(Box<Place>, Box<Expr>), // TODO: remove box?
-    GetPointer(Box<Place>),
+    Store(Place, Box<Expr>),
+    GetPointer(Place),
 
     Argument(String),
     Block(BlockExpr),
@@ -246,7 +246,7 @@ impl Expr {
 
     pub fn into_place(self) -> Option<Place> {
         match self.kind {
-            ExprKind::Load(place) => Some(*place),
+            ExprKind::Load(place) => Some(place),
             ExprKind::Field(place, field) => Some(Place {
                 ty: self.ty,
                 span: self.span,
@@ -286,22 +286,15 @@ impl Expr {
             .ok_or_else(|| Error::new("expected a place expression").with_span(span))
     }
 
-    // pub fn expect_lvalue(self) -> Result<Place, Error> {
-    //     match self {
-    //         Self::L(lvalue) => Ok(lvalue),
-    //         Self::R(rvalue) => Err(Error::new("expected an l-value expression").with_span(rvalue.span.unwrap())),
-    //     }
-    // }
-
     fn get_var(var: VariableId, ty: Type) -> Self {
         Self {
             ty,
             span: None,
-            kind: ExprKind::Load(Box::new(Place {
+            kind: ExprKind::Load(Place {
                 ty,
                 span: None,
                 kind: PlaceKind::Variable(var),
-            })),
+            }),
         }
     }
 
@@ -310,11 +303,11 @@ impl Expr {
             ty: Type::Unit,
             span: None,
             kind: ExprKind::Store(
-                Box::new(Place {
+                Place {
                     ty: expr.ty,
                     span: None,
                     kind: PlaceKind::Variable(var),
-                }),
+                },
                 Box::new(expr),
             ),
         }

@@ -49,7 +49,7 @@ impl ExprVisitorMut for BasicOptVisitor {
         if let PlaceKind::Dereference(ptr_expr) = &mut place.kind
             && let ExprKind::GetPointer(place_expr) = &mut ptr_expr.kind
         {
-            let place_expr = std::mem::replace(&mut **place_expr, Place::DUMMY);
+            let place_expr = std::mem::replace(place_expr, Place::DUMMY);
             *place = place_expr;
         }
     }

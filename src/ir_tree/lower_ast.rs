@@ -620,7 +620,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 Ok(Expr {
                     ty: Type::Unit,
                     span,
-                    kind: ExprKind::Store(Box::new(lowered_place), Box::new(lowered_value)),
+                    kind: ExprKind::Store(lowered_place, Box::new(lowered_value)),
                 })
             }
             ast::Expr::CompoundAssignment(e) => {
@@ -642,7 +642,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 let place_ptr_expr = Expr {
                     ty: place_ptr_ty,
                     span: None,
-                    kind: ExprKind::GetPointer(Box::new(lowered_place)),
+                    kind: ExprKind::GetPointer(lowered_place),
                 };
                 let tmp_var_id = VariableId::new();
                 Ok(Expr {
@@ -656,7 +656,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                                 ty: Type::Unit,
                                 span: None,
                                 kind: ExprKind::Store(
-                                    Box::new(Place::dereference(Expr::get_var(tmp_var_id, place_ptr_ty), operands_ty)),
+                                    Place::dereference(Expr::get_var(tmp_var_id, place_ptr_ty), operands_ty),
                                     Box::new(Expr {
                                         ty: operands_ty,
                                         span: None,
@@ -665,10 +665,10 @@ impl<'a> FunctionLoweringCtx<'a> {
                                             Box::new(Expr {
                                                 ty: operands_ty,
                                                 span: None,
-                                                kind: ExprKind::Load(Box::new(Place::dereference(
+                                                kind: ExprKind::Load(Place::dereference(
                                                     Expr::get_var(tmp_var_id, place_ptr_ty),
                                                     operands_ty,
-                                                ))),
+                                                )),
                                             }),
                                             Box::new(lowered_value),
                                         ),
@@ -808,7 +808,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     Ok(Expr {
                         ty,
                         span,
-                        kind: ExprKind::GetPointer(Box::new(lowered_rhs)),
+                        kind: ExprKind::GetPointer(lowered_rhs),
                     })
                 }
             },
@@ -850,11 +850,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                 Ok(Expr {
                     ty,
                     span,
-                    kind: ExprKind::Load(Box::new(Place {
+                    kind: ExprKind::Load(Place {
                         ty,
                         span,
                         kind: PlaceKind::Variable(var_id),
-                    })),
+                    }),
                 })
             }
             ast::Expr::FieldAccess(e) => {
@@ -897,11 +897,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                 Ok(Expr {
                     ty,
                     span,
-                    kind: ExprKind::Load(Box::new(Place {
+                    kind: ExprKind::Load(Place {
                         ty,
                         span,
                         kind: PlaceKind::Dereference(Box::new(lowered_ptr)),
-                    })),
+                    }),
                 })
             }
             ast::Expr::Index(e) => {
