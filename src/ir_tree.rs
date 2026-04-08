@@ -1,3 +1,4 @@
+mod checkers;
 mod dump;
 mod lower_ast;
 mod opt;
@@ -100,6 +101,9 @@ impl Module {
                             &mut typesystem,
                             &type_namespace,
                         )?;
+                        if decl.is_pure {
+                            checkers::purity_check(&body, &functions)?;
+                        }
                         opt::BasicOptVisitor.visit_expr(&mut body);
                         functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
@@ -179,7 +183,6 @@ pub struct Expr {
 #[derive(Debug)]
 pub struct Place {
     pub ty: Type,
-    #[expect(unused)]
     pub span: Option<lex::Span>,
     pub kind: PlaceKind,
 }
