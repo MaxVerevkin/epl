@@ -129,6 +129,7 @@ pub struct Function {
     pub args: Vec<(String, Type)>,
     pub return_ty: Type,
     pub is_variadic: bool,
+    pub is_pure: bool,
     pub body: Option<Expr>,
 }
 
@@ -140,11 +141,10 @@ impl Function {
         ast: &ast::Function,
         annotations: &BTreeSet<ast::Annotation>,
     ) -> Result<Self, Error> {
-        if let Some(annotation) = annotations.iter().next() {
+        let mut is_pure = false;
+        for annotation in annotations {
             match annotation.ident.value.as_str() {
-                "pure" => {
-                    return Err(Error::new("pure functions are not supported yet").with_span(annotation.span()));
-                }
+                "pure" => is_pure = true,
                 other => {
                     return Err(Error::new(format!("unknown annotation: {other:?}")).with_span(annotation.span()));
                 }
@@ -165,6 +165,7 @@ impl Function {
                 .transpose()?
                 .unwrap_or(Type::Unit),
             is_variadic: ast.is_variadic,
+            is_pure,
             body: None,
         })
     }
