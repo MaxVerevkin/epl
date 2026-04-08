@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{
-    ast,
-    common::{ArithmeticOp, CmpOp},
-};
+use crate::ast;
+use crate::common::{ArithmeticOp, CmpOp};
 
 /// Construct an IR of a function from its AST
 pub fn lower_function_body(

@@ -1,5 +1,6 @@
 use super::*;
-use crate::{ast, common::Layout};
+use crate::ast;
+use crate::common::Layout;
 
 /// The set of data types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

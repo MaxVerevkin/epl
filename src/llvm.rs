@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::ffi::CStr;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::fmt;
 
 use llvm_sys::LLVMIntPredicate;
@@ -10,9 +9,7 @@ use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 
-use crate::common::ArithmeticOp;
-use crate::common::CmpOp;
-use crate::common::Layout;
+use crate::common::{ArithmeticOp, CmpOp, Layout};
 use crate::ir;
 
 /// An LLVM module

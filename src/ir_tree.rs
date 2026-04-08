@@ -6,13 +6,11 @@ mod visit;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::{
-    ast,
-    common::{ArithmeticOp, BinaryOp, CmpOp},
-    ir_tree::visit::ExprVisitorMut,
-    lex, make_entity_id,
-};
 pub use types::{IntType, Type, TypeSystem};
+
+use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
+use crate::ir_tree::visit::ExprVisitorMut;
+use crate::{ast, lex, make_entity_id};
 
 /// An error during IR construction and typechecking
 #[derive(Debug)]

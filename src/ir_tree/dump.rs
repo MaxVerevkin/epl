@@ -1,8 +1,7 @@
 use std::fmt::Write;
 
-use crate::ir_tree::visit::ExprVisitor;
-
 use super::*;
+use crate::ir_tree::visit::ExprVisitor;
 
 pub fn dump(module: &Module) -> String {
     let mut writer = Writer {

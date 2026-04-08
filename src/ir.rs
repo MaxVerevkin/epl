@@ -2,19 +2,13 @@ pub mod graphviz;
 mod lower_ir_tree;
 mod opt;
 
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::hash::Hash;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroU64;
 
-use crate::common::ArithmeticOp;
-use crate::common::CmpOp;
-use crate::common::Layout;
-use crate::ir_tree;
-use crate::lex;
-use crate::make_entity_id;
+use crate::common::{ArithmeticOp, CmpOp, Layout};
+use crate::{ir_tree, lex, make_entity_id};
 
 /// An intermediate representation of a program
 #[derive(Debug)]

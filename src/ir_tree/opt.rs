@@ -1,6 +1,5 @@
-use crate::ir_tree::visit::ExprVisitorMut;
-
 use super::*;
+use crate::ir_tree::visit::ExprVisitorMut;
 
 /// Collapses redundantly nested expressions, eliminates dead code.
 pub struct BasicOptVisitor;

@@ -1,2 +1,4 @@
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
 struct_variant_width = 80
 max_width = 120
