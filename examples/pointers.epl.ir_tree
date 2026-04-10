@@ -28,22 +28,11 @@ fn inc(num: *i32) -> unit
     |   STORE TYPE=unit
     |   |   VARIABLE(var_2) [PLACE] TYPE=*i32
     |   |   ARGUMENT("num") TYPE=*i32
-    |   BLOCK TYPE=unit
-    |   |   DECLARE var_3 : *i32
-    |   |   STORE TYPE=unit
-    |   |   |   VARIABLE(var_3) [PLACE] TYPE=*i32
+    |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   DEREFERENCE [PLACE] TYPE=i32
     |   |   |   LOAD TYPE=*i32
     |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=*i32
-    |   |   STORE TYPE=unit
-    |   |   |   DEREFERENCE [PLACE] TYPE=i32
-    |   |   |   |   LOAD TYPE=*i32
-    |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=*i32
-    |   |   |   ARITHMETIC(Add) TYPE=i32
-    |   |   |   |   LOAD TYPE=i32
-    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=i32
-    |   |   |   |   |   |   LOAD TYPE=*i32
-    |   |   |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=*i32
-    |   |   |   |   CONST_NUMBER(1) TYPE=i32
+    |   |   CONST_NUMBER(1) TYPE=i32
 
 fn printf(fmt: *i8, ...) -> unit
 

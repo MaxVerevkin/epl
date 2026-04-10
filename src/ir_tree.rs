@@ -215,6 +215,7 @@ pub enum ExprKind {
     Return(Box<Expr>),
     Break(LoopId, Box<Expr>),
     Arithmetic(ArithmeticOp, Box<Expr>, Box<Expr>),
+    InPlaceArithmetic(ArithmeticOp, Place, Box<Expr>),
     Cmp(CmpOp, Box<Expr>, Box<Expr>),
     If { cond: Box<Expr>, if_true: Box<Expr>, if_false: Box<Expr> },
     Loop(LoopId, Box<Expr>),
@@ -271,6 +272,7 @@ impl Expr {
             | ExprKind::Return(..)
             | ExprKind::Break(..)
             | ExprKind::Arithmetic(..)
+            | ExprKind::InPlaceArithmetic(..)
             | ExprKind::Cmp(..)
             | ExprKind::If { .. }
             | ExprKind::Loop(..)
@@ -292,11 +294,7 @@ impl Expr {
         Self {
             ty,
             span: None,
-            kind: ExprKind::Load(Place {
-                ty,
-                span: None,
-                kind: PlaceKind::Variable(var),
-            }),
+            kind: ExprKind::Load(Place::var(var, ty)),
         }
     }
 
@@ -333,11 +331,11 @@ impl Expr {
 }
 
 impl Place {
-    fn dereference(expr: Expr, ty: Type) -> Self {
+    fn var(var: VariableId, ty: Type) -> Self {
         Self {
             ty,
             span: None,
-            kind: PlaceKind::Dereference(Box::new(expr)),
+            kind: PlaceKind::Variable(var),
         }
     }
 }

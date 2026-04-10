@@ -312,18 +312,15 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                     exprs: vec![
                                                         Expr::set_var(shadowed_var_id, Expr::get_var(var_id, var_type)),
                                                         lowered_body.body,
-                                                        Expr::set_var(
-                                                            var_id,
-                                                            Expr {
-                                                                ty: var_type,
-                                                                span: None,
-                                                                kind: ExprKind::Arithmetic(
-                                                                    ArithmeticOp::Add,
-                                                                    Box::new(Expr::get_var(var_id, var_type)),
-                                                                    Box::new(Expr::const_number(1, var_type)),
-                                                                ),
-                                                            },
-                                                        ),
+                                                        Expr {
+                                                            ty: Type::Unit,
+                                                            span: None,
+                                                            kind: ExprKind::InPlaceArithmetic(
+                                                                ArithmeticOp::Add,
+                                                                Place::var(var_id, var_type),
+                                                                Box::new(Expr::const_number(1, var_type)),
+                                                            ),
+                                                        },
                                                     ],
                                                 }),
                                             }),
@@ -636,45 +633,10 @@ impl<'a> FunctionLoweringCtx<'a> {
                     ))
                     .with_span(e.op_span));
                 }
-                let place_ptr_ty = operands_ty.make_ptr(self.typesystem);
-                let place_ptr_expr = Expr {
-                    ty: place_ptr_ty,
-                    span: None,
-                    kind: ExprKind::GetPointer(lowered_place),
-                };
-                let tmp_var_id = VariableId::new();
                 Ok(Expr {
                     ty: Type::Unit,
                     span,
-                    kind: ExprKind::Block(BlockExpr {
-                        variables: vec![(tmp_var_id, place_ptr_ty)],
-                        exprs: vec![
-                            Expr::set_var(tmp_var_id, place_ptr_expr),
-                            Expr {
-                                ty: Type::Unit,
-                                span: None,
-                                kind: ExprKind::Store(
-                                    Place::dereference(Expr::get_var(tmp_var_id, place_ptr_ty), operands_ty),
-                                    Box::new(Expr {
-                                        ty: operands_ty,
-                                        span: None,
-                                        kind: ExprKind::Arithmetic(
-                                            e.op,
-                                            Box::new(Expr {
-                                                ty: operands_ty,
-                                                span: None,
-                                                kind: ExprKind::Load(Place::dereference(
-                                                    Expr::get_var(tmp_var_id, place_ptr_ty),
-                                                    operands_ty,
-                                                )),
-                                            }),
-                                            Box::new(lowered_value),
-                                        ),
-                                    }),
-                                ),
-                            },
-                        ],
-                    }),
+                    kind: ExprKind::InPlaceArithmetic(e.op, lowered_place, Box::new(lowered_value)),
                 })
             }
             ast::Expr::Binary(binary_expr) => match binary_expr.op {

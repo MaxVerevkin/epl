@@ -28,6 +28,7 @@ pub fn purity_check(body: &Expr, functions: &BTreeMap<FunctionId, Function>) -> 
                 | ExprKind::Return(_)
                 | ExprKind::Break(_, _)
                 | ExprKind::Arithmetic(_, _, _)
+                | ExprKind::InPlaceArithmetic(_, _, _)
                 | ExprKind::Cmp(_, _, _)
                 | ExprKind::If { .. }
                 | ExprKind::Loop(_, _)

@@ -59,39 +59,13 @@ fn fib_it(n: u32) -> u32
     |   |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=u32
     |   |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=u32
-    |   |   |   |   |   BLOCK TYPE=unit
-    |   |   |   |   |   |   DECLARE var_7 : *u32
-    |   |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   GET_POINTER TYPE=*u32
-    |   |   |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=u32
-    |   |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=u32
-    |   |   |   |   |   |   |   |   LOAD TYPE=*u32
-    |   |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   ARITHMETIC(Add) TYPE=u32
-    |   |   |   |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=u32
-    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*u32
-    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u32
-    |   |   |   |   |   BLOCK TYPE=unit
-    |   |   |   |   |   |   DECLARE var_8 : *u32
-    |   |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   GET_POINTER TYPE=*u32
-    |   |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u32
-    |   |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=u32
-    |   |   |   |   |   |   |   |   LOAD TYPE=*u32
-    |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   ARITHMETIC(Add) TYPE=u32
-    |   |   |   |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=u32
-    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*u32
-    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=u32
+    |   |   |   |   |   |   LOAD TYPE=u32
+    |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u32
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u32
+    |   |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
     |   |   |   |   BREAK(loop_1) TYPE=!
     |   |   |   |   |   UNIT TYPE=unit
     |   |   LOAD TYPE=u32
@@ -99,47 +73,34 @@ fn fib_it(n: u32) -> u32
 
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_9 : u32
+    |   DECLARE var_7 : u32
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_9) [PLACE] TYPE=u32
+    |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   CONST_NUMBER(0) TYPE=u32
     |   LOOP(loop_2) TYPE=unit
     |   |   IF TYPE=unit
     |   |   |   CMP(Less) TYPE=bool
     |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
+    |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   |   |   CONST_NUMBER(10) TYPE=u32
     |   |   |   BLOCK TYPE=unit
     |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   CONST_STRING("fib(%i) = %i\n") TYPE=*i8
     |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
+    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   |   |   |   FUNCTION_CALL("fib") TYPE=u32
     |   |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
+    |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   CONST_STRING("fib_id(%i) = %i\n") TYPE=*i8
     |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
+    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   |   |   |   FUNCTION_CALL("fib_it") TYPE=u32
     |   |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
-    |   |   |   |   BLOCK TYPE=unit
-    |   |   |   |   |   DECLARE var_10 : *u32
-    |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   GET_POINTER TYPE=*u32
-    |   |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
-    |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=u32
-    |   |   |   |   |   |   |   LOAD TYPE=*u32
-    |   |   |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   ARITHMETIC(Add) TYPE=u32
-    |   |   |   |   |   |   |   LOAD TYPE=u32
-    |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=u32
-    |   |   |   |   |   |   |   |   |   LOAD TYPE=*u32
-    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*u32
-    |   |   |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
+    |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
+    |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
+    |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
     |   |   |   BREAK(loop_2) TYPE=!
     |   |   |   |   UNIT TYPE=unit
     |   CONST_NUMBER(0) TYPE=i32

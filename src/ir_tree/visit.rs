@@ -44,7 +44,7 @@ impl Expr {
                 visitor.visit_expr(expr2);
             }
 
-            ExprKind::Store(place, value) => {
+            ExprKind::Store(place, value) | ExprKind::InPlaceArithmetic(_, place, value) => {
                 visitor.visit_place(place);
                 visitor.visit_expr(value);
             }
@@ -104,12 +104,12 @@ impl Expr {
                 visitor.visit_expr(&mut *expr2);
             }
 
-            ExprKind::Store(place, value) => {
-                visitor.visit_place(&mut *place);
+            ExprKind::Store(place, value) | ExprKind::InPlaceArithmetic(_, place, value) => {
+                visitor.visit_place(place);
                 visitor.visit_expr(&mut *value);
             }
 
-            ExprKind::Load(place) | ExprKind::GetPointer(place) => visitor.visit_place(&mut *place),
+            ExprKind::Load(place) | ExprKind::GetPointer(place) => visitor.visit_place(place),
 
             ExprKind::Block(bexpr) => {
                 for expr in &mut bexpr.exprs {

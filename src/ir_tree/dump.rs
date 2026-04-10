@@ -47,6 +47,7 @@ impl ExprVisitor for Writer<'_> {
             ExprKind::Return(_) => self.output.push_str("RETURN"),
             ExprKind::Break(loop_id, _) => write!(self.output, "BREAK({loop_id:?})").unwrap(),
             ExprKind::Arithmetic(op, _, _) => write!(self.output, "ARITHMETIC({op:?})").unwrap(),
+            ExprKind::InPlaceArithmetic(op, _, _) => write!(self.output, "INPLACE_ARITHMETIC({op:?})").unwrap(),
             ExprKind::Cmp(op, _, _) => write!(self.output, "CMP({op:?})").unwrap(),
             ExprKind::If { .. } => self.output.push_str("IF"),
             ExprKind::Loop(loop_id, _) => write!(self.output, "LOOP({loop_id:?})").unwrap(),

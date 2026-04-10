@@ -266,6 +266,24 @@ impl<'a> BodyLoweringCtx<'a> {
                 };
                 EvalResult::Value(Value::Definition(self.cursor().arithmetic(*op, signed, lhs, rhs)))
             }
+            ir_tree::ExprKind::InPlaceArithmetic(op, lhs, rhs) => {
+                let signed = lhs.ty.is_signed_int();
+                let operands_ty = lower_type(self.module, lhs.ty);
+                let lhs_ptr = match self.eval_place_as_ptr(lhs)? {
+                    EvalResult::Never => return Ok(EvalResult::Never),
+                    EvalResult::Value(val) => val,
+                };
+                let rhs = match self.eval_expr(rhs)? {
+                    EvalResult::Never => return Ok(EvalResult::Never),
+                    EvalResult::Value(val) => val,
+                };
+                let lhs_before = self.cursor().load(lhs_ptr.clone(), operands_ty);
+                let result = self
+                    .cursor()
+                    .arithmetic(*op, signed, Value::Definition(lhs_before), rhs);
+                self.cursor().store(lhs_ptr, Value::Definition(result));
+                EvalResult::Value(Value::Zst)
+            }
             ir_tree::ExprKind::Cmp(op, lhs, rhs) => {
                 let signed = lhs.ty.is_signed_int();
                 let lhs = match self.eval_expr(lhs)? {
