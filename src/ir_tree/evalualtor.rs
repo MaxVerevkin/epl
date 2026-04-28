@@ -119,9 +119,15 @@ impl EvalCtx<'_> {
                 todo!()
             }
             ExprKind::ArrayElement(expr, index) => {
-                let array_value = self.eval_expr(expr)?;
-                let index_value = self.eval_expr(expr)?;
-                todo!()
+                let mut elements = match self.eval_expr(expr)? {
+                    Constant::Array(_, elements) => elements,
+                    _other => unreachable!(),
+                };
+                let index_value = match self.eval_expr(index)? {
+                    Constant::U64(index) => index,
+                    _other => unreachable!(),
+                };
+                elements.remove(index_value as usize)
             }
             ExprKind::Store(place, expr) => {
                 let place_value = self.eval_place(place)?;
