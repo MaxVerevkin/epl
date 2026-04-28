@@ -1,25 +1,22 @@
 fn main() {
-	let primes = comptime make_primes_lut();
+	let primes = comptime {
+		let lut: [i32; 20];
+		let ready = 0;
+		let next = 3;
+		while ready < 20 {
+			while !is_prime(next) {
+				next += 2;
+			}
+			lut[ready as u64] = next;
+			ready += 1;
+			next += 2;
+		}
+		lut
+	};
 	for i in 0..20 {
 		printf("%i ", primes[i as u64]);
 	}
 	printf("\n")
-}
-
-@pure
-fn make_primes_lut() -> [i32; 20] {
-	let lut: [i32; 20];
-	let ready = 0;
-	let next = 3;
-	while ready < 20 {
-		while !is_prime(next) {
-			next += 2;
-		}
-		lut[ready as u64] = next;
-		ready += 1;
-		next += 2;
-	}
-	lut
 }
 
 @pure

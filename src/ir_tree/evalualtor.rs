@@ -11,16 +11,31 @@ pub enum Error {
 }
 
 pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Error> {
-    let ExprKind::FunctionCall(function_id, args) = &expr.kind else {
-        return Err(Error::BadIr(
-            "only function calls are implemented inside comptime".to_owned(),
-        ));
+    let mut ctx = EvalCtx {
+        module,
+        in_function_call: None,
+        scope: Scope::default(),
     };
-    let args = args
-        .iter()
-        .map(|arg| eval_expr_simple(arg, module))
-        .collect::<Result<Vec<_>, _>>()?;
-    eval_pure_function(*function_id, args, module)
+    match ctx.eval_expr(expr) {
+        Err(Error::Return(..)) => panic!("cannot return from a comptime block"),
+        Err(Error::Break(..)) => panic!("cannot break from a comptime block"),
+        other => other,
+    }
+}
+
+fn eval_pure_function(function_id: FunctionId, arguments: &[Constant], module: &Module) -> Result<Constant, Error> {
+    let function = &module.functions[&function_id];
+    let body = function.body.as_ref().unwrap();
+    let mut ctx = EvalCtx {
+        module,
+        in_function_call: Some(InFunctionCall { function, arguments }),
+        scope: Scope::default(),
+    };
+    match ctx.eval_expr(body) {
+        Err(Error::Return(value)) => Ok(value),
+        Err(Error::Break(..)) => unreachable!(),
+        other => other,
+    }
 }
 
 impl Constant {
@@ -38,52 +53,49 @@ struct ConstantPlace {
     bytes_offset: usize,
 }
 
+#[derive(Debug)]
 struct VariableMemory {
     bytes: Vec<u8>,
 }
 
-fn eval_pure_function(function_id: FunctionId, arguments: Vec<Constant>, module: &Module) -> Result<Constant, Error> {
-    let function = &module.functions[&function_id];
-    let body = function.body.as_ref().unwrap();
-    let mut ctx = EvalCtx {
-        function,
-        arguments,
-        module,
-        variables: HashMap::new(),
-    };
-    match ctx.eval_expr(body) {
-        Err(Error::Return(value)) => Ok(value),
-        Err(Error::Break(..)) => unreachable!(),
-        other => other,
+struct EvalCtx<'a> {
+    module: &'a Module,
+    in_function_call: Option<InFunctionCall<'a>>,
+    scope: Scope,
+}
+
+#[derive(Clone, Copy)]
+struct InFunctionCall<'a> {
+    function: &'a Function,
+    arguments: &'a [Constant],
+}
+
+#[derive(Default, Debug)]
+struct Scope {
+    variables: HashMap<VariableId, VariableMemory>,
+    parent: Option<Box<Self>>,
+}
+
+impl Scope {
+    fn get_variable(&mut self, id: VariableId) -> Option<&mut VariableMemory> {
+        self.variables
+            .get_mut(&id)
+            .or_else(|| self.parent.as_mut().and_then(|p| p.get_variable(id)))
     }
 }
 
-struct EvalCtx<'a> {
-    function: &'a Function,
-    arguments: Vec<Constant>,
-    module: &'a Module,
-    variables: HashMap<VariableId, VariableMemory>,
-}
-
-fn eval_expr_simple(expr: &Expr, module: &Module) -> Result<Constant, Error> {
-    Ok(match &expr.kind {
-        ExprKind::Const(value) => value.clone(),
-        ExprKind::Comptime(expr) => eval_comptime_expr(expr, module)?,
-        _other => return Err(Error::BadIr("this is not a simple expr".to_owned())),
-    })
-}
-
 impl EvalCtx<'_> {
-    fn load(&self, place: ConstantPlace, ty: Type) -> Constant {
+    fn load(&mut self, place: ConstantPlace, ty: Type) -> Constant {
+        let mem = self.scope.get_variable(place.variable).unwrap();
         let layout = ty.layout(&self.module.typesystem);
-        let bytes = &self.variables[&place.variable].bytes[place.bytes_offset..][..layout.size as usize];
+        let bytes = &mem.bytes[place.bytes_offset..][..layout.size as usize];
         const_abi::constant_from_bytes(bytes, ty, &self.module.typesystem)
     }
 
     fn store(&mut self, place: ConstantPlace, value: &Constant) {
+        let mem = self.scope.get_variable(place.variable).unwrap();
         let bytes = const_abi::constant_to_bytes(value, &self.module.typesystem);
-        self.variables.get_mut(&place.variable).unwrap().bytes[place.bytes_offset..][..bytes.len()]
-            .copy_from_slice(&bytes);
+        mem.bytes[place.bytes_offset..][..bytes.len()].copy_from_slice(&bytes);
     }
 
     fn eval_expr(&mut self, expr: &Expr) -> Result<Constant, Error> {
@@ -111,34 +123,40 @@ impl EvalCtx<'_> {
             }
             ExprKind::GetPointer(place) => todo!(),
             ExprKind::Argument(argument_name) => {
-                let i = self
+                let in_fn = self.in_function_call.as_ref().unwrap();
+                let i = in_fn
                     .function
                     .args
                     .iter()
                     .position(|(name, _ty)| name == argument_name)
                     .unwrap();
-                self.arguments[i].clone()
+                in_fn.arguments[i].clone()
             }
             ExprKind::Block(block_expr) => {
-                for (variable, ty) in &block_expr.variables {
-                    let layout = ty.layout(&self.module.typesystem);
-                    self.variables.insert(
-                        *variable,
-                        VariableMemory {
-                            bytes: vec![0; layout.size as usize],
-                        },
-                    );
-                }
-                fn on_block_exit(ctx: &mut EvalCtx<'_>, block_expr: &BlockExpr) {
-                    for (variable, _) in &block_expr.variables {
-                        ctx.variables.remove(variable);
-                    }
-                }
+                let mut ctx = EvalCtx {
+                    module: self.module,
+                    in_function_call: self.in_function_call,
+                    scope: Scope {
+                        variables: block_expr
+                            .variables
+                            .iter()
+                            .map(|(id, ty)| {
+                                (
+                                    *id,
+                                    VariableMemory {
+                                        bytes: vec![0; ty.layout(&self.module.typesystem).size as usize],
+                                    },
+                                )
+                            })
+                            .collect(),
+                        parent: Some(Box::new(std::mem::take(&mut self.scope))),
+                    },
+                };
                 let value = 'blk: {
                     for (expr_i, expr) in block_expr.exprs.iter().enumerate() {
-                        match self.eval_expr(expr) {
+                        match ctx.eval_expr(expr) {
                             Err(e) => {
-                                on_block_exit(self, block_expr);
+                                self.scope = *ctx.scope.parent.unwrap();
                                 return Err(e);
                             }
                             Ok(value) => {
@@ -150,7 +168,7 @@ impl EvalCtx<'_> {
                     }
                     Constant::Unit
                 };
-                on_block_exit(self, block_expr);
+                self.scope = *ctx.scope.parent.unwrap();
                 value
             }
             ExprKind::Return(expr) => return Err(Error::Return(self.eval_expr(expr)?)),
@@ -198,11 +216,11 @@ impl EvalCtx<'_> {
                     .iter()
                     .map(|expr| self.eval_expr(expr))
                     .collect::<Result<Vec<_>, _>>()?;
-                eval_pure_function(*function_id, arguments_values, self.module)?
+                eval_pure_function(*function_id, &arguments_values, self.module)?
             }
             ExprKind::Cast(expr_to_cast) => arithmetic_and_cmp::eval_cast(self.eval_expr(expr_to_cast)?, expr.ty)?,
             ExprKind::Not(expr) => Constant::Bool(!self.eval_expr(expr)?.into_bool().unwrap()),
-            ExprKind::Comptime(expr) => eval_comptime_expr(expr, self.module)?,
+            ExprKind::Comptime(expr) => self.eval_expr(expr)?,
         })
     }
 
