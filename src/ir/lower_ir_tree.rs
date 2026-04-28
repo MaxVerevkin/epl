@@ -163,11 +163,8 @@ impl<'a> BodyLoweringCtx<'a> {
     fn eval_expr(&mut self, expr: &ir_tree::Expr) -> Result<EvalResult, Error> {
         let ty = lower_type(self.module, expr.ty);
         Ok(match &expr.kind {
-            ir_tree::ExprKind::Undefined => EvalResult::Value(Value::Undefined(ty)),
-            ir_tree::ExprKind::ConstUnit => EvalResult::Value(Value::Zst),
-            ir_tree::ExprKind::ConstNumber(num) => EvalResult::Value(Value::Number { data: *num, ty }),
+            ir_tree::ExprKind::Const(value) => EvalResult::Value(self.eval_const(value)),
             ir_tree::ExprKind::ConstString(str) => EvalResult::Value(Value::String(str.clone())),
-            ir_tree::ExprKind::ConstBool(bool) => EvalResult::Value(Value::Bool(*bool)),
 
             ir_tree::ExprKind::Load(place) => match self.eval_place_as_ptr(place)? {
                 EvalResult::Never => EvalResult::Never,
@@ -419,6 +416,9 @@ impl<'a> BodyLoweringCtx<'a> {
                 };
                 EvalResult::Value(Value::Definition(self.cursor().not(value)))
             }
+            ir_tree::ExprKind::Comptime(_) => {
+                panic!("comptime exprs must have been evaluated before IR_TREE -> IR lowering");
+            }
         })
     }
 
@@ -470,6 +470,76 @@ impl<'a> BodyLoweringCtx<'a> {
                 EvalResult::Value(Value::Definition(alloca))
             }
         })
+    }
+
+    fn eval_const(&mut self, value: &ir_tree::Constant) -> Value {
+        match value {
+            ir_tree::Constant::Undefined(ty) => Value::Undefined(lower_type(self.module, *ty)),
+            ir_tree::Constant::Unit => Value::Zst,
+            ir_tree::Constant::Bool(bool) => Value::Bool(*bool),
+            ir_tree::Constant::I8(int) => Value::Number {
+                data: *int as i64,
+                ty: Type::I8,
+            },
+            ir_tree::Constant::U8(int) => Value::Number {
+                data: *int as i64,
+                ty: Type::I8,
+            },
+            ir_tree::Constant::I32(int) => Value::Number {
+                data: *int as i64,
+                ty: Type::I32,
+            },
+            ir_tree::Constant::U32(int) => Value::Number {
+                data: *int as i64,
+                ty: Type::I32,
+            },
+            ir_tree::Constant::I64(int) => Value::Number {
+                data: *int as i64,
+                ty: Type::I64,
+            },
+            ir_tree::Constant::U64(int) => Value::Number {
+                data: *int as i64,
+                ty: Type::I64,
+            },
+            ir_tree::Constant::Array(..) => {
+                let ty = lower_type(self.module, value.ty());
+                let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
+                self.eval_const_into(alloca.clone(), value);
+                Value::Definition(self.cursor().load(alloca, ty))
+            }
+        }
+    }
+
+    fn eval_const_into(&mut self, place_ptr: Value, value: &ir_tree::Constant) {
+        match value {
+            ir_tree::Constant::Undefined(_)
+            | ir_tree::Constant::Unit
+            | ir_tree::Constant::Bool(_)
+            | ir_tree::Constant::I8(_)
+            | ir_tree::Constant::U8(_)
+            | ir_tree::Constant::I32(_)
+            | ir_tree::Constant::U32(_)
+            | ir_tree::Constant::I64(_)
+            | ir_tree::Constant::U64(_) => {
+                let value = self.eval_const(value);
+                self.cursor().store(place_ptr, value)
+            }
+            ir_tree::Constant::Array(element_ty, elements) => {
+                let element_size = self
+                    .module
+                    .typesystem
+                    .get_type(*element_ty)
+                    .layout(&self.module.typesystem)
+                    .size;
+                for (i, element) in elements.iter().enumerate() {
+                    let element = self.eval_const(element);
+                    let ptr = self
+                        .cursor()
+                        .offset_ptr(place_ptr.clone(), Value::new_i64(i as i64 * element_size as i64));
+                    self.cursor().store(ptr, element);
+                }
+            }
+        }
     }
 
     /// Evaluate array initializer and store the elements into provided array place. Returns `place_ptr`.

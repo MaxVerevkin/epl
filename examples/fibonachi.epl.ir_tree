@@ -8,7 +8,7 @@ fn fib(n: u32) -> u32
     |   |   CMP(Less) TYPE=bool
     |   |   |   LOAD TYPE=u32
     |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=u32
-    |   |   |   CONST_NUMBER(2) TYPE=u32
+    |   |   |   CONST 2 TYPE=u32
     |   |   LOAD TYPE=u32
     |   |   |   VARIABLE(var_1) [PLACE] TYPE=u32
     |   |   ARITHMETIC(Add) TYPE=u32
@@ -16,12 +16,12 @@ fn fib(n: u32) -> u32
     |   |   |   |   ARITHMETIC(Sub) TYPE=u32
     |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=u32
-    |   |   |   |   |   CONST_NUMBER(2) TYPE=u32
+    |   |   |   |   |   CONST 2 TYPE=u32
     |   |   |   FUNCTION_CALL("fib") TYPE=u32
     |   |   |   |   ARITHMETIC(Sub) TYPE=u32
     |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=u32
-    |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
+    |   |   |   |   |   CONST 1 TYPE=u32
 
 fn fib_it(n: u32) -> u32
     BLOCK TYPE=u32
@@ -35,13 +35,13 @@ fn fib_it(n: u32) -> u32
     |   |   DECLARE var_5 : u32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_3) [PLACE] TYPE=u32
-    |   |   |   CONST_NUMBER(0) TYPE=u32
+    |   |   |   CONST 0 TYPE=u32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_4) [PLACE] TYPE=u32
-    |   |   |   CONST_NUMBER(1) TYPE=u32
+    |   |   |   CONST 1 TYPE=u32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_5) [PLACE] TYPE=u32
-    |   |   |   CONST_NUMBER(0) TYPE=u32
+    |   |   |   CONST 0 TYPE=u32
     |   |   LOOP(loop_1) TYPE=unit
     |   |   |   IF TYPE=unit
     |   |   |   |   CMP(Less) TYPE=bool
@@ -65,9 +65,9 @@ fn fib_it(n: u32) -> u32
     |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u32
     |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
     |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u32
-    |   |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
+    |   |   |   |   |   |   CONST 1 TYPE=u32
     |   |   |   |   BREAK(loop_1) TYPE=!
-    |   |   |   |   |   UNIT TYPE=unit
+    |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   LOAD TYPE=u32
     |   |   |   VARIABLE(var_3) [PLACE] TYPE=u32
 
@@ -76,13 +76,13 @@ fn main() -> i32
     |   DECLARE var_7 : u32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_7) [PLACE] TYPE=u32
-    |   |   CONST_NUMBER(0) TYPE=u32
+    |   |   CONST 0 TYPE=u32
     |   LOOP(loop_2) TYPE=unit
     |   |   IF TYPE=unit
     |   |   |   CMP(Less) TYPE=bool
     |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
-    |   |   |   |   CONST_NUMBER(10) TYPE=u32
+    |   |   |   |   CONST 10 TYPE=u32
     |   |   |   BLOCK TYPE=unit
     |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   CONST_STRING("fib(%i) = %i\n") TYPE=*i8
@@ -100,10 +100,10 @@ fn main() -> i32
     |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
     |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
-    |   |   |   |   |   CONST_NUMBER(1) TYPE=u32
+    |   |   |   |   |   CONST 1 TYPE=u32
     |   |   |   BREAK(loop_2) TYPE=!
-    |   |   |   |   UNIT TYPE=unit
-    |   CONST_NUMBER(0) TYPE=i32
+    |   |   |   |   CONST UNIT TYPE=unit
+    |   CONST 0 TYPE=i32
 
 fn printf(fmt: *i8, ...) -> unit
 

@@ -3,13 +3,13 @@ fn main() -> i32
     |   DECLARE var_1 : i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=i32
-    |   |   CONST_NUMBER(0) TYPE=i32
+    |   |   CONST 0 TYPE=i32
     |   LOOP(loop_1) TYPE=unit
     |   |   IF TYPE=unit
     |   |   |   CMP(Less) TYPE=bool
     |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
-    |   |   |   |   CONST_NUMBER(5) TYPE=i32
+    |   |   |   |   CONST 5 TYPE=i32
     |   |   |   BLOCK TYPE=unit
     |   |   |   |   FUNCTION_CALL("inc") TYPE=unit
     |   |   |   |   |   GET_POINTER TYPE=*i32
@@ -19,8 +19,8 @@ fn main() -> i32
     |   |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
     |   |   |   BREAK(loop_1) TYPE=!
-    |   |   |   |   UNIT TYPE=unit
-    |   CONST_NUMBER(0) TYPE=i32
+    |   |   |   |   CONST UNIT TYPE=unit
+    |   CONST 0 TYPE=i32
 
 fn inc(num: *i32) -> unit
     BLOCK TYPE=unit
@@ -32,7 +32,7 @@ fn inc(num: *i32) -> unit
     |   |   DEREFERENCE [PLACE] TYPE=i32
     |   |   |   LOAD TYPE=*i32
     |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=*i32
-    |   |   CONST_NUMBER(1) TYPE=i32
+    |   |   CONST 1 TYPE=i32
 
 fn printf(fmt: *i8, ...) -> unit
 

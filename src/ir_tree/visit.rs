@@ -1,11 +1,11 @@
 use super::*;
 
-pub trait ExprVisitor: Sized {
-    fn visit_expr(&mut self, expr: &Expr) {
+pub trait ExprVisitor<'a>: Sized {
+    fn visit_expr(&mut self, expr: &'a Expr) {
         expr.visit_children(self);
     }
 
-    fn visit_place(&mut self, place: &Place) {
+    fn visit_place(&mut self, place: &'a Place) {
         place.visit_children(self);
     }
 }
@@ -21,21 +21,17 @@ pub trait ExprVisitorMut: Sized {
 }
 
 impl Expr {
-    pub fn visit_children(&self, visitor: &mut impl ExprVisitor) {
+    pub fn visit_children<'a>(&'a self, visitor: &mut impl ExprVisitor<'a>) {
         match &self.kind {
-            ExprKind::Undefined
-            | ExprKind::ConstUnit
-            | ExprKind::ConstNumber(_)
-            | ExprKind::ConstString(_)
-            | ExprKind::ConstBool(_)
-            | ExprKind::Argument(_) => (),
+            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_) => (),
 
             ExprKind::Field(expr, _)
             | ExprKind::Return(expr)
             | ExprKind::Break(_, expr)
             | ExprKind::Loop(_, expr)
             | ExprKind::Cast(expr)
-            | ExprKind::Not(expr) => visitor.visit_expr(expr),
+            | ExprKind::Not(expr)
+            | ExprKind::Comptime(expr) => visitor.visit_expr(expr),
 
             ExprKind::ArrayElement(expr1, expr2)
             | ExprKind::Arithmetic(_, expr1, expr2)
@@ -83,19 +79,15 @@ impl Expr {
 
     pub fn visit_children_mut(&mut self, visitor: &mut impl ExprVisitorMut) {
         match &mut self.kind {
-            ExprKind::Undefined
-            | ExprKind::ConstUnit
-            | ExprKind::ConstNumber(_)
-            | ExprKind::ConstString(_)
-            | ExprKind::ConstBool(_)
-            | ExprKind::Argument(_) => (),
+            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_) => (),
 
             ExprKind::Field(expr, _)
             | ExprKind::Return(expr)
             | ExprKind::Break(_, expr)
             | ExprKind::Loop(_, expr)
             | ExprKind::Cast(expr)
-            | ExprKind::Not(expr) => visitor.visit_expr(&mut *expr),
+            | ExprKind::Not(expr)
+            | ExprKind::Comptime(expr) => visitor.visit_expr(&mut *expr),
 
             ExprKind::ArrayElement(expr1, expr2)
             | ExprKind::Arithmetic(_, expr1, expr2)
@@ -143,7 +135,7 @@ impl Expr {
 }
 
 impl Place {
-    pub fn visit_children(&self, visitor: &mut impl ExprVisitor) {
+    pub fn visit_children<'a>(&'a self, visitor: &mut impl ExprVisitor<'a>) {
         match &self.kind {
             PlaceKind::Variable(_) => (),
             PlaceKind::Dereference(ptr) => visitor.visit_expr(ptr),

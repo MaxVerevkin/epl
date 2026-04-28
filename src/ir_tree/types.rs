@@ -35,6 +35,14 @@ impl Type {
         matches!(self, Self::Int(_))
     }
 
+    /// Returns the `IntType` of this type if it is an integer
+    pub fn as_int(self) -> Option<IntType> {
+        match self {
+            Self::Int(i) => Some(i),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if this data type is an integer that is signed
     pub fn is_signed_int(self) -> bool {
         matches!(self, Self::Int(i) if i.is_signed())

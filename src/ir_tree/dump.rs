@@ -27,16 +27,16 @@ struct Writer<'a> {
     indent_level: u32,
 }
 
-impl ExprVisitor for Writer<'_> {
+impl ExprVisitor<'_> for Writer<'_> {
     fn visit_expr(&mut self, expr: &Expr) {
         self.indent();
 
         match &expr.kind {
-            ExprKind::Undefined => self.output.push_str("UNDEFINED"),
-            ExprKind::ConstUnit => self.output.push_str("UNIT"),
-            ExprKind::ConstNumber(num) => write!(self.output, "CONST_NUMBER({num})").unwrap(),
+            ExprKind::Const(value) => {
+                self.output.push_str("CONST ");
+                self.dump_constant(value);
+            }
             ExprKind::ConstString(str) => write!(self.output, "CONST_STRING({str:?})").unwrap(),
-            ExprKind::ConstBool(bool) => write!(self.output, "CONST_BOOL({bool})").unwrap(),
             ExprKind::Load(_) => self.output.push_str("LOAD"),
             ExprKind::Field(_, field) => write!(self.output, "FIELD_ACCESS({field})").unwrap(),
             ExprKind::ArrayElement(_, _) => self.output.push_str("ARRAY_ELEMENT"),
@@ -61,6 +61,7 @@ impl ExprVisitor for Writer<'_> {
             .unwrap(),
             ExprKind::Cast(_) => self.output.push_str("CAST"),
             ExprKind::Not(_) => self.output.push_str("NOT"),
+            ExprKind::Comptime(_) => self.output.push_str("COMPTIME"),
         }
 
         self.output.push_str(" TYPE=");
@@ -161,5 +162,29 @@ impl Writer<'_> {
         self.output.push_str(") -> ");
         self.dump_type(function.return_ty);
         self.output.push('\n');
+    }
+
+    fn dump_constant(&mut self, value: &Constant) {
+        match value {
+            Constant::Undefined(_) => self.output.push_str("UNDEFINED"),
+            Constant::Unit => self.output.push_str("UNIT"),
+            Constant::Bool(bool) => write!(self.output, "{bool}").unwrap(),
+            Constant::I8(num) => write!(self.output, "{num}").unwrap(),
+            Constant::U8(num) => write!(self.output, "{num}").unwrap(),
+            Constant::I32(num) => write!(self.output, "{num}").unwrap(),
+            Constant::U32(num) => write!(self.output, "{num}").unwrap(),
+            Constant::I64(num) => write!(self.output, "{num}").unwrap(),
+            Constant::U64(num) => write!(self.output, "{num}").unwrap(),
+            Constant::Array(_, elements) => {
+                self.output.push('[');
+                for (i, element) in elements.iter().enumerate() {
+                    self.dump_constant(element);
+                    if i + 1 != elements.len() {
+                        self.output.push_str(", ");
+                    }
+                }
+                self.output.push(']');
+            }
+        }
     }
 }

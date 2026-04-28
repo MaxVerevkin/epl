@@ -264,6 +264,7 @@ impl<'a> FunctionLoweringCtx<'a> {
 
                 // Only i32 is supported for now
                 let var_type = Type::Int(IntType::I32);
+                let var_type_int = var_type.as_int().unwrap();
                 let from_expr = self.lower_expr(&range_expr.from, Some(var_type))?;
                 let to_expr = self.lower_expr(&range_expr.to, Some(var_type))?;
 
@@ -318,7 +319,10 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                             kind: ExprKind::InPlaceArithmetic(
                                                                 ArithmeticOp::Add,
                                                                 Place::var(var_id, var_type),
-                                                                Box::new(Expr::const_number(1, var_type)),
+                                                                Box::new(Expr::new_const(Constant::int(
+                                                                    1,
+                                                                    var_type_int,
+                                                                ))),
                                                             ),
                                                         },
                                                     ],
@@ -518,7 +522,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     Ok(Expr {
                         ty: Type::Int(int_ty),
                         span,
-                        kind: ExprKind::ConstNumber(*number),
+                        kind: ExprKind::Const(Constant::int(*number, int_ty)),
                     })
                 }
                 ast::LiteralExprValue::String(string) => {
@@ -543,7 +547,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         Ok(Expr {
                             ty: Type::Bool,
                             span,
-                            kind: ExprKind::ConstBool(*bool),
+                            kind: ExprKind::Const(Constant::Bool(*bool)),
                         })
                     }
                 }
@@ -553,7 +557,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     Ok(Expr {
                         ty,
                         span,
-                        kind: ExprKind::Undefined,
+                        kind: ExprKind::Const(Constant::Undefined(ty)),
                     })
                 }
             },
@@ -739,7 +743,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         span,
                         kind: ExprKind::Arithmetic(
                             ArithmeticOp::Sub,
-                            Box::new(Expr::const_number(0, Type::Int(int_ty))),
+                            Box::new(Expr::new_const(Constant::int(0, int_ty))),
                             Box::new(lowered_rhs),
                         ),
                     })
@@ -791,8 +795,13 @@ impl<'a> FunctionLoweringCtx<'a> {
                     }
                 }
             }
-            ast::Expr::Comptime(_) => {
-                unimplemented!("comptime blocks are not yet implemented")
+            ast::Expr::Comptime(cexpr) => {
+                let lowered_cexpr = self.lower_expr(&cexpr.expr, expect_type)?;
+                Ok(Expr {
+                    ty: lowered_cexpr.ty,
+                    span,
+                    kind: ExprKind::Comptime(Box::new(lowered_cexpr)),
+                })
             }
             ast::Expr::Range(_range_expr) => {
                 unimplemented!("range expressions cannot be evaluated yet")

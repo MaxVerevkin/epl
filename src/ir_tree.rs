@@ -1,5 +1,6 @@
 mod checkers;
 mod dump;
+mod evalualtor;
 mod lower_ast;
 mod opt;
 mod types;
@@ -7,10 +8,10 @@ mod visit;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-pub use types::{IntType, Type, TypeSystem};
+pub use types::{IntType, Type, TypeId, TypeSystem};
 
 use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
-use crate::ir_tree::visit::ExprVisitorMut;
+use crate::ir_tree::visit::{ExprVisitor, ExprVisitorMut};
 use crate::{ast, lex, make_entity_id};
 
 /// An error during IR construction and typechecking
@@ -112,6 +113,51 @@ impl Module {
             }
         }
 
+        for function_id in functions.keys().copied().collect::<Vec<_>>() {
+            // TODO: this is ridiculusly inefficient O(n^2), for something that could potentially be O(n).
+
+            fn get_first_comptime_expr(function: &Function) -> Option<&Expr> {
+                struct Visitor<'a>(Option<&'a Expr>);
+                impl<'a> ExprVisitor<'a> for Visitor<'a> {
+                    fn visit_expr(&mut self, expr: &'a Expr) {
+                        match &expr.kind {
+                            ExprKind::Comptime(expr) => {
+                                if self.0.is_none() {
+                                    self.0 = Some(expr);
+                                }
+                            }
+                            _ => expr.visit_children(self),
+                        }
+                    }
+                }
+                let mut v = Visitor(None);
+                v.visit_expr(function.body.as_ref()?);
+                v.0
+            }
+
+            fn set_first_comptime_expr(function: &mut Function, value: Constant) {
+                struct Visitor(Option<Constant>);
+                impl ExprVisitorMut for Visitor {
+                    fn visit_expr(&mut self, expr: &mut Expr) {
+                        if matches!(expr.kind, ExprKind::Comptime(_)) {
+                            if let Some(value) = self.0.take() {
+                                *expr = Expr::new_const(value);
+                            }
+                        } else {
+                            expr.visit_children_mut(self);
+                        }
+                    }
+                }
+                let mut v = Visitor(Some(value));
+                v.visit_expr(function.body.as_mut().unwrap());
+            }
+
+            while let Some(expr) = get_first_comptime_expr(&functions[&function_id]) {
+                let evaluated = evalualtor::eval_comptime_expr(expr, &functions, &typesystem).unwrap();
+                set_first_comptime_expr(functions.get_mut(&function_id).unwrap(), evaluated);
+            }
+        }
+
         Ok(Self { typesystem, functions })
     }
 
@@ -197,11 +243,8 @@ impl Place {
 
 #[derive(Debug)]
 pub enum ExprKind {
-    Undefined,
-    ConstUnit,
-    ConstNumber(i64),
+    Const(Constant),
     ConstString(String),
-    ConstBool(bool),
 
     Load(Place),
     Field(Box<Expr>, String),
@@ -224,6 +267,7 @@ pub enum ExprKind {
     FunctionCall(FunctionId, Vec<Expr>),
     Cast(Box<Expr>),
     Not(Box<Expr>),
+    Comptime(Box<Expr>),
 }
 
 #[derive(Debug)]
@@ -232,6 +276,51 @@ pub enum PlaceKind {
     Variable(VariableId),
     Field(Box<Place>, String),
     ArrayElement(Box<Place>, Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Constant {
+    Undefined(Type),
+    Unit,
+    Bool(bool),
+    I8(i8),
+    U8(u8),
+    I32(i32),
+    U32(u32),
+    I64(i64),
+    U64(u64),
+    Array(TypeId, Vec<Self>),
+}
+
+impl Constant {
+    pub fn ty(&self) -> Type {
+        match self {
+            Self::Undefined(ty) => *ty,
+            Self::Unit => Type::Unit,
+            Self::Bool(_) => Type::Bool,
+            Self::I8(_) => Type::Int(IntType::I8),
+            Self::U8(_) => Type::Int(IntType::U8),
+            Self::I32(_) => Type::Int(IntType::I32),
+            Self::U32(_) => Type::Int(IntType::U32),
+            Self::I64(_) => Type::Int(IntType::I64),
+            Self::U64(_) => Type::Int(IntType::U64),
+            Self::Array(element_ty, elements) => Type::Array {
+                element: *element_ty,
+                length: elements.len() as u64,
+            },
+        }
+    }
+
+    pub fn int(number: i64, ty: IntType) -> Self {
+        match ty {
+            IntType::I8 => Self::I8(number as _),
+            IntType::U8 => Self::U8(number as _),
+            IntType::I32 => Self::I32(number as _),
+            IntType::U32 => Self::U32(number as _),
+            IntType::I64 => Self::I64(number as _),
+            IntType::U64 => Self::U64(number as _),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -244,7 +333,7 @@ impl Expr {
     const UNIT: Self = Self {
         ty: Type::Unit,
         span: None,
-        kind: ExprKind::ConstUnit,
+        kind: ExprKind::Const(Constant::Unit),
     };
 
     pub fn into_place(self) -> Option<Place> {
@@ -260,11 +349,8 @@ impl Expr {
                 span: self.span,
                 kind: PlaceKind::ArrayElement(Box::new(place.into_place()?), index),
             }),
-            ExprKind::Undefined
-            | ExprKind::ConstUnit
-            | ExprKind::ConstNumber(..)
+            ExprKind::Const(..)
             | ExprKind::ConstString(..)
-            | ExprKind::ConstBool(..)
             | ExprKind::Store(..)
             | ExprKind::GetPointer(..)
             | ExprKind::Argument(..)
@@ -280,7 +366,8 @@ impl Expr {
             | ExprKind::StructInitializer(..)
             | ExprKind::FunctionCall(..)
             | ExprKind::Cast(..)
-            | ExprKind::Not(..) => None,
+            | ExprKind::Not(..)
+            | ExprKind::Comptime(..) => None,
         }
     }
 
@@ -313,11 +400,11 @@ impl Expr {
         }
     }
 
-    fn const_number(number: i64, ty: Type) -> Self {
+    fn new_const(constant: Constant) -> Self {
         Self {
-            ty,
+            ty: constant.ty(),
             span: None,
-            kind: ExprKind::ConstNumber(number),
+            kind: ExprKind::Const(constant),
         }
     }
 
@@ -325,7 +412,7 @@ impl Expr {
         Self {
             ty: Type::Bool,
             span: None,
-            kind: ExprKind::ConstBool(bool),
+            kind: ExprKind::Const(Constant::Bool(bool)),
         }
     }
 }

@@ -7,18 +7,14 @@ pub fn purity_check(body: &Expr, functions: &BTreeMap<FunctionId, Function>) -> 
         functions: &'a BTreeMap<FunctionId, Function>,
     }
 
-    impl ExprVisitor for Visitor<'_> {
+    impl ExprVisitor<'_> for Visitor<'_> {
         fn visit_expr(&mut self, expr: &Expr) {
             if self.error.is_some() {
                 return;
             }
 
             match &expr.kind {
-                ExprKind::Undefined
-                | ExprKind::ConstUnit
-                | ExprKind::ConstNumber(_)
-                | ExprKind::ConstString(_)
-                | ExprKind::ConstBool(_)
+                ExprKind::Const(..)
                 | ExprKind::Load(_)
                 | ExprKind::Field(_, _)
                 | ExprKind::ArrayElement(_, _)
@@ -35,7 +31,15 @@ pub fn purity_check(body: &Expr, functions: &BTreeMap<FunctionId, Function>) -> 
                 | ExprKind::ArrayInitializer(_)
                 | ExprKind::StructInitializer(_)
                 | ExprKind::Cast(_)
-                | ExprKind::Not(_) => (),
+                | ExprKind::Not(_)
+                | ExprKind::Comptime(_) => (),
+                ExprKind::ConstString(_) => {
+                    self.error = Some(
+                        Error::new("constant strings in pure functions are not yet supported")
+                            .with_span(expr.span.unwrap()),
+                    );
+                    return;
+                }
                 ExprKind::GetPointer(_) => {
                     self.error =
                         Some(Error::new("getting pointers is not a pure operation").with_span(expr.span.unwrap()));

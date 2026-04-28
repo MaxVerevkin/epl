@@ -27,7 +27,7 @@ impl ExprVisitorMut for BasicOptVisitor {
             block.eliminate_dead_code();
             if block.variables.is_empty() {
                 if block.exprs.is_empty() {
-                    expr.kind = ExprKind::ConstUnit;
+                    expr.kind = ExprKind::Const(Constant::Unit);
                 } else if block.exprs.len() == 1 {
                     *expr = block.exprs.pop().unwrap();
                 }
@@ -58,16 +58,12 @@ impl Expr {
     fn is_pure(&self) -> bool {
         matches!(
             self.kind,
-            ExprKind::Undefined
-                | ExprKind::ConstUnit
-                | ExprKind::ConstNumber(_)
-                | ExprKind::ConstString(_)
-                | ExprKind::ConstBool(_)
+            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_)
         )
     }
 
     fn is_const_unit(&self) -> bool {
-        matches!(self.kind, ExprKind::ConstUnit)
+        matches!(self.kind, ExprKind::Const(Constant::Unit))
     }
 }
 
