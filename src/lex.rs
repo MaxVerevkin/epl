@@ -150,6 +150,8 @@ pub enum Punct {
     Star,
     /// /
     Slash,
+    /// %
+    Percent,
     /// !
     Exclam,
     /// &
@@ -191,6 +193,7 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     (">", Punct::CmpG),
     ("*", Punct::Star),
     ("/", Punct::Slash),
+    ("%", Punct::Percent),
     ("!", Punct::Exclam),
     ("&", Punct::Ampersand),
     ("@", Punct::At),

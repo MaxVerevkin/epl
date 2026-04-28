@@ -932,6 +932,7 @@ impl Parser<'_> {
             let op = match self.peek_token()? {
                 Some(lex::Token::Punct(lex::Punct::Star)) => BinaryOp::Arithmetic(ArithmeticOp::Mul),
                 Some(lex::Token::Punct(lex::Punct::Slash)) => BinaryOp::Arithmetic(ArithmeticOp::Div),
+                Some(lex::Token::Punct(lex::Punct::Percent)) => BinaryOp::Arithmetic(ArithmeticOp::Rem),
                 _ => break,
             };
             let (op_span, _) = self.consume_token()?.unwrap();

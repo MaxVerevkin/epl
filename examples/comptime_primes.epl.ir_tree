@@ -120,7 +120,7 @@ fn is_prime(x: i32) -> bool
     |   |   |   CONST UNIT TYPE=unit
     |   |   IF TYPE=unit
     |   |   |   CMP(Equal) TYPE=bool
-    |   |   |   |   FUNCTION_CALL("rem") TYPE=i32
+    |   |   |   |   ARITHMETIC(Rem) TYPE=i32
     |   |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=i32
     |   |   |   |   |   CONST 2 TYPE=i32
@@ -145,7 +145,7 @@ fn is_prime(x: i32) -> bool
     |   |   |   |   BLOCK TYPE=unit
     |   |   |   |   |   IF TYPE=unit
     |   |   |   |   |   |   CMP(Equal) TYPE=bool
-    |   |   |   |   |   |   |   FUNCTION_CALL("rem") TYPE=i32
+    |   |   |   |   |   |   |   ARITHMETIC(Rem) TYPE=i32
     |   |   |   |   |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=i32
     |   |   |   |   |   |   |   |   LOAD TYPE=i32
@@ -162,28 +162,6 @@ fn is_prime(x: i32) -> bool
     |   |   |   |   BREAK(loop_4) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   CONST true TYPE=bool
-
-fn rem(a: i32, b: i32) -> i32
-    BLOCK TYPE=i32
-    |   DECLARE var_10 : i32
-    |   DECLARE var_11 : i32
-    |   STORE TYPE=unit
-    |   |   VARIABLE(var_10) [PLACE] TYPE=i32
-    |   |   ARGUMENT("a") TYPE=i32
-    |   STORE TYPE=unit
-    |   |   VARIABLE(var_11) [PLACE] TYPE=i32
-    |   |   ARGUMENT("b") TYPE=i32
-    |   ARITHMETIC(Sub) TYPE=i32
-    |   |   LOAD TYPE=i32
-    |   |   |   VARIABLE(var_10) [PLACE] TYPE=i32
-    |   |   ARITHMETIC(Mul) TYPE=i32
-    |   |   |   ARITHMETIC(Div) TYPE=i32
-    |   |   |   |   LOAD TYPE=i32
-    |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=i32
-    |   |   |   |   LOAD TYPE=i32
-    |   |   |   |   |   VARIABLE(var_11) [PLACE] TYPE=i32
-    |   |   |   LOAD TYPE=i32
-    |   |   |   |   VARIABLE(var_11) [PLACE] TYPE=i32
 
 fn printf(fmt: *i8, ...) -> unit
 

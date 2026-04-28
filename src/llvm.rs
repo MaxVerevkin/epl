@@ -113,6 +113,7 @@ impl LlvmModule {
                                 ArithmeticOp::Sub => builder.sub(lhs, rhs),
                                 ArithmeticOp::Mul => builder.mul(lhs, rhs),
                                 ArithmeticOp::Div => builder.div(*signed, lhs, rhs),
+                                ArithmeticOp::Rem => builder.rem(*signed, lhs, rhs),
                             }
                         }
                         ir::InstructionKind::Not { value } => {
@@ -439,6 +440,16 @@ impl LlvmBuilder {
             match signed {
                 false => LLVMBuildUDiv(self.raw, lhs, rhs, c"".as_ptr()),
                 true => LLVMBuildSDiv(self.raw, lhs, rhs, c"".as_ptr()),
+            }
+        }
+    }
+
+    /// Build the `rem` instruction
+    fn rem(&self, signed: bool, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            match signed {
+                false => LLVMBuildURem(self.raw, lhs, rhs, c"".as_ptr()),
+                true => LLVMBuildSRem(self.raw, lhs, rhs, c"".as_ptr()),
             }
         }
     }

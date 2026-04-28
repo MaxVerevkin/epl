@@ -10,6 +10,7 @@ pub fn eval_arithmetic(op: ArithmeticOp, lhs: Constant, rhs: Constant) -> Result
                         ArithmeticOp::Sub => lhs - rhs,
                         ArithmeticOp::Mul => lhs * rhs,
                         ArithmeticOp::Div => lhs / rhs,
+                        ArithmeticOp::Rem => lhs % rhs,
                     }
                 }
             )*

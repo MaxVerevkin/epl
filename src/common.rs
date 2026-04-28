@@ -5,6 +5,7 @@ pub enum ArithmeticOp {
     Sub,
     Mul,
     Div,
+    Rem,
 }
 
 /// A basic comparison operation

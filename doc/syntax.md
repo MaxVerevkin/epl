@@ -52,7 +52,7 @@ annotation = '@' ident
 - comp_expr = range_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) range_expr )?
 - range_expr = additive_expr ( `..` additive_expr )?
 - additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
-- multiplicative_expr = as_expr ( (`*` | `/`) as_expr )*
+- multiplicative_expr = as_expr ( (`*` | `/` | `%`) as_expr )*
 - as_expr = unary_expr ( `as` type )*
 - unary_expr = (`-` | `!` | `&`)? unary_expr | field_access_expr
 - field_access_expr = base_expr ( `.` `*` | `.` ident | `[` expr `]` )*
