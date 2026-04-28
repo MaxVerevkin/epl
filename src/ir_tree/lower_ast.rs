@@ -25,7 +25,11 @@ pub fn lower_function_body(
     for (arg_name, arg_ty) in &decl.args {
         let arg_var_id = VariableId::new();
         builder.scope.variables.insert(arg_name.clone(), (arg_var_id, *arg_ty));
-        variables.push((arg_var_id, *arg_ty));
+        variables.push(VariableDeclaration {
+            id: arg_var_id,
+            ty: *arg_ty,
+            debug_name: arg_name.clone(),
+        });
         exprs.push(Expr::set_var(
             arg_var_id,
             Expr {
@@ -283,7 +287,23 @@ impl<'a> FunctionLoweringCtx<'a> {
                     ty: Type::Unit,
                     span,
                     kind: ExprKind::Block(BlockExpr {
-                        variables: vec![(var_id, var_type), (target_id, var_type), (shadowed_var_id, var_type)],
+                        variables: vec![
+                            VariableDeclaration {
+                                id: var_id,
+                                ty: var_type,
+                                debug_name: format!("<immutable-{}>", e.i.value),
+                            },
+                            VariableDeclaration {
+                                id: target_id,
+                                ty: var_type,
+                                debug_name: format!("<tmp-{}-target>", e.i.value),
+                            },
+                            VariableDeclaration {
+                                id: shadowed_var_id,
+                                ty: var_type,
+                                debug_name: e.i.value.clone(),
+                            },
+                        ],
                         exprs: vec![
                             Expr::set_var(var_id, from_expr),
                             Expr::set_var(target_id, to_expr),
@@ -918,14 +938,22 @@ impl<'a> FunctionLoweringCtx<'a> {
                             .map(|ty| self.typesystem.type_from_ast(self.type_namespace, ty))
                             .transpose()?;
                         let value_eval = self.lower_expr(value, var_ty)?;
-                        variables.push((var_id, value_eval.ty));
+                        variables.push(VariableDeclaration {
+                            id: var_id,
+                            ty: value_eval.ty,
+                            debug_name: name.value.clone(),
+                        });
                         self.scope.variables.insert(name.value.clone(), (var_id, value_eval.ty));
                         exprs.push(Expr::set_var(var_id, value_eval));
                     }
                     ast::LetStatement::WithoutValue { name, ty } => {
                         let id = VariableId::new();
                         let ty = self.typesystem.type_from_ast(self.type_namespace, ty)?;
-                        variables.push((id, ty));
+                        variables.push(VariableDeclaration {
+                            id,
+                            ty,
+                            debug_name: name.value.clone(),
+                        });
                         self.scope.variables.insert(name.value.clone(), (id, ty));
                     }
                 },

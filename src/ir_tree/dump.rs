@@ -70,10 +70,10 @@ impl ExprVisitor<'_> for Writer<'_> {
 
         self.indent_level += 1;
         if let ExprKind::Block(bexpr) = &expr.kind {
-            for (var_id, var_ty) in &bexpr.variables {
+            for decl in &bexpr.variables {
                 self.indent();
-                write!(self.output, "DECLARE {var_id:?} : ").unwrap();
-                self.dump_type(*var_ty);
+                write!(self.output, "DECLARE {:?} {:?} : ", decl.id, decl.debug_name).unwrap();
+                self.dump_type(decl.ty);
                 self.output.push('\n');
             }
         }

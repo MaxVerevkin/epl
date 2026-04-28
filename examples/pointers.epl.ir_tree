@@ -1,6 +1,6 @@
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_1 : i32
+    |   DECLARE var_1 "i" : i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=i32
     |   |   CONST 0 TYPE=i32
@@ -24,7 +24,7 @@ fn main() -> i32
 
 fn inc(num: *i32) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_2 : *i32
+    |   DECLARE var_2 "num" : *i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_2) [PLACE] TYPE=*i32
     |   |   ARGUMENT("num") TYPE=*i32

@@ -1,7 +1,7 @@
 fn vec2_add(lhs: StructId(0), rhs: StructId(0)) -> StructId(0)
     BLOCK TYPE=StructId(0)
-    |   DECLARE var_1 : StructId(0)
-    |   DECLARE var_2 : StructId(0)
+    |   DECLARE var_1 "lhs" : StructId(0)
+    |   DECLARE var_2 "rhs" : StructId(0)
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(0)
     |   |   ARGUMENT("lhs") TYPE=StructId(0)
@@ -26,7 +26,7 @@ fn vec2_add(lhs: StructId(0), rhs: StructId(0)) -> StructId(0)
 
 fn vec2_print(vec: StructId(0)) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_3 : StructId(0)
+    |   DECLARE var_3 "vec" : StructId(0)
     |   STORE TYPE=unit
     |   |   VARIABLE(var_3) [PLACE] TYPE=StructId(0)
     |   |   ARGUMENT("vec") TYPE=StructId(0)
@@ -41,7 +41,7 @@ fn vec2_print(vec: StructId(0)) -> unit
 
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_4 : StructId(0)
+    |   DECLARE var_4 "vec" : StructId(0)
     |   STORE TYPE=unit
     |   |   VARIABLE(var_4) [PLACE] TYPE=StructId(0)
     |   |   STRUCT_INITIALIZER TYPE=StructId(0)

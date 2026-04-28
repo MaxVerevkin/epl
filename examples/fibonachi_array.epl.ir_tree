@@ -4,7 +4,7 @@ fn main() -> unit
 
 fn fib_array() -> [i32; 10]
     BLOCK TYPE=[i32; 10]
-    |   DECLARE var_1 : [i32; 10]
+    |   DECLARE var_1 "array" : [i32; 10]
     |   STORE TYPE=unit
     |   |   ARRAY_ELEMENT [PLACE] TYPE=i32
     |   |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 10]
@@ -16,9 +16,9 @@ fn fib_array() -> [i32; 10]
     |   |   |   CONST 1 TYPE=u64
     |   |   CONST 1 TYPE=i32
     |   BLOCK TYPE=unit
-    |   |   DECLARE var_2 : i32
-    |   |   DECLARE var_3 : i32
-    |   |   DECLARE var_4 : i32
+    |   |   DECLARE var_2 "<immutable-i>" : i32
+    |   |   DECLARE var_3 "<tmp-i-target>" : i32
+    |   |   DECLARE var_4 "i" : i32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_2) [PLACE] TYPE=i32
     |   |   |   CONST 2 TYPE=i32
@@ -70,7 +70,7 @@ fn fib_array() -> [i32; 10]
 
 fn print_array(array: [i32; 10]) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_5 : [i32; 10]
+    |   DECLARE var_5 "array" : [i32; 10]
     |   STORE TYPE=unit
     |   |   VARIABLE(var_5) [PLACE] TYPE=[i32; 10]
     |   |   ARGUMENT("array") TYPE=[i32; 10]
@@ -78,9 +78,9 @@ fn print_array(array: [i32; 10]) -> unit
     |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   CONST_STRING("[") TYPE=*i8
     |   |   BLOCK TYPE=unit
-    |   |   |   DECLARE var_6 : i32
-    |   |   |   DECLARE var_7 : i32
-    |   |   |   DECLARE var_8 : i32
+    |   |   |   DECLARE var_6 "<immutable-i>" : i32
+    |   |   |   DECLARE var_7 "<tmp-i-target>" : i32
+    |   |   |   DECLARE var_8 "i" : i32
     |   |   |   STORE TYPE=unit
     |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=i32
     |   |   |   |   CONST 0 TYPE=i32

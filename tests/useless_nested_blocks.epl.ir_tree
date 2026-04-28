@@ -1,6 +1,6 @@
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_1 : i32
+    |   DECLARE var_1 "retval" : i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=i32
     |   |   CONST 0 TYPE=i32

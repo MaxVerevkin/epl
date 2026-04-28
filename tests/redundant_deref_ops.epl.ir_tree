@@ -1,9 +1,9 @@
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_1 : i32
-    |   DECLARE var_2 : *i32
-    |   DECLARE var_3 : i32
-    |   DECLARE var_4 : *i32
+    |   DECLARE var_1 "a" : i32
+    |   DECLARE var_2 "a_ptr" : *i32
+    |   DECLARE var_3 "b" : i32
+    |   DECLARE var_4 "c" : *i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=i32
     |   |   CONST 42 TYPE=i32

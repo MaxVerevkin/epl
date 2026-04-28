@@ -1,6 +1,6 @@
 fn fib(n: u32) -> u32
     BLOCK TYPE=u32
-    |   DECLARE var_1 : u32
+    |   DECLARE var_1 "n" : u32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=u32
     |   |   ARGUMENT("n") TYPE=u32
@@ -25,14 +25,14 @@ fn fib(n: u32) -> u32
 
 fn fib_it(n: u32) -> u32
     BLOCK TYPE=u32
-    |   DECLARE var_2 : u32
+    |   DECLARE var_2 "n" : u32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_2) [PLACE] TYPE=u32
     |   |   ARGUMENT("n") TYPE=u32
     |   BLOCK TYPE=u32
-    |   |   DECLARE var_3 : u32
-    |   |   DECLARE var_4 : u32
-    |   |   DECLARE var_5 : u32
+    |   |   DECLARE var_3 "a" : u32
+    |   |   DECLARE var_4 "b" : u32
+    |   |   DECLARE var_5 "i" : u32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_3) [PLACE] TYPE=u32
     |   |   |   CONST 0 TYPE=u32
@@ -50,7 +50,7 @@ fn fib_it(n: u32) -> u32
     |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=u32
     |   |   |   |   BLOCK TYPE=unit
-    |   |   |   |   |   DECLARE var_6 : u32
+    |   |   |   |   |   DECLARE var_6 "tmp" : u32
     |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u32
     |   |   |   |   |   |   LOAD TYPE=u32
@@ -73,7 +73,7 @@ fn fib_it(n: u32) -> u32
 
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_7 : u32
+    |   DECLARE var_7 "n" : u32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_7) [PLACE] TYPE=u32
     |   |   CONST 0 TYPE=u32

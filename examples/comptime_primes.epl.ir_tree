@@ -1,13 +1,13 @@
 fn main() -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_1 : [i32; 20]
+    |   DECLARE var_1 "primes" : [i32; 20]
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 20]
     |   |   CONST [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73] TYPE=[i32; 20]
     |   BLOCK TYPE=unit
-    |   |   DECLARE var_5 : i32
-    |   |   DECLARE var_6 : i32
-    |   |   DECLARE var_7 : i32
+    |   |   DECLARE var_5 "<immutable-i>" : i32
+    |   |   DECLARE var_6 "<tmp-i-target>" : i32
+    |   |   DECLARE var_7 "i" : i32
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_5) [PLACE] TYPE=i32
     |   |   |   CONST 0 TYPE=i32
@@ -44,12 +44,12 @@ fn main() -> unit
 
 fn is_prime(x: i32) -> bool
     BLOCK TYPE=bool
-    |   DECLARE var_8 : i32
+    |   DECLARE var_8 "x" : i32
     |   STORE TYPE=unit
     |   |   VARIABLE(var_8) [PLACE] TYPE=i32
     |   |   ARGUMENT("x") TYPE=i32
     |   BLOCK TYPE=bool
-    |   |   DECLARE var_9 : i32
+    |   |   DECLARE var_9 "i" : i32
     |   |   IF TYPE=unit
     |   |   |   CMP(LessOrEqual) TYPE=bool
     |   |   |   |   LOAD TYPE=i32

@@ -222,10 +222,10 @@ impl<'a> BodyLoweringCtx<'a> {
                 EvalResult::Value(Value::Definition(arg_def_id))
             }
             ir_tree::ExprKind::Block(block_expr) => {
-                for (var_id, var_ty) in &block_expr.variables {
-                    let var_ty = lower_type(self.module, *var_ty);
+                for decl in &block_expr.variables {
+                    let var_ty = lower_type(self.module, decl.ty);
                     let alloca = self.alloca(var_ty.layout(self.module));
-                    self.variable_map.insert(*var_id, alloca);
+                    self.variable_map.insert(decl.id, alloca);
                 }
                 for (expr_i, expr) in block_expr.exprs.iter().enumerate() {
                     match self.eval_expr(expr)? {

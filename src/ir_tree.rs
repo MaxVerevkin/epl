@@ -331,8 +331,15 @@ impl Constant {
 
 #[derive(Debug)]
 pub struct BlockExpr {
-    pub variables: Vec<(VariableId, Type)>,
+    pub variables: Vec<VariableDeclaration>,
     pub exprs: Vec<Expr>,
+}
+
+#[derive(Debug)]
+pub struct VariableDeclaration {
+    pub id: VariableId,
+    pub ty: Type,
+    pub debug_name: String,
 }
 
 impl Expr {

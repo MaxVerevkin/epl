@@ -140,11 +140,11 @@ impl EvalCtx<'_> {
                         variables: block_expr
                             .variables
                             .iter()
-                            .map(|(id, ty)| {
+                            .map(|decl| {
                                 (
-                                    *id,
+                                    decl.id,
                                     VariableMemory {
-                                        bytes: vec![0; ty.layout(&self.module.typesystem).size as usize],
+                                        bytes: vec![0; decl.ty.layout(&self.module.typesystem).size as usize],
                                     },
                                 )
                             })
