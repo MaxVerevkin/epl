@@ -58,9 +58,12 @@ pub struct Module {
 impl Module {
     /// Construct an IR from AST
     pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
-        let mut typesystem = TypeSystem::new(8); // TODO: use target arch ptr size!
+        let mut module = Self {
+            functions: BTreeMap::new(),
+            typesystem: TypeSystem::new(8), // TODO: use target arch ptr size!
+        };
+
         let mut functions_namespace = HashMap::new();
-        let mut functions = BTreeMap::new();
 
         let mut type_namespace = HashMap::new();
         type_namespace.insert(String::from("unit"), Type::Unit);
@@ -76,13 +79,16 @@ impl Module {
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(function) => {
-                    let decl = Function::decl_from_ast(&mut typesystem, &type_namespace, function, &item.annotations)?;
+                    let decl =
+                        Function::decl_from_ast(&mut module.typesystem, &type_namespace, function, &item.annotations)?;
                     functions_namespace.insert(function.name.value.clone(), decl.id);
-                    functions.insert(decl.id, decl);
+                    module.functions.insert(decl.id, decl);
                 }
                 ast::ItemKind::Struct(s) => {
                     let name = s.name.value.clone();
-                    let s = typesystem.struct_from_ast(&type_namespace, s, &item.annotations)?;
+                    let s = module
+                        .typesystem
+                        .struct_from_ast(&type_namespace, s, &item.annotations)?;
                     type_namespace.insert(name, s);
                 }
             }
@@ -93,27 +99,27 @@ impl Module {
                 ast::ItemKind::Function(function) => {
                     if let Some(body) = &function.body {
                         let function_id = functions_namespace[&function.name.value];
-                        let decl = &functions[&function_id];
+                        let decl = &module.functions[&function_id];
                         let mut body = lower_ast::lower_function_body(
                             decl,
                             body,
                             &functions_namespace,
-                            &functions,
-                            &mut typesystem,
+                            &module.functions,
+                            &mut module.typesystem,
                             &type_namespace,
                         )?;
                         if decl.is_pure {
-                            checkers::purity_check(&body, &functions)?;
+                            checkers::purity_check(&body, &module.functions)?;
                         }
                         opt::BasicOptVisitor.visit_expr(&mut body);
-                        functions.get_mut(&function_id).unwrap().body = Some(body);
+                        module.functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
                 }
                 ast::ItemKind::Struct(_) => (),
             }
         }
 
-        for function_id in functions.keys().copied().collect::<Vec<_>>() {
+        for function_id in module.functions.keys().copied().collect::<Vec<_>>() {
             // TODO: this is ridiculusly inefficient O(n^2), for something that could potentially be O(n).
 
             fn get_first_comptime_expr(function: &Function) -> Option<&Expr> {
@@ -152,13 +158,13 @@ impl Module {
                 v.visit_expr(function.body.as_mut().unwrap());
             }
 
-            while let Some(expr) = get_first_comptime_expr(&functions[&function_id]) {
-                let evaluated = evalualtor::eval_comptime_expr(expr, &functions, &typesystem).unwrap();
-                set_first_comptime_expr(functions.get_mut(&function_id).unwrap(), evaluated);
+            while let Some(expr) = get_first_comptime_expr(&module.functions[&function_id]) {
+                let evaluated = evalualtor::eval_comptime_expr(expr, &module).unwrap();
+                set_first_comptime_expr(module.functions.get_mut(&function_id).unwrap(), evaluated);
             }
         }
 
-        Ok(Self { typesystem, functions })
+        Ok(module)
     }
 
     /// Dump the contents of this module in a human-readable representation.

@@ -10,11 +10,7 @@ pub enum Error {
     BadIr(String),
 }
 
-pub fn eval_comptime_expr(
-    expr: &Expr,
-    functions: &BTreeMap<FunctionId, Function>,
-    typesystem: &TypeSystem,
-) -> Result<Constant, Error> {
+pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Error> {
     let ExprKind::FunctionCall(function_id, args) = &expr.kind else {
         return Err(Error::BadIr(
             "only function calls are implemented inside comptime".to_owned(),
@@ -22,9 +18,9 @@ pub fn eval_comptime_expr(
     };
     let args = args
         .iter()
-        .map(|arg| eval_expr_simple(arg, functions, typesystem))
+        .map(|arg| eval_expr_simple(arg, module))
         .collect::<Result<Vec<_>, _>>()?;
-    eval_pure_function(*function_id, functions, args, typesystem)
+    eval_pure_function(*function_id, args, module)
 }
 
 impl Constant {
@@ -46,19 +42,13 @@ struct VariableMemory {
     bytes: Vec<u8>,
 }
 
-fn eval_pure_function(
-    function_id: FunctionId,
-    functions: &BTreeMap<FunctionId, Function>,
-    arguments: Vec<Constant>,
-    typesystem: &TypeSystem,
-) -> Result<Constant, Error> {
-    let function = &functions[&function_id];
+fn eval_pure_function(function_id: FunctionId, arguments: Vec<Constant>, module: &Module) -> Result<Constant, Error> {
+    let function = &module.functions[&function_id];
     let body = function.body.as_ref().unwrap();
     let mut ctx = EvalCtx {
         function,
-        functions,
         arguments,
-        typesystem,
+        module,
         variables: HashMap::new(),
     };
     match ctx.eval_expr(body) {
@@ -70,33 +60,28 @@ fn eval_pure_function(
 
 struct EvalCtx<'a> {
     function: &'a Function,
-    functions: &'a BTreeMap<FunctionId, Function>,
     arguments: Vec<Constant>,
-    typesystem: &'a TypeSystem,
+    module: &'a Module,
     variables: HashMap<VariableId, VariableMemory>,
 }
 
-fn eval_expr_simple(
-    expr: &Expr,
-    functions: &BTreeMap<FunctionId, Function>,
-    typesystem: &TypeSystem,
-) -> Result<Constant, Error> {
+fn eval_expr_simple(expr: &Expr, module: &Module) -> Result<Constant, Error> {
     Ok(match &expr.kind {
         ExprKind::Const(value) => value.clone(),
-        ExprKind::Comptime(expr) => eval_comptime_expr(expr, functions, typesystem)?,
+        ExprKind::Comptime(expr) => eval_comptime_expr(expr, module)?,
         _other => return Err(Error::BadIr("this is not a simple expr".to_owned())),
     })
 }
 
 impl EvalCtx<'_> {
     fn load(&self, place: ConstantPlace, ty: Type) -> Constant {
-        let layout = ty.layout(self.typesystem);
+        let layout = ty.layout(&self.module.typesystem);
         let bytes = &self.variables[&place.variable].bytes[place.bytes_offset..][..layout.size as usize];
-        const_abi::constant_from_bytes(bytes, ty, self.typesystem)
+        const_abi::constant_from_bytes(bytes, ty, &self.module.typesystem)
     }
 
     fn store(&mut self, place: ConstantPlace, value: &Constant) {
-        let bytes = const_abi::constant_to_bytes(value, self.typesystem);
+        let bytes = const_abi::constant_to_bytes(value, &self.module.typesystem);
         self.variables.get_mut(&place.variable).unwrap().bytes[place.bytes_offset..][..bytes.len()]
             .copy_from_slice(&bytes);
     }
@@ -136,7 +121,7 @@ impl EvalCtx<'_> {
             }
             ExprKind::Block(block_expr) => {
                 for (variable, ty) in &block_expr.variables {
-                    let layout = ty.layout(self.typesystem);
+                    let layout = ty.layout(&self.module.typesystem);
                     self.variables.insert(
                         *variable,
                         VariableMemory {
@@ -205,16 +190,19 @@ impl EvalCtx<'_> {
             ExprKind::ArrayInitializer(exprs) => todo!(),
             ExprKind::StructInitializer(items) => todo!(),
             ExprKind::FunctionCall(function_id, arguments) => {
-                assert!(self.functions[function_id].is_pure, "can only call pure functions");
+                assert!(
+                    self.module.functions[function_id].is_pure,
+                    "can only call pure functions"
+                );
                 let arguments_values = arguments
                     .iter()
                     .map(|expr| self.eval_expr(expr))
                     .collect::<Result<Vec<_>, _>>()?;
-                eval_pure_function(*function_id, self.functions, arguments_values, self.typesystem)?
+                eval_pure_function(*function_id, arguments_values, self.module)?
             }
             ExprKind::Cast(expr_to_cast) => arithmetic_and_cmp::eval_cast(self.eval_expr(expr_to_cast)?, expr.ty)?,
             ExprKind::Not(expr) => Constant::Bool(!self.eval_expr(expr)?.into_bool().unwrap()),
-            ExprKind::Comptime(expr) => eval_comptime_expr(expr, self.functions, self.typesystem)?,
+            ExprKind::Comptime(expr) => eval_comptime_expr(expr, self.module)?,
         })
     }
 
@@ -231,9 +219,9 @@ impl EvalCtx<'_> {
                 let index_value = self.eval_expr(index_expr)?;
                 let element_size = array_place
                     .ty
-                    .array_element_type(self.typesystem)
+                    .array_element_type(&self.module.typesystem)
                     .unwrap()
-                    .layout(self.typesystem)
+                    .layout(&self.module.typesystem)
                     .size;
                 let offset = match index_value {
                     Constant::U64(index) => index * element_size,
