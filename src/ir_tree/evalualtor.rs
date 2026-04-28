@@ -4,10 +4,16 @@ mod arithmetic_and_cmp;
 mod const_abi;
 
 #[derive(Debug)]
-pub enum Error {
+enum EvalError {
     Return(Constant),
     Break(LoopId, Constant),
-    BadIr(String),
+    Error(Error),
+}
+
+impl From<Error> for EvalError {
+    fn from(value: Error) -> Self {
+        Self::Error(value)
+    }
 }
 
 pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Error> {
@@ -17,9 +23,10 @@ pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Erro
         scope: Scope::default(),
     };
     match ctx.eval_expr(expr) {
-        Err(Error::Return(..)) => panic!("cannot return from a comptime block"),
-        Err(Error::Break(..)) => panic!("cannot break from a comptime block"),
-        other => other,
+        Err(EvalError::Return(..)) => panic!("cannot return from a comptime block"),
+        Err(EvalError::Break(..)) => panic!("cannot break from a comptime block"),
+        Err(EvalError::Error(err)) => Err(err),
+        Ok(ok) => Ok(ok),
     }
 }
 
@@ -32,9 +39,10 @@ fn eval_pure_function(function_id: FunctionId, arguments: &[Constant], module: &
         scope: Scope::default(),
     };
     match ctx.eval_expr(body) {
-        Err(Error::Return(value)) => Ok(value),
-        Err(Error::Break(..)) => unreachable!(),
-        other => other,
+        Err(EvalError::Return(value)) => Ok(value),
+        Err(EvalError::Break(..)) => unreachable!(),
+        Err(EvalError::Error(err)) => Err(err),
+        Ok(ok) => Ok(ok),
     }
 }
 
@@ -98,7 +106,7 @@ impl EvalCtx<'_> {
         mem.bytes[place.bytes_offset..][..bytes.len()].copy_from_slice(&bytes);
     }
 
-    fn eval_expr(&mut self, expr: &Expr) -> Result<Constant, Error> {
+    fn eval_expr(&mut self, expr: &Expr) -> Result<Constant, EvalError> {
         Ok(match &expr.kind {
             ExprKind::Const(value) => value.clone(),
             ExprKind::ConstString(s) => todo!(),
@@ -171,8 +179,8 @@ impl EvalCtx<'_> {
                 self.scope = *ctx.scope.parent.unwrap();
                 value
             }
-            ExprKind::Return(expr) => return Err(Error::Return(self.eval_expr(expr)?)),
-            ExprKind::Break(loop_id, expr) => return Err(Error::Break(*loop_id, self.eval_expr(expr)?)),
+            ExprKind::Return(expr) => return Err(EvalError::Return(self.eval_expr(expr)?)),
+            ExprKind::Break(loop_id, expr) => return Err(EvalError::Break(*loop_id, self.eval_expr(expr)?)),
             ExprKind::Arithmetic(op, lhs, rhs) => {
                 let lhs_value = self.eval_expr(lhs)?;
                 let rhs_value = self.eval_expr(rhs)?;
@@ -200,7 +208,9 @@ impl EvalCtx<'_> {
             },
             ExprKind::Loop(loop_id, body) => loop {
                 match self.eval_expr(body) {
-                    Err(Error::Break(break_loop_id, break_value)) if break_loop_id == *loop_id => break break_value,
+                    Err(EvalError::Break(break_loop_id, break_value)) if break_loop_id == *loop_id => {
+                        break break_value;
+                    }
                     Err(e) => return Err(e),
                     Ok(_) => (),
                 }
@@ -224,7 +234,7 @@ impl EvalCtx<'_> {
         })
     }
 
-    fn eval_place(&mut self, place_expr: &Place) -> Result<ConstantPlace, Error> {
+    fn eval_place(&mut self, place_expr: &Place) -> Result<ConstantPlace, EvalError> {
         Ok(match &place_expr.kind {
             PlaceKind::Dereference(expr) => panic!("dereference is not a pure operation"),
             PlaceKind::Variable(variable_id) => ConstantPlace {

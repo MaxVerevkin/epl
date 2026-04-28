@@ -159,7 +159,7 @@ impl Module {
             }
 
             while let Some(expr) = get_first_comptime_expr(&module.functions[&function_id]) {
-                let evaluated = evalualtor::eval_comptime_expr(expr, &module).unwrap();
+                let evaluated = evalualtor::eval_comptime_expr(expr, &module)?;
                 set_first_comptime_expr(module.functions.get_mut(&function_id).unwrap(), evaluated);
             }
         }
