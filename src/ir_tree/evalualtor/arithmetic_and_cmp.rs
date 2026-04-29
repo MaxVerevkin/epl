@@ -86,35 +86,47 @@ pub fn eval_cmp(op: CmpOp, lhs: Constant, rhs: Constant) -> Result<bool, Error> 
 }
 
 pub fn eval_cast(from: Constant, target_ty: Type) -> Result<Constant, Error> {
-    fn const_cast_i32(from: i32, target_ty: Type) -> Constant {
-        match target_ty {
-            Type::Never | Type::Unit | Type::Struct(_) | Type::Array { .. } | Type::Ptr { .. } | Type::Bool => {
-                unreachable!()
-            }
-            Type::Int(int_type) => match int_type {
-                IntType::I8 => Constant::I8(from as _),
-                IntType::U8 => Constant::U8(from as _),
-                IntType::I32 => Constant::I32(from as _),
-                IntType::U32 => Constant::U32(from as _),
-                IntType::I64 => Constant::I64(from as _),
-                IntType::U64 => Constant::U64(from as _),
-            },
-        }
+    macro_rules! make_const_int_cast {
+        ($($name:ident, $ty:ty;)*) => {
+            $(
+                fn $name(from: $ty, target_ty: Type) -> Constant {
+                    match target_ty {
+                        Type::Never | Type::Unit | Type::Struct(_) | Type::Array { .. } | Type::Ptr { .. } | Type::Bool => {
+                            unreachable!()
+                        }
+                        Type::Int(int_type) => match int_type {
+                            IntType::I8 => Constant::I8(from as _),
+                            IntType::U8 => Constant::U8(from as _),
+                            IntType::I32 => Constant::I32(from as _),
+                            IntType::U32 => Constant::U32(from as _),
+                            IntType::I64 => Constant::I64(from as _),
+                            IntType::U64 => Constant::U64(from as _),
+                        },
+                    }
+                }
+            )*
+        };
+    }
+
+    make_const_int_cast! {
+        const_cast_i8, i8;
+        const_cast_u8, u8;
+        const_cast_i32, i32;
+        const_cast_u32, u32;
+        const_cast_i64, i64;
+        const_cast_u64, u64;
     }
 
     Ok(match from {
-        Constant::Undefined(_) => Constant::Undefined(target_ty),
-        Constant::Unit => {
-            assert_eq!(target_ty, Type::Unit);
-            Constant::Unit
-        }
-        Constant::Bool(_) => todo!(),
-        Constant::I8(_) => todo!(),
-        Constant::U8(_) => todo!(),
-        Constant::I32(num) => const_cast_i32(num, target_ty),
-        Constant::U32(_) => todo!(),
-        Constant::I64(_) => todo!(),
-        Constant::U64(_) => todo!(),
+        Constant::Undefined(_) => todo!(),
+        Constant::Unit => unreachable!(),
+        Constant::Bool(_) => unreachable!(),
+        Constant::I8(int) => const_cast_i8(int, target_ty),
+        Constant::U8(int) => const_cast_u8(int, target_ty),
+        Constant::I32(int) => const_cast_i32(int, target_ty),
+        Constant::U32(int) => const_cast_u32(int, target_ty),
+        Constant::I64(int) => const_cast_i64(int, target_ty),
+        Constant::U64(int) => const_cast_u64(int, target_ty),
         Constant::Array(..) => unreachable!(),
     })
 }

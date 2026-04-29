@@ -389,25 +389,21 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                if value.ty() == ty {
-                    EvalResult::Value(value)
-                } else if from_ty.is_int() && to_ty.is_int() {
-                    let ir_tree::Type::Int(from_ty) = from_ty else {
-                        unreachable!()
-                    };
-                    let ir_tree::Type::Int(to_ty) = to_ty else {
-                        unreachable!()
-                    };
-                    EvalResult::Value(Value::Definition(if from_ty.bytes() > to_ty.bytes() {
+                EvalResult::Value(if value.ty() == ty {
+                    value
+                } else if let Some(from_ty) = from_ty.as_int()
+                    && let Some(to_ty) = to_ty.as_int()
+                {
+                    Value::Definition(if from_ty.bytes() > to_ty.bytes() {
                         self.cursor().truncate(value, ty)
-                    } else if !from_ty.is_signed() && !to_ty.is_signed() {
-                        self.cursor().zext(value, ty)
-                    } else {
+                    } else if from_ty.is_signed() {
                         self.cursor().sext(value, ty)
-                    }))
+                    } else {
+                        self.cursor().zext(value, ty)
+                    })
                 } else {
                     unimplemented!("cast from {from_ty:?} to {to_ty:?} is not handled")
-                }
+                })
             }
             ir_tree::ExprKind::Not(value) => {
                 let value = match self.eval_expr(value)? {
