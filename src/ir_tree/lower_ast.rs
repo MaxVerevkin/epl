@@ -22,7 +22,7 @@ pub fn lower_function_body(
     let mut variables = Vec::new();
     let mut exprs = Vec::new();
 
-    for (arg_name, arg_ty) in &decl.args {
+    for (arg_i, (arg_name, arg_ty)) in decl.args.iter().enumerate() {
         let arg_var_id = VariableId::new();
         builder.scope.variables.insert(arg_name.clone(), (arg_var_id, *arg_ty));
         variables.push(VariableDeclaration {
@@ -35,7 +35,7 @@ pub fn lower_function_body(
             Expr {
                 ty: *arg_ty,
                 span: None,
-                kind: ExprKind::Argument(arg_name.clone()),
+                kind: ExprKind::Argument(arg_i),
             },
         ));
     }

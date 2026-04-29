@@ -259,7 +259,7 @@ pub enum ExprKind {
     Store(Place, Box<Expr>),
     GetPointer(Place),
 
-    Argument(String),
+    Argument(usize),
     Block(BlockExpr),
     Return(Box<Expr>),
     Break(LoopId, Box<Expr>),

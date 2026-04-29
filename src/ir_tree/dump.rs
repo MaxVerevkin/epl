@@ -7,15 +7,18 @@ pub fn dump(module: &Module) -> String {
     let mut writer = Writer {
         output: String::new(),
         module,
+        function: None,
         indent_level: 1,
     };
 
     for function in module.functions.values() {
+        writer.function = Some(function);
         writer.dump_function_desc(function);
         if let Some(body) = &function.body {
             writer.visit_expr(body);
         }
         writer.output.push('\n');
+        writer.function = None;
     }
 
     writer.output
@@ -23,6 +26,7 @@ pub fn dump(module: &Module) -> String {
 
 struct Writer<'a> {
     output: String,
+    function: Option<&'a Function>,
     module: &'a Module,
     indent_level: u32,
 }
@@ -42,7 +46,9 @@ impl ExprVisitor<'_> for Writer<'_> {
             ExprKind::ArrayElement(_, _) => self.output.push_str("ARRAY_ELEMENT"),
             ExprKind::Store(_, _) => self.output.push_str("STORE"),
             ExprKind::GetPointer(_) => self.output.push_str("GET_POINTER"),
-            ExprKind::Argument(arg) => write!(self.output, "ARGUMENT({arg:?})").unwrap(),
+            ExprKind::Argument(arg) => {
+                write!(self.output, "ARGUMENT({:?})", self.function.unwrap().args[*arg].0).unwrap();
+            }
             ExprKind::Block(_) => self.output.push_str("BLOCK"),
             ExprKind::Return(_) => self.output.push_str("RETURN"),
             ExprKind::Break(loop_id, _) => write!(self.output, "BREAK({loop_id:?})").unwrap(),

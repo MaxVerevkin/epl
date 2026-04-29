@@ -22,7 +22,7 @@ pub fn lower_function(function: &ir_tree::Function, module: &ir_tree::Module) ->
         if function.is_variadic {
             return Err(Error::new("defining variadic functions is not supported").with_span(function.name.span));
         }
-        ir_function.body = Some(lower_function_body(module, &ir_function, function, body)?);
+        ir_function.body = Some(lower_function_body(module, &ir_function, body)?);
     }
 
     Ok(ir_function)
@@ -59,10 +59,9 @@ fn lower_type(module: &ir_tree::Module, ty: ir_tree::Type) -> Type {
 fn lower_function_body(
     module: &ir_tree::Module,
     function: &Function,
-    ir_tree_function: &ir_tree::Function,
     body: &ir_tree::Expr,
 ) -> Result<FunctionBody, Error> {
-    let mut builder = BodyLoweringCtx::new(module, function, ir_tree_function);
+    let mut builder = BodyLoweringCtx::new(module, function);
 
     let entry = builder.current_block_id;
     let body_eval = builder.eval_expr(body)?;
@@ -82,7 +81,7 @@ fn lower_function_body(
 struct BodyLoweringCtx<'a> {
     module: &'a ir_tree::Module,
     allocas: Vec<Alloca>,
-    argument_map: HashMap<String, DefinitionId>,
+    arguments: Vec<DefinitionId>,
     variable_map: HashMap<ir_tree::VariableId, DefinitionId>,
     basic_blocks: HashMap<BasicBlockId, BasicBlock>,
     current_block_id: BasicBlockId,
@@ -104,20 +103,19 @@ impl From<DefinitionId> for EvalResult<Value> {
 
 impl<'a> BodyLoweringCtx<'a> {
     /// Create a new lowering context
-    fn new(module: &'a ir_tree::Module, function: &'a Function, ir_tree_function: &'a ir_tree::Function) -> Self {
-        let mut argument_map = HashMap::new();
+    fn new(module: &'a ir_tree::Module, function: &'a Function) -> Self {
+        let mut arguments = Vec::new();
         let mut entry_block_args = Vec::new();
-        for (arg_i, arg_ty) in function.args.iter().enumerate() {
-            let arg_name = ir_tree_function.args[arg_i].0.clone();
+        for arg_ty in &function.args {
             let def_id = DefinitionId::new(arg_ty.clone());
-            argument_map.insert(arg_name, def_id.clone());
+            arguments.push(def_id.clone());
             entry_block_args.push(def_id);
         }
 
         Self {
             module,
             allocas: Vec::new(),
-            argument_map,
+            arguments,
             variable_map: HashMap::new(),
             basic_blocks: HashMap::new(),
             current_block_id: BasicBlockId::new(),
@@ -217,8 +215,8 @@ impl<'a> BodyLoweringCtx<'a> {
             }
             ir_tree::ExprKind::GetPointer(lexpr) => self.eval_place_as_ptr(lexpr)?,
 
-            ir_tree::ExprKind::Argument(arg_name) => {
-                let arg_def_id = self.argument_map[arg_name].clone();
+            ir_tree::ExprKind::Argument(arg_index) => {
+                let arg_def_id = self.arguments[*arg_index].clone();
                 EvalResult::Value(Value::Definition(arg_def_id))
             }
             ir_tree::ExprKind::Block(block_expr) => {

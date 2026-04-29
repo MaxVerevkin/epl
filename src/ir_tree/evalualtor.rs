@@ -35,7 +35,7 @@ fn eval_pure_function(function_id: FunctionId, arguments: &[Constant], module: &
     let body = function.body.as_ref().unwrap();
     let mut ctx = EvalCtx {
         module,
-        in_function_call: Some(InFunctionCall { function, arguments }),
+        in_function_call: Some(InFunctionCall { arguments }),
         scope: Scope::default(),
     };
     match ctx.eval_expr(body) {
@@ -74,7 +74,6 @@ struct EvalCtx<'a> {
 
 #[derive(Clone, Copy)]
 struct InFunctionCall<'a> {
-    function: &'a Function,
     arguments: &'a [Constant],
 }
 
@@ -136,16 +135,7 @@ impl EvalCtx<'_> {
                 Constant::Unit
             }
             ExprKind::GetPointer(_) => panic!("getting pointers is not a pure operation"),
-            ExprKind::Argument(argument_name) => {
-                let in_fn = self.in_function_call.as_ref().unwrap();
-                let i = in_fn
-                    .function
-                    .args
-                    .iter()
-                    .position(|(name, _ty)| name == argument_name)
-                    .unwrap();
-                in_fn.arguments[i].clone()
-            }
+            ExprKind::Argument(arg_index) => self.in_function_call.as_ref().unwrap().arguments[*arg_index].clone(),
             ExprKind::Block(block_expr) => {
                 let mut ctx = EvalCtx {
                     module: self.module,
