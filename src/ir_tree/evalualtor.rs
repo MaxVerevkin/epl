@@ -109,14 +109,14 @@ impl EvalCtx<'_> {
     fn eval_expr(&mut self, expr: &Expr) -> Result<Constant, EvalError> {
         Ok(match &expr.kind {
             ExprKind::Const(value) => value.clone(),
-            ExprKind::ConstString(s) => todo!(),
+            ExprKind::ConstString(_) => panic!("constant strings are not pure operations"),
             ExprKind::Load(place) => {
                 let place_value = self.eval_place(place)?;
                 self.load(place_value, expr.ty)
             }
-            ExprKind::Field(expr, field_name) => {
-                let struct_value = self.eval_expr(expr)?;
-                todo!()
+            ExprKind::Field(struct_expr, _field_name) => {
+                let _struct_value = self.eval_expr(struct_expr)?;
+                todo!("accessing struct fields is not implemented yet")
             }
             ExprKind::ArrayElement(expr, index) => {
                 let mut elements = match self.eval_expr(expr)? {
@@ -135,7 +135,7 @@ impl EvalCtx<'_> {
                 self.store(place_value, &expr_value);
                 Constant::Unit
             }
-            ExprKind::GetPointer(place) => todo!(),
+            ExprKind::GetPointer(_) => panic!("getting pointers is not a pure operation"),
             ExprKind::Argument(argument_name) => {
                 let in_fn = self.in_function_call.as_ref().unwrap();
                 let i = in_fn
@@ -221,8 +221,14 @@ impl EvalCtx<'_> {
                     Ok(_) => (),
                 }
             },
-            ExprKind::ArrayInitializer(exprs) => todo!(),
-            ExprKind::StructInitializer(items) => todo!(),
+            ExprKind::ArrayInitializer(elements_exprs) => {
+                let elements = elements_exprs
+                    .iter()
+                    .map(|expr| self.eval_expr(expr))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Constant::Array(expr.ty.array_element_type_id().unwrap(), elements)
+            }
+            ExprKind::StructInitializer(_fields_exprs) => todo!("struct initializers are not supported yet"),
             ExprKind::FunctionCall(function_id, arguments) => {
                 assert!(
                     self.module.functions[function_id].is_pure,
@@ -242,12 +248,12 @@ impl EvalCtx<'_> {
 
     fn eval_place(&mut self, place_expr: &Place) -> Result<ConstantPlace, EvalError> {
         Ok(match &place_expr.kind {
-            PlaceKind::Dereference(expr) => panic!("dereference is not a pure operation"),
+            PlaceKind::Dereference(_) => panic!("dereference is not a pure operation"),
             PlaceKind::Variable(variable_id) => ConstantPlace {
                 variable: *variable_id,
                 bytes_offset: 0,
             },
-            PlaceKind::Field(place, _) => todo!(),
+            PlaceKind::Field(_, _) => todo!("accessing struct fields is not implemented yet"),
             PlaceKind::ArrayElement(array_place, index_expr) => {
                 let array_place_value = self.eval_place(array_place)?;
                 let index_value = self.eval_expr(index_expr)?;

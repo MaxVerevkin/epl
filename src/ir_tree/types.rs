@@ -48,12 +48,17 @@ impl Type {
         matches!(self, Self::Int(i) if i.is_signed())
     }
 
-    /// Returns the type of the array's element, or None if not an array
-    pub fn array_element_type(self, typesystem: &TypeSystem) -> Option<Self> {
+    /// Returns the type ID of the array's element, or None if not an array
+    pub fn array_element_type_id(self) -> Option<TypeId> {
         match self {
-            Self::Array { element, length: _ } => Some(typesystem.get_type(element)),
+            Self::Array { element, length: _ } => Some(element),
             _ => None,
         }
+    }
+
+    /// Returns the type of the array's element, or None if not an array
+    pub fn array_element_type(self, typesystem: &TypeSystem) -> Option<Self> {
+        self.array_element_type_id().map(|id| typesystem.get_type(id))
     }
 
     /// Returns the byte offset of the struct's field

@@ -494,7 +494,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 ty: Type::I32,
             },
             ir_tree::Constant::I64(int) => Value::Number {
-                data: *int as i64,
+                data: *int,
                 ty: Type::I64,
             },
             ir_tree::Constant::U64(int) => Value::Number {

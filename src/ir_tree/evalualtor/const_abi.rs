@@ -42,8 +42,8 @@ pub fn constant_from_bytes(bytes: &[u8], ty: Type, typesystem: &TypeSystem) -> C
             IntType::I64 => Constant::I64(i64::from_le_bytes(bytes.try_into().unwrap())),
             IntType::U64 => Constant::U64(u64::from_le_bytes(bytes.try_into().unwrap())),
         },
-        Type::Struct(struct_id) => todo!(),
-        Type::Ptr { pointee } => todo!(),
+        Type::Struct(_struct_id) => todo!("reading struct values is not implemeneted yet"),
+        Type::Ptr { .. } => panic!("reading pointers is not a pure operation"),
         Type::Array { element, length } => {
             let mut elements = Vec::new();
             let mut bytes = bytes;
