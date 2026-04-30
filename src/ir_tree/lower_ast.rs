@@ -266,10 +266,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     );
                 };
 
-                // Only i32 is supported for now
-                let var_type = Type::Int(IntType::I32);
-                let var_type_int = var_type.as_int().unwrap();
-                let from_expr = self.lower_expr(&range_expr.from, Some(var_type))?;
+                let from_expr = self.lower_expr(&range_expr.from, None)?;
+                let var_type = from_expr.ty;
+                let var_type_int = var_type.as_int().ok_or_else(|| {
+                    Error::new("expected an expression of integer type").with_span(range_expr.from.span())
+                })?;
                 let to_expr = self.lower_expr(&range_expr.to, Some(var_type))?;
 
                 let var_id = VariableId::new();
