@@ -13,8 +13,8 @@ fn main() {
 		}
 		lut
 	};
-	for i in 0..20 {
-		printf("%i ", primes[i as u64]);
+	for i in 0u64..20 {
+		printf("%i ", primes[i]);
 	}
 	printf("\n")
 }

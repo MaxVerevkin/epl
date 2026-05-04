@@ -528,18 +528,31 @@ impl<'a> FunctionLoweringCtx<'a> {
                 })
             }
             ast::Expr::Literal(literal_expr) => match &literal_expr.value {
-                ast::LiteralExprValue::Number(number) => {
-                    let int_ty = match expect_type {
-                        None => IntType::I32,
-                        Some(Type::Int(i)) => i,
-                        Some(other) => {
-                            return Err(Error::expr_type_missmatch(
-                                other,
-                                Type::Int(IntType::I32),
-                                literal_expr.span,
-                            ));
-                        }
+                ast::LiteralExprValue::Number(number, suffix) => {
+                    let int_ty = match suffix {
+                        None => expect_type.and_then(|ty| ty.as_int()).unwrap_or(IntType::I32),
+                        Some(suffix) => match &*suffix.value {
+                            "i8" => IntType::I8,
+                            "u8" => IntType::U8,
+                            "i32" => IntType::I32,
+                            "u32" => IntType::U32,
+                            "i64" => IntType::I64,
+                            "u64" => IntType::U64,
+                            other => {
+                                return Err(Error::new(format!("unknown integer literal suffix: {other:?}"))
+                                    .with_span(suffix.span));
+                            }
+                        },
                     };
+                    if let Some(expect_type) = expect_type
+                        && expect_type != Type::Int(int_ty)
+                    {
+                        return Err(Error::expr_type_missmatch(
+                            expect_type,
+                            Type::Int(int_ty),
+                            literal_expr.span,
+                        ));
+                    }
                     Ok(Expr {
                         ty: Type::Int(int_ty),
                         span,

@@ -6,16 +6,16 @@ fn fib_array() -> [i32; 10] {
 	let array: [i32; 10];
 	array[0] = 0;
 	array[1] = 1;
-	for i in 2..10 {
-		array[i as u64] = array[i as u64 - 1] + array[i as u64 - 2];
+	for i in 2u64..10 {
+		array[i] = array[i - 1] + array[i - 2];
 	}
 	array
 }
 
 fn print_array(array: [i32; 10]) {
 	printf("[");
-	for i in 0..10 {
-		printf("%i", array[i as u64]);
+	for i in 0u64..10 {
+		printf("%i", array[i]);
 		if i != 9 {
 			printf(", ")
 		}

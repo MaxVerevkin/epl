@@ -230,7 +230,7 @@ impl TypeSystem {
                 let length = match &**length {
                     ast::Expr::Literal(ast::LiteralExpr {
                         span: _,
-                        value: ast::LiteralExprValue::Number(num),
+                        value: ast::LiteralExprValue::Number(num, _),
                     }) => *num as u64,
                     _ => return Err(Error::new("array length must be a number literal").with_span(length.span())),
                 };

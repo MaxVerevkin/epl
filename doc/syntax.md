@@ -76,6 +76,7 @@ annotation = '@' ident
 ## Literals
 
 - literal = number_literal | string_literal | bool_literal | `undefined`
-- number_literal = [0-9]+
+- number_literal = [0-9]+number_literal_suffix?
+- number_literal_suffix = (`u` | `i`) (`8` | `32` | `64`)
 - string_literal = `"` [^"] `"`
 - bool_literal = `true` | `false`

@@ -301,7 +301,7 @@ pub struct LiteralExpr {
 #[derive(Debug, Clone)]
 pub enum LiteralExprValue {
     Undefined,
-    Number(i64),
+    Number(i64, Option<Ident>),
     String(String),
     Bool(bool),
 }
@@ -1055,7 +1055,9 @@ impl Parser<'_> {
                 Ok(Expr::Literal(LiteralExpr {
                     span,
                     value: match lit {
-                        lex::Literal::Number(num) => LiteralExprValue::Number(num),
+                        lex::Literal::Number(num, suffix) => {
+                            LiteralExprValue::Number(num, suffix.map(|s| Ident { span: s.1, value: s.0 }))
+                        }
                         lex::Literal::String(str) => LiteralExprValue::String(str),
                     },
                 }))
@@ -1285,7 +1287,7 @@ impl fmt::Debug for LiteralExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.value {
             LiteralExprValue::Undefined => f.write_str("undefined")?,
-            LiteralExprValue::Number(num) => num.fmt(f)?,
+            LiteralExprValue::Number(num, _suffix) => num.fmt(f)?,
             LiteralExprValue::String(s) => s.fmt(f)?,
             LiteralExprValue::Bool(b) => b.fmt(f)?,
         }

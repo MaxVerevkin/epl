@@ -81,7 +81,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
 /// A literal token
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
-    Number(i64),
+    Number(i64, Option<(String, Span)>),
     String(String),
 }
 
@@ -375,16 +375,44 @@ impl Lexer<'_> {
     /// Panics if the next character is not an ASCII digit.
     fn next_number_literal(&mut self) -> Result<(Span, Token), Error> {
         let ch = self.peek_char().expect("next_number_literal called at EOF");
+        self.consume_char();
         assert!(ch.is_ascii_digit());
-        let mut span = self.consume_char();
+        let span_start = self.offset;
         let mut number = (ch as u8 - b'0') as i64;
         while let Some(ch) = self.peek_char()
             && ch.is_ascii_digit()
         {
-            span = self.consume_char().join(span);
+            self.consume_char();
             number = number * 10 + (ch as u8 - b'0') as i64;
         }
-        Ok((span, Token::Literal(Literal::Number(number))))
+        let suffix = if let Some(ch) = self.peek_char()
+            && is_valid_ident_start(ch)
+        {
+            let span_start = self.offset;
+            let mut suffix = String::new();
+            while let Some(ch) = self.peek_char()
+                && is_valid_ident_char(ch)
+            {
+                self.consume_char();
+                suffix.push(ch);
+            }
+            Some((
+                suffix,
+                Span {
+                    start: span_start,
+                    end: self.offset,
+                },
+            ))
+        } else {
+            None
+        };
+        Ok((
+            Span {
+                start: span_start,
+                end: self.offset,
+            },
+            Token::Literal(Literal::Number(number, suffix)),
+        ))
     }
 }
 
