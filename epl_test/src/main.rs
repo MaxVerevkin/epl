@@ -71,7 +71,7 @@ fn main() {
         }
     }
 
-    if !stats.fail.is_empty() {
+    if !stats.fail.is_empty() || !stats.new.is_empty() {
         std::process::exit(1);
     }
 }
