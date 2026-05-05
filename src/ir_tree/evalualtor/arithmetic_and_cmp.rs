@@ -6,11 +6,11 @@ pub fn eval_arithmetic(op: ArithmeticOp, lhs: Constant, rhs: Constant) -> Result
             $(
                 fn $name(op: ArithmeticOp, lhs: $ty, rhs: $ty) -> $ty {
                     match op {
-                        ArithmeticOp::Add => lhs + rhs,
-                        ArithmeticOp::Sub => lhs - rhs,
-                        ArithmeticOp::Mul => lhs * rhs,
-                        ArithmeticOp::Div => lhs / rhs,
-                        ArithmeticOp::Rem => lhs % rhs,
+                        ArithmeticOp::Add => lhs.wrapping_add(rhs),
+                        ArithmeticOp::Sub => lhs.wrapping_sub(rhs),
+                        ArithmeticOp::Mul => lhs.wrapping_mul(rhs),
+                        ArithmeticOp::Div => lhs.wrapping_div(rhs),
+                        ArithmeticOp::Rem => lhs.wrapping_rem(rhs),
                     }
                 }
             )*
