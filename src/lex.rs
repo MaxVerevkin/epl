@@ -374,10 +374,10 @@ impl Lexer<'_> {
     ///
     /// Panics if the next character is not an ASCII digit.
     fn next_number_literal(&mut self) -> Result<(Span, Token), Error> {
+        let span_start = self.offset;
         let ch = self.peek_char().expect("next_number_literal called at EOF");
         self.consume_char();
         assert!(ch.is_ascii_digit());
-        let span_start = self.offset;
         let mut number = (ch as u8 - b'0') as i64;
         while let Some(ch) = self.peek_char()
             && ch.is_ascii_digit()
