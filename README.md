@@ -38,6 +38,12 @@ The current pipeline is as follows:
 
 ## Useful commands
 
+To run tests:
+
+```
+cargo b && cargo r -p epl_test ./target/debug/epl examples && cargo r -p epl_test ./target/debug/epl tests
+```
+
 Inspect the intermediate representation in the contro-flow-graph form (requires `graphviz`):
 
 ```
