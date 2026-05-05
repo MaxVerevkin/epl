@@ -7,6 +7,7 @@ mod const_abi;
 enum EvalError {
     Return(Constant),
     Break(LoopId, Constant),
+    Continue(LoopId),
     Error(Error),
 }
 
@@ -25,6 +26,7 @@ pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Erro
     match ctx.eval_expr(expr) {
         Err(EvalError::Return(..)) => panic!("cannot return from a comptime block"),
         Err(EvalError::Break(..)) => panic!("cannot break from a comptime block"),
+        Err(EvalError::Continue(..)) => panic!("cannot continue from a comptime block"),
         Err(EvalError::Error(err)) => Err(err),
         Ok(ok) => Ok(ok),
     }
@@ -40,7 +42,7 @@ fn eval_pure_function(function_id: FunctionId, arguments: &[Constant], module: &
     };
     match ctx.eval_expr(body) {
         Err(EvalError::Return(value)) => Ok(value),
-        Err(EvalError::Break(..)) => unreachable!(),
+        Err(EvalError::Break(..) | EvalError::Continue(..)) => unreachable!(),
         Err(EvalError::Error(err)) => Err(err),
         Ok(ok) => Ok(ok),
     }
@@ -177,6 +179,7 @@ impl EvalCtx<'_> {
             }
             ExprKind::Return(expr) => return Err(EvalError::Return(self.eval_expr(expr)?)),
             ExprKind::Break(loop_id, expr) => return Err(EvalError::Break(*loop_id, self.eval_expr(expr)?)),
+            ExprKind::Continue(loop_id) => return Err(EvalError::Continue(*loop_id)),
             ExprKind::Arithmetic(op, lhs, rhs) => {
                 let lhs_value = self.eval_expr(lhs)?;
                 let rhs_value = self.eval_expr(rhs)?;
@@ -207,6 +210,7 @@ impl EvalCtx<'_> {
                     Err(EvalError::Break(break_loop_id, break_value)) if break_loop_id == *loop_id => {
                         break break_value;
                     }
+                    Err(EvalError::Continue(continue_loop_id)) if continue_loop_id == *loop_id => (),
                     Err(e) => return Err(e),
                     Ok(_) => (),
                 }

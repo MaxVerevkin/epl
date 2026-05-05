@@ -12,6 +12,7 @@ Everything after `#` is treated as a comment.
 - `fn`
 - `return`
 - `break`
+- `continue`
 - `if`
 - `else`
 - `loop`
@@ -48,7 +49,7 @@ annotation = `@` ident
 
 ## Expressions
 
-- expr = `return` expr? | `break` expr? | `comptime` expr | assigning_expr
+- expr = `return` expr? | `break` expr? | `continue` | `comptime` expr | assigning_expr
 - assigning_expr = or_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` ) or_expr )?
 - or_expr = and_expr ( `||` and_expr )*
 - and_expr = comp_expr ( `&&` comp_expr )*

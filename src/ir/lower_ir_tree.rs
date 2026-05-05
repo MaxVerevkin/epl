@@ -88,6 +88,7 @@ struct BodyLoweringCtx<'a> {
     current_block_args: Vec<DefinitionId>,
     current_instructions: Vec<Instruction>,
     break_target_map: HashMap<ir_tree::LoopId, BasicBlockId>,
+    continue_target_map: HashMap<ir_tree::LoopId, BasicBlockId>,
 }
 
 enum EvalResult<T = Value> {
@@ -122,6 +123,7 @@ impl<'a> BodyLoweringCtx<'a> {
             current_block_args: entry_block_args,
             current_instructions: Vec::new(),
             break_target_map: HashMap::new(),
+            continue_target_map: HashMap::new(),
         }
     }
 
@@ -241,14 +243,19 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never
                 }
             },
-            ir_tree::ExprKind::Break(break_from, value) => match self.eval_expr(value)? {
+            ir_tree::ExprKind::Break(loop_id, value) => match self.eval_expr(value)? {
                 EvalResult::Never => EvalResult::Never,
                 EvalResult::Value(value) => {
-                    let to = self.break_target_map[break_from];
+                    let to = self.break_target_map[loop_id];
                     self.finalize_block(Terminator::Jump { to, args: vec![value] });
                     EvalResult::Never
                 }
             },
+            ir_tree::ExprKind::Continue(loop_id) => {
+                let to = self.continue_target_map[loop_id];
+                self.finalize_block(Terminator::Jump { to, args: Vec::new() });
+                EvalResult::Never
+            }
             ir_tree::ExprKind::Arithmetic(op, lhs, rhs) => {
                 let signed = lhs.ty.is_signed_int();
                 let lhs = match self.eval_expr(lhs)? {
@@ -341,6 +348,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 let continuation_id = BasicBlockId::new();
 
                 self.break_target_map.insert(*loop_id, continuation_id);
+                self.continue_target_map.insert(*loop_id, body_id);
 
                 self.finalize_block(Terminator::Jump {
                     to: body_id,

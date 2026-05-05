@@ -202,6 +202,7 @@ pub enum Expr {
     StructInitializer(StructInitializerExpr),
     Return(ReturnExpr),
     Break(BreakExpr),
+    Continue(ContinueExpr),
     Literal(LiteralExpr),
     FunctionCallExpr(FunctionCallExpr),
     Assignment(AssignmentExpr),
@@ -245,6 +246,7 @@ impl Expr {
                 Some(val) => break_expr.break_keyword_span.join(val.span()),
                 None => break_expr.break_keyword_span,
             },
+            Self::Continue(e) => e.continue_keyword_span,
             Self::Literal(literal_expr) => literal_expr.span,
             Self::FunctionCallExpr(function_call_expr) => function_call_expr.span(),
             Self::Assignment(e) => e.place.span().join(e.value.span()),
@@ -288,6 +290,12 @@ pub struct ReturnExpr {
 pub struct BreakExpr {
     pub break_keyword_span: lex::Span,
     pub value: Option<Box<Expr>>,
+}
+
+/// A continue expression
+#[derive(Debug, Clone)]
+pub struct ContinueExpr {
+    pub continue_keyword_span: lex::Span,
 }
 
 /// A literal expression with its span
@@ -805,6 +813,10 @@ impl Parser<'_> {
                     value,
                 }))
             }
+            Some(lex::Token::Keyword(lex::Keyword::Continue)) => {
+                let (continue_keyword_span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::Continue(ContinueExpr { continue_keyword_span }))
+            }
             _ => self.next_assigning_expr(),
         }
     }
@@ -1270,6 +1282,7 @@ impl fmt::Debug for Expr {
             Self::StructInitializer(e) => e.fmt(f),
             Self::Return(e) => e.fmt(f),
             Self::Break(e) => e.fmt(f),
+            Self::Continue(e) => e.fmt(f),
             Self::Literal(e) => e.fmt(f),
             Self::FunctionCallExpr(e) => e.fmt(f),
             Self::Assignment(e) => e.fmt(f),

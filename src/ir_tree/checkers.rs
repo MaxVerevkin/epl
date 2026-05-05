@@ -23,6 +23,7 @@ pub fn purity_check(body: &Expr, functions: &BTreeMap<FunctionId, Function>) -> 
                 | ExprKind::Block(_)
                 | ExprKind::Return(_)
                 | ExprKind::Break(_, _)
+                | ExprKind::Continue(_)
                 | ExprKind::Arithmetic(_, _, _)
                 | ExprKind::InPlaceArithmetic(_, _, _)
                 | ExprKind::Cmp(_, _, _)

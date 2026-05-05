@@ -95,6 +95,9 @@ fn main() -> i32
     |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
     |   |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
+    |   |   |   |   |   |   CONST 1 TYPE=u32
     |   |   |   |   |   BLOCK TYPE=unit
     |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   |   CONST_STRING("fib(%i) = %i\n") TYPE=*i8
@@ -110,9 +113,6 @@ fn main() -> i32
     |   |   |   |   |   |   |   FUNCTION_CALL("fib_it") TYPE=u32
     |   |   |   |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
-    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u32
-    |   |   |   |   |   |   CONST 1 TYPE=u32
     |   |   |   |   BREAK(loop_2) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   CONST 0 TYPE=i32

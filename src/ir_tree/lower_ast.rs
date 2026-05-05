@@ -69,7 +69,7 @@ struct Scope {
 
 #[derive(Clone, Copy)]
 struct LoopContext {
-    break_from: LoopId,
+    loop_id: LoopId,
     break_used_with_type: Option<Type>,
     expect_type: Option<Type>,
 }
@@ -243,15 +243,13 @@ impl<'a> FunctionLoweringCtx<'a> {
                 //     loop {
                 //         if $var < $target {
                 //             let <var> = $var
-                //             { $body }
                 //             $var += 1
+                //             { $body }
                 //         } else {
                 //             break
                 //         }
                 //     }
                 // }
-                //
-                // TODO: shadowed target will no longer be needed when mutability is implemented
 
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Unit
@@ -333,7 +331,6 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                     variables: Vec::new(),
                                                     exprs: vec![
                                                         Expr::set_var(shadowed_var_id, Expr::get_var(var_id, var_type)),
-                                                        lowered_body.body,
                                                         Expr {
                                                             ty: Type::Unit,
                                                             span: None,
@@ -346,6 +343,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                                 ))),
                                                             ),
                                                         },
+                                                        lowered_body.body,
                                                     ],
                                                 }),
                                             }),
@@ -509,11 +507,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                         .with_span(break_expr.break_keyword_span));
                 }
                 let loop_ctx = self.scope.loop_context().ok_or_else(|| {
-                    Error::new("break expressions are only allowed inside loops")
+                    Error::new("'break' expressions are only allowed inside loops")
                         .with_span(break_expr.break_keyword_span)
                 })?;
                 let expect_type = loop_ctx.expect_type;
-                let break_from = loop_ctx.break_from;
+                let loop_id = loop_ctx.loop_id;
                 let lowered_value = break_expr
                     .value
                     .as_ref()
@@ -528,7 +526,18 @@ impl<'a> FunctionLoweringCtx<'a> {
                 Ok(Expr {
                     ty: Type::Never,
                     span,
-                    kind: ExprKind::Break(break_from, Box::new(lowered_value)),
+                    kind: ExprKind::Break(loop_id, Box::new(lowered_value)),
+                })
+            }
+            ast::Expr::Continue(continue_expr) => {
+                let loop_ctx = self.scope.loop_context().ok_or_else(|| {
+                    Error::new("'continue' expressions are only allowed inside loops")
+                        .with_span(continue_expr.continue_keyword_span)
+                })?;
+                Ok(Expr {
+                    ty: Type::Never,
+                    span,
+                    kind: ExprKind::Continue(loop_ctx.loop_id),
                 })
             }
             ast::Expr::Literal(literal_expr) => match &literal_expr.value {
@@ -1011,7 +1020,7 @@ impl<'a> FunctionLoweringCtx<'a> {
         let loop_id = LoopId::new();
         self.scope.push();
         self.scope.loop_context = Some(LoopContext {
-            break_from: loop_id,
+            loop_id,
             break_used_with_type: None,
             expect_type,
         });

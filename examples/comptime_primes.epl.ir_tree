@@ -26,6 +26,9 @@ fn main() -> unit
     |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u64
     |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
+    |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   CONST_STRING("%i ") TYPE=*i8
     |   |   |   |   |   |   ARRAY_ELEMENT TYPE=i32
@@ -33,9 +36,6 @@ fn main() -> unit
     |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 20]
     |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u64
-    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
-    |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   BREAK(loop_3) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   FUNCTION_CALL("printf") TYPE=unit

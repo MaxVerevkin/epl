@@ -263,6 +263,7 @@ pub enum ExprKind {
     Block(BlockExpr),
     Return(Box<Expr>),
     Break(LoopId, Box<Expr>),
+    Continue(LoopId),
     Arithmetic(ArithmeticOp, Box<Expr>, Box<Expr>),
     InPlaceArithmetic(ArithmeticOp, Place, Box<Expr>),
     Cmp(CmpOp, Box<Expr>, Box<Expr>),
@@ -370,6 +371,7 @@ impl Expr {
             | ExprKind::Block(..)
             | ExprKind::Return(..)
             | ExprKind::Break(..)
+            | ExprKind::Continue(..)
             | ExprKind::Arithmetic(..)
             | ExprKind::InPlaceArithmetic(..)
             | ExprKind::Cmp(..)

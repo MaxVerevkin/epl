@@ -23,7 +23,7 @@ pub trait ExprVisitorMut: Sized {
 impl Expr {
     pub fn visit_children<'a>(&'a self, visitor: &mut impl ExprVisitor<'a>) {
         match &self.kind {
-            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_) => (),
+            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_) | ExprKind::Continue(_) => (),
 
             ExprKind::Field(expr, _)
             | ExprKind::Return(expr)
@@ -79,7 +79,7 @@ impl Expr {
 
     pub fn visit_children_mut(&mut self, visitor: &mut impl ExprVisitorMut) {
         match &mut self.kind {
-            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_) => (),
+            ExprKind::Const(_) | ExprKind::ConstString(_) | ExprKind::Argument(_) | ExprKind::Continue(_) => (),
 
             ExprKind::Field(expr, _)
             | ExprKind::Return(expr)

@@ -37,6 +37,9 @@ fn fib_array() -> [i32; 10]
     |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=u64
     |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=u64
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=u64
+    |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   ARRAY_ELEMENT [PLACE] TYPE=i32
     |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 10]
@@ -57,9 +60,6 @@ fn fib_array() -> [i32; 10]
     |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   CONST 2 TYPE=u64
-    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=u64
-    |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   BREAK(loop_1) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   LOAD TYPE=[i32; 10]
@@ -96,6 +96,9 @@ fn print_array(array: [i32; 10]) -> unit
     |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   |   |   BLOCK TYPE=unit
     |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   |   |   CONST_STRING("%i") TYPE=*i8
@@ -112,9 +115,6 @@ fn print_array(array: [i32; 10]) -> unit
     |   |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   |   |   |   CONST_STRING(", ") TYPE=*i8
     |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
-    |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
-    |   |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   |   BREAK(loop_2) TYPE=!
     |   |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   FUNCTION_CALL("printf") TYPE=unit
