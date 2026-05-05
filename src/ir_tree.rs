@@ -56,7 +56,7 @@ pub struct Module {
 }
 
 impl Module {
-    /// Construct an IR from AST
+    /// Construct an IR_TREE from AST
     pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
         let mut module = Self {
             functions: BTreeMap::new(),
@@ -81,15 +81,22 @@ impl Module {
                 ast::ItemKind::Function(function) => {
                     let decl =
                         Function::decl_from_ast(&mut module.typesystem, &type_namespace, function, &item.annotations)?;
-                    functions_namespace.insert(function.name.value.clone(), decl.id);
+                    if functions_namespace
+                        .insert(function.name.value.clone(), decl.id)
+                        .is_some()
+                    {
+                        return Err(Error::new("function with this name already exists").with_span(decl.name.span));
+                    }
                     module.functions.insert(decl.id, decl);
                 }
-                ast::ItemKind::Struct(s) => {
-                    let name = s.name.value.clone();
+                ast::ItemKind::Struct(s_def) => {
+                    let name = s_def.name.value.clone();
                     let s = module
                         .typesystem
-                        .struct_from_ast(&type_namespace, s, &item.annotations)?;
-                    type_namespace.insert(name, s);
+                        .struct_from_ast(&type_namespace, s_def, &item.annotations)?;
+                    if type_namespace.insert(name, s).is_some() {
+                        return Err(Error::new("type with this name already exists").with_span(s_def.name.span));
+                    }
                 }
             }
         }
