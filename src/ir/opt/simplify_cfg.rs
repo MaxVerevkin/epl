@@ -11,7 +11,7 @@ pub fn pass(function: &mut Function) {
 
     eliminate_unreachable(body);
 
-    let predecessor_map = build_predecessor_map(body);
+    let mut predecessor_map = build_predecessor_map(body);
 
     let mut queue = body.postorder();
     let mut removed = HashSet::new();
@@ -35,6 +35,7 @@ pub fn pass(function: &mut Function) {
                 unreachable!()
             };
             rename_map.map_args(&succ.args, &succ_args);
+            predecessor_map = build_predecessor_map(body);
             continue;
         }
 
@@ -79,6 +80,7 @@ pub fn pass(function: &mut Function) {
                     Terminator::Return(_) | Terminator::Unreachable => unreachable!(),
                 }
             }
+            predecessor_map = build_predecessor_map(body);
             continue;
         }
     }
