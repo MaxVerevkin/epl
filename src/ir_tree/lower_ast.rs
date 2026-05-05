@@ -499,17 +499,17 @@ impl<'a> FunctionLoweringCtx<'a> {
                 })
             }
             ast::Expr::Break(break_expr) => {
+                let loop_ctx = self.scope.loop_context().ok_or_else(|| {
+                    Error::new("'break' expressions are only allowed inside loops")
+                        .with_span(break_expr.break_keyword_span)
+                })?;
                 if break_expr.value.is_none()
-                    && let Some(expect_type) = expect_type
+                    && let Some(expect_type) = loop_ctx.expect_type
                     && expect_type != Type::Unit
                 {
                     return Err(Error::new(format!("a break value of type {expect_type:?} is expected"))
                         .with_span(break_expr.break_keyword_span));
                 }
-                let loop_ctx = self.scope.loop_context().ok_or_else(|| {
-                    Error::new("'break' expressions are only allowed inside loops")
-                        .with_span(break_expr.break_keyword_span)
-                })?;
                 let expect_type = loop_ctx.expect_type;
                 let loop_id = loop_ctx.loop_id;
                 let lowered_value = break_expr
