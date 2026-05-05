@@ -94,9 +94,14 @@ fn run_tests_in_dir(stats: &mut Stats, dir: &Path, epl_exe: &str) {
 }
 
 fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
+    ir_tree_snapshot_test(stats, path, epl_exe);
+    ir_smoke_test(stats, path, epl_exe);
+}
+
+fn ir_tree_snapshot_test(stats: &mut Stats, path: &Path, epl_exe: &str) {
     let test_case = TestCase {
         path: path.to_path_buf(),
-        test_name: String::from("ir_tree"),
+        test_name: String::from("ir_tree snapshot"),
     };
 
     let result = std::process::Command::new(epl_exe)
@@ -132,4 +137,30 @@ fn run_tests_on_src(stats: &mut Stats, path: &Path, epl_exe: &str) {
             panic!("could not read expected ir_tree output: {e:?}");
         }
     }
+}
+
+fn ir_smoke_test(stats: &mut Stats, path: &Path, epl_exe: &str) {
+    let test_case = TestCase {
+        path: path.to_path_buf(),
+        test_name: String::from("ir smoke test"),
+    };
+
+    let result = std::process::Command::new(epl_exe)
+        .arg("ir")
+        .arg(path)
+        .output()
+        .expect("compiler invocation failed");
+
+    if !result.status.success() {
+        stats.mark_fail(test_case, "compiler existed with non zero exit code");
+        return;
+    }
+
+    let Ok(_result_str) = String::from_utf8(result.stdout) else {
+        stats.mark_fail(test_case, "compiler produced non-utf8 output");
+        return;
+    };
+
+    // TODO: snapshot test IR output
+    stats.mark_ok(test_case);
 }
