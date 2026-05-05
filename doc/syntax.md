@@ -30,12 +30,13 @@ Everything after `#` is treated as a comment.
 
 ## Annotations
 
-annotation = '@' ident
+annotation = `@` ident
 
 ## Fuctions
 
-- function = `fn` ident `(` fn_arg? (, fn_arg)* `)` (`->` type)? (block_expr | `;`)
-- fn_arg = ident `:` type
+- function = `fn` ident `(` (fn_args `,`?)? `)` (`->` type)? (block_expr | `;`)
+- fn_args =  fn_arg (`,` fn_arg)* (`,` `...`)? | `...`
+- fn_arg = (ident `:` type)
 
 ## Struct Definitions
 
@@ -69,7 +70,7 @@ annotation = '@' ident
 - loop_expr = `loop` block_expr
 - while_expr = `while` expr block_expr
 - for_expr = `for` ident `in` expr block_expr
-- function_call_expr = ident `(` expr? (, expr)*, `...` `)` | ident `(` `...` `)`
+- function_call_expr = ident `(` expr (`,` expr)* `,`? `)` | ident `(` `)`
 - let_statement =  `let` ident `:` type `;` | `let` ident (`:` type)? `=` expr `;`
 - type = `!` | ident | `*` type | `[` type `;` expr `]`
 
