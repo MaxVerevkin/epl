@@ -520,7 +520,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .map(|expr| self.lower_expr(expr, expect_type))
                     .transpose()?
                     .unwrap_or(Expr::UNIT);
-                self.scope.loop_context().unwrap().break_used_with_type = Some(lowered_value.ty);
+                if lowered_value.ty != Type::Never {
+                    let loop_ctx = self.scope.loop_context().unwrap();
+                    loop_ctx.break_used_with_type = Some(lowered_value.ty);
+                    loop_ctx.expect_type = Some(lowered_value.ty);
+                }
                 Ok(Expr {
                     ty: Type::Never,
                     span,
