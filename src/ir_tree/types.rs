@@ -69,7 +69,7 @@ impl Type {
                 let mut offset = 0u64;
                 for field in &struct_def.fields {
                     let field_layout = field.ty.layout(typesystem);
-                    offset = offset.next_multiple_of(field_layout.size);
+                    offset = offset.next_multiple_of(field_layout.align);
                     if field.name.value == name {
                         return Some(offset);
                     }
