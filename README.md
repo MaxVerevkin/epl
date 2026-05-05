@@ -41,7 +41,7 @@ The current pipeline is as follows:
 To run tests:
 
 ```
-cargo b && cargo r -p epl_test ./target/debug/epl examples && cargo r -p epl_test ./target/debug/epl tests
+cargo b && cargo r -p epl_test ./target/debug/epl examples tests
 ```
 
 Inspect the intermediate representation in the contro-flow-graph form (requires `graphviz`):

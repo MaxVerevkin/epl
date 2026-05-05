@@ -41,14 +41,15 @@ fn main() {
     let arg0 = args.next().unwrap();
 
     let Some(epl_exe) = args.next() else { usage(&arg0) };
-    let Some(test_dir) = args.next() else { usage(&arg0) };
-
-    if args.next().is_some() {
+    let test_dirs: Vec<_> = args.collect();
+    if test_dirs.is_empty() {
         usage(&arg0);
     }
 
     let mut stats = Stats::default();
-    run_tests_in_dir(&mut stats, Path::new(&test_dir), &epl_exe);
+    for test_dir in test_dirs {
+        run_tests_in_dir(&mut stats, Path::new(&test_dir), &epl_exe);
+    }
 
     println!(
         "\nDONE ({} passed, {} failed, {} new)",
@@ -77,7 +78,7 @@ fn main() {
 }
 
 fn usage(arg0: &str) -> ! {
-    println!("USAGE: {arg0} [epl exe] [test dir]");
+    println!("USAGE: {arg0} [epl exe] [test dir [test dir [...]]]");
     std::process::exit(1);
 }
 
