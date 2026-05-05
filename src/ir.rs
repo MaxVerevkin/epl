@@ -331,7 +331,8 @@ impl Terminator {
                     cb(arg);
                 }
             }
-            Self::Return(_) | Self::Unreachable => (),
+            Self::Return(op) => cb(op),
+            Self::Unreachable => (),
         }
     }
 }
