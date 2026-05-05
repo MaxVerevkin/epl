@@ -691,11 +691,13 @@ impl<'a> FunctionLoweringCtx<'a> {
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
                     let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
-                    if !operands_ty.is_int() {
-                        return Err(
-                            Error::new(format!("only integer types can be compared, not {operands_ty:?}"))
-                                .with_span(binary_expr.op_span),
-                        );
+                    match (cmp_op, operands_ty) {
+                        (_, Type::Int(_)) => (),
+                        (CmpOp::Equal | CmpOp::NotEqual, Type::Bool) => (),
+                        _ => {
+                            return Err(Error::new(format!("cannot compare {operands_ty:?} with {cmp_op:?}"))
+                                .with_span(binary_expr.op_span));
+                        }
                     }
                     Ok(Expr {
                         ty: Type::Bool,
