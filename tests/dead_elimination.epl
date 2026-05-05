@@ -1,0 +1,7 @@
+fn test() {
+	external();
+	return;
+	external();
+}
+
+fn external();

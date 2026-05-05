@@ -69,6 +69,11 @@ impl Expr {
 
 impl BlockExpr {
     fn eliminate_dead_code(&mut self) {
+        // remove all code after first expr with never type
+        if let Some(first_never_expr_i) = self.exprs.iter().position(|expr| expr.ty == Type::Never) {
+            self.exprs.truncate(first_never_expr_i + 1);
+        }
+
         // remove all pure exprs except the last one
         let mut expr_i = 0;
         let exprs_len = self.exprs.len();

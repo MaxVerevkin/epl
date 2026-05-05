@@ -1,0 +1,9 @@
+fn test() -> unit
+    BLOCK TYPE=unit
+    |   FUNCTION_CALL("external") TYPE=unit
+    |   RETURN TYPE=!
+    |   |   CONST UNIT TYPE=unit
+
+fn external() -> unit
+
+
