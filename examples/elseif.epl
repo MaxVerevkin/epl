@@ -1,0 +1,9 @@
+fn select(a: i32, b: i32, c: i32, cond: i32) -> i32 {
+	if cond < 0 {
+		a
+	} else if cond == 0 {
+		b
+	} else {
+		c
+	}
+}

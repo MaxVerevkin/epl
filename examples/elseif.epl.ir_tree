@@ -1,0 +1,36 @@
+fn select(a: i32, b: i32, c: i32, cond: i32) -> i32
+    BLOCK TYPE=i32
+    |   DECLARE var_1 "a" : i32
+    |   DECLARE var_2 "b" : i32
+    |   DECLARE var_3 "c" : i32
+    |   DECLARE var_4 "cond" : i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   ARGUMENT("a") TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_2) [PLACE] TYPE=i32
+    |   |   ARGUMENT("b") TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_3) [PLACE] TYPE=i32
+    |   |   ARGUMENT("c") TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_4) [PLACE] TYPE=i32
+    |   |   ARGUMENT("cond") TYPE=i32
+    |   IF TYPE=i32
+    |   |   CMP(Less) TYPE=bool
+    |   |   |   LOAD TYPE=i32
+    |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=i32
+    |   |   |   CONST 0 TYPE=i32
+    |   |   LOAD TYPE=i32
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   IF TYPE=i32
+    |   |   |   CMP(Equal) TYPE=bool
+    |   |   |   |   LOAD TYPE=i32
+    |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=i32
+    |   |   |   |   CONST 0 TYPE=i32
+    |   |   |   LOAD TYPE=i32
+    |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=i32
+    |   |   |   LOAD TYPE=i32
+    |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=i32
+
+

@@ -170,7 +170,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 let if_false = if_expr
                     .if_false
                     .as_ref()
-                    .map(|expr| self.lower_block_expr(expr, expect_type))
+                    .map(|expr| self.lower_expr(expr, expect_type))
                     .transpose()?
                     .unwrap_or(Expr::UNIT);
 
