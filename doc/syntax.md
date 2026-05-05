@@ -16,6 +16,8 @@ Everything after `#` is treated as a comment.
 - `else`
 - `loop`
 - `while`
+- `for`
+- `in`
 - `let`
 - `true`
 - `false`
@@ -59,7 +61,7 @@ annotation = `@` ident
 - field_access_expr = base_expr ( `.` `*` | `.` ident | `[` expr `]` )*
 - base_expr = literal | function_call_expr | ident | `(` expr `)` | expr_with_block
 - expr_with_block = block_expr | if_expr | loop_expr | while_expr | for_expr | struct_initializer | array_initializer
-- array_initializer = `[` (expr ,?)? | expr (, expr)* ,? `]`
+- array_initializer = `[` (expr (`,` expr)* `,`?)? `]`
 - struct_initializer = ident? `.{` struct_initializer_fields `}`
 - struct_initializer_fields = (struct_initializer_field ,?)? | struct_initializer_field (, struct_initializer_field)* ,?
 - struct_initializer_field = ident `:` expr
