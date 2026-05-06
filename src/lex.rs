@@ -91,7 +91,7 @@ pub enum Literal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Punct {
     /// ...
-    TrippleDot,
+    TripleDot,
     /// ..
     DoubleDot,
     // ||
@@ -166,7 +166,7 @@ pub enum Punct {
 
 /// A mapping from strings to punct tokens
 const PUNCT_MAP: &[(&str, Punct)] = &[
-    ("...", Punct::TrippleDot),
+    ("...", Punct::TripleDot),
     ("..", Punct::DoubleDot),
     ("||", Punct::LogicalOr),
     ("&&", Punct::LogicalAnd),

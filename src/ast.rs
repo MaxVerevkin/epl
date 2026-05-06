@@ -605,7 +605,7 @@ impl Parser<'_> {
                     self.consume_token()?;
                     break;
                 }
-                Some(lex::Token::Punct(lex::Punct::TrippleDot)) => {
+                Some(lex::Token::Punct(lex::Punct::TripleDot)) => {
                     let (span, _) = self.consume_token()?.unwrap();
                     is_variadic = true;
                     if self.peek_token()? != Some(&lex::Token::Punct(lex::Punct::RightParen)) {

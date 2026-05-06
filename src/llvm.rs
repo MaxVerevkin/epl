@@ -193,11 +193,11 @@ impl LlvmModule {
         module.verify()?;
 
         // unsafe {
-        //     let target_tripple = LLVMGetDefaultTargetTriple();
+        //     let target_triple = LLVMGetDefaultTargetTriple();
 
         //     let mut target = std::ptr::null_mut();
         //     let mut error_ptr = std::ptr::null_mut();
-        //     if LLVMGetTargetFromTriple(target_tripple, &mut target, &mut error_ptr) != 0 {
+        //     if LLVMGetTargetFromTriple(target_triple, &mut target, &mut error_ptr) != 0 {
         //         let error = cstring_from_ptr(error_ptr);
         //         LLVMDisposeMessage(error_ptr);
         //         return Err(error);
@@ -205,7 +205,7 @@ impl LlvmModule {
 
         //     let target_machine = LLVMCreateTargetMachine(
         //         target,
-        //         target_tripple,
+        //         target_triple,
         //         c"generic".as_ptr(),
         //         c"".as_ptr(),
         //         LLVMCodeGenOptLevel::LLVMCodeGenLevelNone,
@@ -224,11 +224,11 @@ impl LlvmModule {
     /// Compile this module for the native target and save the object as a.out.o
     pub fn compile(&self) -> Result<(), CString> {
         unsafe {
-            let target_tripple = LLVMGetDefaultTargetTriple();
+            let target_triple = LLVMGetDefaultTargetTriple();
 
             let mut target = std::ptr::null_mut();
             let mut error_ptr = std::ptr::null_mut();
-            if LLVMGetTargetFromTriple(target_tripple, &mut target, &mut error_ptr) != 0 {
+            if LLVMGetTargetFromTriple(target_triple, &mut target, &mut error_ptr) != 0 {
                 let error = cstring_from_ptr(error_ptr);
                 LLVMDisposeMessage(error_ptr);
                 return Err(error);
@@ -236,7 +236,7 @@ impl LlvmModule {
 
             let target_machine = LLVMCreateTargetMachine(
                 target,
-                target_tripple,
+                target_triple,
                 c"generic".as_ptr(),
                 c"".as_ptr(),
                 LLVMCodeGenOptLevel::LLVMCodeGenLevelNone,
@@ -245,7 +245,7 @@ impl LlvmModule {
             );
 
             LLVMSetModuleDataLayout(self.raw, LLVMCreateTargetDataLayout(target_machine));
-            LLVMSetTarget(self.raw, target_tripple);
+            LLVMSetTarget(self.raw, target_triple);
 
             if LLVMTargetMachineEmitToFile(
                 target_machine,
