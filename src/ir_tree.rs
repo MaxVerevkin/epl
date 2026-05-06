@@ -211,14 +211,22 @@ impl Function {
                 }
             }
         }
+
+        let mut args: Vec<(String, Type)> = Vec::new();
+        for arg in &ast.args {
+            if args.iter().any(|x| x.0 == arg.name.value) {
+                return Err(Error::new("argument with this name already exists").with_span(arg.name.span));
+            }
+            args.push((
+                arg.name.value.clone(),
+                typesystem.type_from_ast(type_namespace, &arg.ty)?,
+            ));
+        }
+
         Ok(Self {
             id: FunctionId::new(),
             name: ast.name.clone(),
-            args: ast
-                .args
-                .iter()
-                .map(|a| Ok((a.name.value.clone(), typesystem.type_from_ast(type_namespace, &a.ty)?)))
-                .collect::<Result<_, _>>()?,
+            args,
             return_ty: ast
                 .return_ty
                 .as_ref()

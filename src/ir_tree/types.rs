@@ -254,16 +254,18 @@ impl TypeSystem {
                 Error::new(format!("unknown annotation: {:?}", annotation.ident.value)).with_span(annotation.span())
             );
         }
-        let fields = ast
-            .fields
-            .iter()
-            .map(|field| {
-                Ok(StructField {
-                    name: field.name.clone(),
-                    ty: self.type_from_ast(type_namespace, &field.ty)?,
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut fields: Vec<StructField> = Vec::new();
+        for field in &ast.fields {
+            if fields.iter().any(|x| x.name.value == field.name.value) {
+                return Err(Error::new("field with this name already exists").with_span(field.name.span));
+            }
+            fields.push(StructField {
+                name: field.name.clone(),
+                ty: self.type_from_ast(type_namespace, &field.ty)?,
+            });
+        }
+
         let sid = StructId(self.structs.len());
         self.structs.push(Struct {
             name: ast.name.clone(),

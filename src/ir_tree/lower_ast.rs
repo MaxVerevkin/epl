@@ -445,8 +445,9 @@ impl<'a> FunctionLoweringCtx<'a> {
                         }
                     },
                 };
-                let struct_def = self.typesystem.get_struct(sid);
-                if let Some(missing_field) = struct_def
+                if let Some(missing_field) = self
+                    .typesystem
+                    .get_struct(sid)
                     .fields
                     .iter()
                     .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.name.value))
@@ -455,8 +456,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                         Error::new(format!("missing field: {}", missing_field.name.value)).with_span(expr.span())
                     );
                 }
-                let mut lowered_fields = Vec::new();
+                let mut lowered_fields: Vec<(String, Expr)> = Vec::new();
                 for field in &e.fields {
+                    if lowered_fields.iter().any(|x| x.0 == field.name.value) {
+                        return Err(Error::new("duplicate field entry").with_span(field.name.span));
+                    }
                     let struct_def = self.typesystem.get_struct(sid);
                     let f_ty = struct_def
                         .fields
