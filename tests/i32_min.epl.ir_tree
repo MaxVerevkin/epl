@@ -1,0 +1,4 @@
+fn get_i32_min() -> i32
+    CONST -2147483648 TYPE=i32
+
+

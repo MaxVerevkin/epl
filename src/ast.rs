@@ -330,6 +330,7 @@ pub struct LiteralExpr {
 pub enum LiteralExprValue {
     Undefined,
     Number(u128, Option<Ident>),
+    NegativeNumber(i128, Option<Ident>),
     String(String),
     Bool(bool),
 }
@@ -1001,12 +1002,29 @@ impl Parser<'_> {
         match self.peek_token()? {
             Some(lex::Token::Punct(lex::Punct::Minus)) => {
                 let (op_span, _) = self.consume_token()?.unwrap();
-                let rhs = self.next_unary_expr()?;
-                Ok(Expr::Unary(UnaryExpr {
-                    op: UnaryOp::Negate,
-                    rhs: Box::new(rhs),
-                    op_span,
-                }))
+                Ok(match self.next_unary_expr()? {
+                    Expr::Literal(LiteralExpr {
+                        span,
+                        value: LiteralExprValue::Number(number, suffix),
+                    }) => {
+                        let span = span.join(op_span);
+                        let Ok(number) = i128::try_from(number) else {
+                            return Err(Error {
+                                span: Some(span),
+                                kind: ErrorKind::Lex(lex::ErrorKind::NumberLiteralTooLarge),
+                            });
+                        };
+                        Expr::Literal(LiteralExpr {
+                            span,
+                            value: LiteralExprValue::NegativeNumber(-number, suffix),
+                        })
+                    }
+                    rhs => Expr::Unary(UnaryExpr {
+                        op: UnaryOp::Negate,
+                        rhs: Box::new(rhs),
+                        op_span,
+                    }),
+                })
             }
             Some(lex::Token::Punct(lex::Punct::Exclam)) => {
                 let (op_span, _) = self.consume_token()?.unwrap();
@@ -1330,6 +1348,7 @@ impl fmt::Debug for LiteralExpr {
         match &self.value {
             LiteralExprValue::Undefined => f.write_str("undefined")?,
             LiteralExprValue::Number(num, _suffix) => num.fmt(f)?,
+            LiteralExprValue::NegativeNumber(num, _suffix) => num.fmt(f)?,
             LiteralExprValue::String(s) => s.fmt(f)?,
             LiteralExprValue::Bool(b) => b.fmt(f)?,
         }

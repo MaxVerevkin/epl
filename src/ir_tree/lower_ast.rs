@@ -580,6 +580,42 @@ impl<'a> FunctionLoweringCtx<'a> {
                         kind: ExprKind::Const(const_value),
                     })
                 }
+                ast::LiteralExprValue::NegativeNumber(number, suffix) => {
+                    let int_ty = match suffix {
+                        None => expect_type.and_then(|ty| ty.as_int()).unwrap_or(IntType::I32),
+                        Some(suffix) => match &*suffix.value {
+                            "i8" => IntType::I8,
+                            "u8" => IntType::U8,
+                            "i32" => IntType::I32,
+                            "u32" => IntType::U32,
+                            "i64" => IntType::I64,
+                            "u64" => IntType::U64,
+                            other => {
+                                return Err(Error::new(format!("unknown integer literal suffix: {other:?}"))
+                                    .with_span(suffix.span));
+                            }
+                        },
+                    };
+                    if let Some(expect_type) = expect_type
+                        && expect_type != Type::Int(int_ty)
+                    {
+                        return Err(Error::expr_type_missmatch(
+                            expect_type,
+                            Type::Int(int_ty),
+                            literal_expr.span,
+                        ));
+                    }
+                    let Some(const_value) = Constant::int_signed(*number, int_ty) else {
+                        return Err(
+                            Error::new(format!("number does not fit into {int_ty:?}")).with_span(literal_expr.span)
+                        );
+                    };
+                    Ok(Expr {
+                        ty: Type::Int(int_ty),
+                        span,
+                        kind: ExprKind::Const(const_value),
+                    })
+                }
                 ast::LiteralExprValue::String(string) => {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::I8_PTR

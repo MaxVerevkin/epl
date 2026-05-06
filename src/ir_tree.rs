@@ -357,6 +357,18 @@ impl Constant {
             IntType::U64 => Self::U64(number.try_into().ok()?),
         })
     }
+
+    /// Returns `None` if the number cannot fit into provided `IntType`
+    pub fn int_signed(number: i128, ty: IntType) -> Option<Self> {
+        Some(match ty {
+            IntType::I8 => Self::I8(number.try_into().ok()?),
+            IntType::U8 => Self::U8(number.try_into().ok()?),
+            IntType::I32 => Self::I32(number.try_into().ok()?),
+            IntType::U32 => Self::U32(number.try_into().ok()?),
+            IntType::I64 => Self::I64(number.try_into().ok()?),
+            IntType::U64 => Self::U64(number.try_into().ok()?),
+        })
+    }
 }
 
 #[derive(Debug)]
