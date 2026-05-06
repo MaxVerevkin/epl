@@ -35,6 +35,11 @@ impl Type {
         matches!(self, Self::Int(_))
     }
 
+    /// Returns `true` if this data type is an pointer
+    pub fn is_ptr(self) -> bool {
+        matches!(self, Self::Ptr { .. })
+    }
+
     /// Returns the `IntType` of this type if it is an integer
     pub fn as_int(self) -> Option<IntType> {
         match self {

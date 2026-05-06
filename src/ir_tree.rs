@@ -96,6 +96,9 @@ impl Module {
                 ast::ItemKind::Function(function) => {
                     let decl =
                         Function::decl_from_ast(&mut module.typesystem, &type_namespace, function, &item.annotations)?;
+                    if decl.is_pure && function.body.is_none() {
+                        return Err(Error::new("pure functions must have a body").with_span(decl.name.span));
+                    }
                     if functions_namespace
                         .insert(function.name.value.clone(), decl.id)
                         .is_some()
@@ -122,8 +125,9 @@ impl Module {
                             &mut module.typesystem,
                             &type_namespace,
                         )?;
+                        checkers::check_comptime_exprs(&body, &module)?;
                         if decl.is_pure {
-                            checkers::purity_check(&body, &module.functions)?;
+                            checkers::check_pure_function(&body, &module)?;
                         }
                         opt::BasicOptVisitor.visit_expr(&mut body);
                         module.functions.get_mut(&function_id).unwrap().body = Some(body);

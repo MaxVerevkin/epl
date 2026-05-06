@@ -34,7 +34,7 @@ impl Eq for Annotation {}
 
 impl PartialOrd for Annotation {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.ident.value.partial_cmp(&other.ident.value)
+        Some(self.cmp(other))
     }
 }
 
