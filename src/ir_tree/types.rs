@@ -246,7 +246,7 @@ impl TypeSystem {
 
         let mut fields: Vec<StructField> = Vec::new();
         let mut size = 0u64;
-        let mut align = 0;
+        let mut align = 1;
         for field in &ast.fields {
             if fields.iter().any(|x| x.name.value == field.name.value) {
                 return Err(Error::new("field with this name already exists").with_span(field.name.span));
