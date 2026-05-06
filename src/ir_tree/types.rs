@@ -64,19 +64,12 @@ impl Type {
     /// Returns the byte offset of the struct's field
     pub fn get_field_offset(self, name: &str, typesystem: &TypeSystem) -> Option<u64> {
         match self {
-            Self::Struct(struct_id) => {
-                let struct_def = typesystem.get_struct(struct_id);
-                let mut offset = 0u64;
-                for field in &struct_def.fields {
-                    let field_layout = field.ty.layout(typesystem);
-                    offset = offset.next_multiple_of(field_layout.align);
-                    if field.name.value == name {
-                        return Some(offset);
-                    }
-                    offset += field_layout.size;
-                }
-                None
-            }
+            Self::Struct(struct_id) => typesystem
+                .get_struct(struct_id)
+                .fields
+                .iter()
+                .find(|f| f.name.value == name)
+                .map(|f| f.offset),
             _ => None,
         }
     }
@@ -94,18 +87,7 @@ impl Type {
                 size: typesystem.ptr_size,
                 align: typesystem.ptr_size,
             },
-            Self::Struct(sid) => {
-                let s = typesystem.get_struct(sid);
-                let mut layout = Layout { size: 0, align: 1 };
-                for f in &s.fields {
-                    let f_layout = f.ty.layout(typesystem);
-                    layout.align = layout.align.max(f_layout.align);
-                    layout.size = layout.size.next_multiple_of(f_layout.align);
-                    layout.size += f_layout.size;
-                }
-                layout.size = layout.size.next_multiple_of(layout.align);
-                layout
-            }
+            Self::Struct(sid) => typesystem.get_struct(sid).layout,
             Self::Array { element, length } => {
                 let mut layout = typesystem.get_type(element).layout(typesystem);
                 layout.size = layout.size.next_multiple_of(layout.align);
@@ -155,6 +137,7 @@ pub struct StructId(usize);
 pub struct Struct {
     pub name: ast::Ident,
     pub fields: Vec<StructField>,
+    pub layout: Layout,
 }
 
 /// A field of a struct definition
@@ -162,6 +145,7 @@ pub struct Struct {
 pub struct StructField {
     pub name: ast::Ident,
     pub ty: Type,
+    pub offset: u64,
 }
 
 /// The ID of a type
@@ -256,20 +240,32 @@ impl TypeSystem {
         }
 
         let mut fields: Vec<StructField> = Vec::new();
+        let mut size = 0u64;
+        let mut align = 0;
         for field in &ast.fields {
             if fields.iter().any(|x| x.name.value == field.name.value) {
                 return Err(Error::new("field with this name already exists").with_span(field.name.span));
             }
+            let ty = self.type_from_ast(type_namespace, &field.ty)?;
+            let layout = ty.layout(self);
+            size = size.next_multiple_of(layout.align);
+            align = align.max(layout.align);
             fields.push(StructField {
                 name: field.name.clone(),
-                ty: self.type_from_ast(type_namespace, &field.ty)?,
+                ty,
+                offset: size,
             });
+            size += layout.size;
         }
 
         let sid = StructId(self.structs.len());
         self.structs.push(Struct {
             name: ast.name.clone(),
             fields,
+            layout: Layout {
+                size: size.next_multiple_of(align),
+                align,
+            },
         });
         Ok(Type::Struct(sid))
     }

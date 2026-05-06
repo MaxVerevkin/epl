@@ -25,7 +25,7 @@ pub enum Type {
     I32,
     I64,
     Ptr,
-    Struct(Vec<Self>),
+    Struct(Vec<Self>, Layout),
     Array(Box<Self>, u64),
 }
 
@@ -40,17 +40,7 @@ impl Type {
                 size: module.typesystem.ptr_size(),
                 align: module.typesystem.ptr_size(),
             },
-            Type::Struct(fields) => {
-                let mut layout = Layout { size: 0, align: 1 };
-                for field in fields {
-                    let field_layout = field.layout(module);
-                    layout.align = layout.align.max(field_layout.align);
-                    layout.size = layout.size.next_multiple_of(field_layout.align);
-                    layout.size += field_layout.size;
-                }
-                layout.size = layout.size.next_multiple_of(layout.align);
-                layout
-            }
+            Type::Struct(_, layout) => *layout,
             Type::Array(element, length) => {
                 let element_layout = element.layout(module);
                 Layout {
@@ -65,7 +55,7 @@ impl Type {
         match self {
             Self::Unit => true,
             Self::Bool | Self::I8 | Self::I32 | Self::I64 | Self::Ptr => false,
-            Self::Struct(items) => items.iter().all(Self::is_zst),
+            Self::Struct(items, _) => items.iter().all(Self::is_zst),
             Self::Array(element, length) => *length == 0 || element.is_zst(),
         }
     }
@@ -82,7 +72,7 @@ impl Type {
             Type::I8 => Some(8),
             Type::I32 => Some(32),
             Type::I64 => Some(64),
-            Type::Unit | Type::Bool | Type::Ptr | Type::Struct(_) | Type::Array(_, _) => None,
+            Type::Unit | Type::Bool | Type::Ptr | Type::Struct(_, _) | Type::Array(_, _) => None,
         }
     }
 }

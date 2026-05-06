@@ -530,7 +530,7 @@ impl BuildCtx<'_> {
                 ir::Type::I32 => LLVMInt32TypeInContext(self.module.context),
                 ir::Type::I64 => LLVMInt64TypeInContext(self.module.context),
                 ir::Type::Ptr => LLVMPointerTypeInContext(self.module.context, 0),
-                ir::Type::Struct(fields) => {
+                ir::Type::Struct(fields, _) => {
                     let mut fields: Vec<_> = fields.iter().map(|ty| self.build_type(ty)).collect();
                     LLVMStructTypeInContext(self.module.context, fields.as_mut_ptr(), fields.len() as u32, 0)
                 }

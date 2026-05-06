@@ -44,14 +44,9 @@ fn lower_type(module: &ir_tree::Module, ty: ir_tree::Type) -> Type {
             Type::Array(Box::new(element), length)
         }
         ir_tree::Type::Struct(struct_id) => {
-            let fields = module
-                .typesystem
-                .get_struct(struct_id)
-                .fields
-                .iter()
-                .map(|field| lower_type(module, field.ty))
-                .collect();
-            Type::Struct(fields)
+            let s = module.typesystem.get_struct(struct_id);
+            let fields = s.fields.iter().map(|field| lower_type(module, field.ty)).collect();
+            Type::Struct(fields, s.layout)
         }
     }
 }
