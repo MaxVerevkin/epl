@@ -13,156 +13,33 @@ fn main() {
     let Some(command) = args.next() else {
         print_usage(&arg0, 1)
     };
+    if command == "help" {
+        print_usage(&arg0, 0);
+    }
+    let Some(file) = args.next() else { print_usage(&arg0, 1) };
+    if args.next().is_some() {
+        print_usage(&arg0, 1)
+    }
+    let src = std::fs::read_to_string(&file).unwrap();
 
     match &*command {
-        "help" => {
-            print_usage(&arg0, 0);
-        }
         "ast" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(&file).unwrap();
-
-            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            println!("{ast:#?}");
+            println!("{:#?}", ast(&file, &src));
         }
         "ir_tree" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(&file).unwrap();
-
-            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir_tree = ir_tree::Module::from_ast(&ast).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            println!("{}", ir_tree.dump());
+            println!("{}", ir_tree(&file, &src).dump());
         }
         "ir" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(&file).unwrap();
-
-            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir_tree = ir_tree::Module::from_ast(&ast).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir = ir::Ir::from_ir_tree(&ir_tree).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            println!("{:#?}", ir);
+            println!("{:#?}", ir(&file, &src));
         }
         "cfg" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(&file).unwrap();
-
-            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir_tree = ir_tree::Module::from_ast(&ast).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir = ir::Ir::from_ir_tree(&ir_tree).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let graph = ir::graphviz::graph(&ir);
-            print!("{graph}");
+            print!("{}", ir::graphviz::graph(&ir(&file, &src)));
         }
         "llvm-ir" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(&file).unwrap();
-
-            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir_tree = ir_tree::Module::from_ast(&ast).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir = ir::Ir::from_ir_tree(&ir_tree).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let llvm_module = llvm::LlvmModule::from_ir(&ir).unwrap_or_else(|err| {
-                eprintln!("LLVM verification error: {}", err.to_string_lossy());
-                std::process::exit(1);
-            });
-
-            println!("{llvm_module}");
+            println!("{}", llvm_module(&file, &src));
         }
         "llvm-obj" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(&file).unwrap();
-
-            let ast = ast::Parser::new(&src).parse().unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir_tree = ir_tree::Module::from_ast(&ast).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let ir = ir::Ir::from_ir_tree(&ir_tree).unwrap_or_else(|err| {
-                diagnostics::print_error(&file, &src, err);
-                std::process::exit(1);
-            });
-
-            let llvm_module = llvm::LlvmModule::from_ir(&ir).unwrap_or_else(|err| {
-                eprintln!("LLVM verification error: {}", err.to_string_lossy());
-                std::process::exit(1);
-            });
-
-            llvm_module.compile().unwrap_or_else(|err| {
+            llvm_module(&file, &src).compile().unwrap_or_else(|err| {
                 eprintln!("LLVM compilation error: {}", err.to_string_lossy());
                 std::process::exit(1);
             });
@@ -173,6 +50,34 @@ fn main() {
             print_usage(&arg0, 1);
         }
     }
+}
+
+fn ast(file: &str, src: &str) -> ast::Ast {
+    ast::Parser::new(src).parse().unwrap_or_else(|err| {
+        diagnostics::print_error(file, src, err);
+        std::process::exit(1);
+    })
+}
+
+fn ir_tree(file: &str, src: &str) -> ir_tree::Module {
+    ir_tree::Module::from_ast(&ast(file, src)).unwrap_or_else(|err| {
+        diagnostics::print_error(file, src, err);
+        std::process::exit(1);
+    })
+}
+
+fn ir(file: &str, src: &str) -> ir::Ir {
+    ir::Ir::from_ir_tree(&ir_tree(file, src)).unwrap_or_else(|err| {
+        diagnostics::print_error(file, src, err);
+        std::process::exit(1);
+    })
+}
+
+fn llvm_module(file: &str, src: &str) -> llvm::LlvmModule {
+    llvm::LlvmModule::from_ir(&ir(file, src)).unwrap_or_else(|err| {
+        eprintln!("LLVM verification error: {}", err.to_string_lossy());
+        std::process::exit(1);
+    })
 }
 
 fn print_usage(arg0: &str, status_code: i32) -> ! {
