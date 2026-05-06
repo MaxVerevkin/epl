@@ -18,10 +18,30 @@ pub struct Item {
 }
 
 /// An annotation
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug)]
 pub struct Annotation {
     pub at_symbol_span: lex::Span,
     pub ident: Ident,
+}
+
+impl PartialEq for Annotation {
+    fn eq(&self, other: &Self) -> bool {
+        self.ident.value == other.ident.value
+    }
+}
+
+impl Eq for Annotation {}
+
+impl PartialOrd for Annotation {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.ident.value.partial_cmp(&other.ident.value)
+    }
+}
+
+impl Ord for Annotation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ident.value.cmp(&other.ident.value)
+    }
 }
 
 impl Annotation {
