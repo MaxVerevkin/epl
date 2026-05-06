@@ -18,19 +18,6 @@ fn main() {
         "help" => {
             print_usage(&arg0, 0);
         }
-        "lex" => {
-            let Some(file) = args.next() else { print_usage(&arg0, 1) };
-            if args.next().is_some() {
-                print_usage(&arg0, 1)
-            }
-
-            let src = std::fs::read_to_string(file).unwrap();
-
-            for x in lex::Lexer::new(&src) {
-                let (span, token) = x.unwrap();
-                println!("{}..{}: {token:?}", span.start, span.end);
-            }
-        }
         "ast" => {
             let Some(file) = args.next() else { print_usage(&arg0, 1) };
             if args.next().is_some() {
@@ -193,7 +180,6 @@ fn print_usage(arg0: &str, status_code: i32) -> ! {
     println!();
     println!("Commands:");
     println!("  - help");
-    println!("  - lex <file>");
     println!("  - ast <file>");
     println!("  - ir_tree <file>");
     println!("  - ir <file>");
