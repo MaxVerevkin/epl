@@ -116,6 +116,8 @@ pub enum Punct {
     MulAssign,
     /// /=
     DivAssign,
+    /// %=
+    RemAssign,
     /// .{
     DotLeftBrace,
     /// =
@@ -177,6 +179,7 @@ const PUNCT_MAP: &[(&str, Punct)] = &[
     ("-=", Punct::SubAssign),
     ("*=", Punct::MulAssign),
     ("/=", Punct::DivAssign),
+    ("%=", Punct::RemAssign),
     (".{", Punct::DotLeftBrace),
     ("=", Punct::Assign),
     (";", Punct::Semicolon),

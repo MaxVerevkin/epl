@@ -50,7 +50,7 @@ annotation = `@` ident
 ## Expressions
 
 - expr = `return` expr? | `break` expr? | `continue` | `comptime` expr | assigning_expr
-- assigning_expr = or_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` ) or_expr )?
+- assigning_expr = or_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` | `%=` ) or_expr )?
 - or_expr = and_expr ( `||` and_expr )*
 - and_expr = comp_expr ( `&&` comp_expr )*
 - comp_expr = range_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) range_expr )?

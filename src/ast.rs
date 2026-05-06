@@ -832,13 +832,18 @@ impl Parser<'_> {
                 }))
             }
             Some(lex::Token::Punct(
-                op @ (lex::Punct::AddAssign | lex::Punct::SubAssign | lex::Punct::MulAssign | lex::Punct::DivAssign),
+                op @ (lex::Punct::AddAssign
+                | lex::Punct::SubAssign
+                | lex::Punct::MulAssign
+                | lex::Punct::DivAssign
+                | lex::Punct::RemAssign),
             )) => {
                 let op = match *op {
                     lex::Punct::AddAssign => ArithmeticOp::Add,
                     lex::Punct::SubAssign => ArithmeticOp::Sub,
                     lex::Punct::MulAssign => ArithmeticOp::Mul,
                     lex::Punct::DivAssign => ArithmeticOp::Div,
+                    lex::Punct::RemAssign => ArithmeticOp::Rem,
                     _ => unreachable!(),
                 };
                 let (op_span, _) = self.consume_token()?.unwrap();
