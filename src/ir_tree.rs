@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 pub use types::{IntType, Type, TypeId, TypeSystem};
 
 use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
+use crate::ir_tree::types::StructId;
 use crate::ir_tree::visit::{ExprVisitor, ExprVisitorMut};
 use crate::{ast, lex, make_entity_id};
 
@@ -325,6 +326,7 @@ pub enum Constant {
     I64(i64),
     U64(u64),
     Array(TypeId, Vec<Self>),
+    Struct(StructId, Vec<Self>),
 }
 
 impl Constant {
@@ -343,6 +345,7 @@ impl Constant {
                 element: *element_ty,
                 length: elements.len() as u64,
             },
+            Self::Struct(struct_id, _) => Type::Struct(*struct_id),
         }
     }
 

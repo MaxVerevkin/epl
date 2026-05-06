@@ -1,3 +1,4 @@
+@pure
 fn vec2_add(lhs: Vec2, rhs: Vec2) -> Vec2 {
 	lhs.x += rhs.x;
 	lhs.y += rhs.y;
@@ -12,6 +13,7 @@ fn main() -> i32 {
 	let vec = Vec2 .{ x: 10, y: 20 };
 	vec2_print(vec);
 	vec2_print(vec2_add(vec, .{ x: 5, y: 5 }));
+	vec2_print(comptime vec2_add(.{ x: 1, y: 2 }, .{ y: 10, x: 20 }));
 	0
 }
 

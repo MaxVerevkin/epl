@@ -499,7 +499,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 data: *int as i64,
                 ty: Type::I64,
             },
-            ir_tree::Constant::Array(..) => {
+            ir_tree::Constant::Array(..) | ir_tree::Constant::Struct(..) => {
                 let ty = lower_type(self.module, value.ty());
                 let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
                 self.eval_const_into(alloca.clone(), value);
@@ -530,11 +530,19 @@ impl<'a> BodyLoweringCtx<'a> {
                     .layout(&self.module.typesystem)
                     .size;
                 for (i, element) in elements.iter().enumerate() {
-                    let element = self.eval_const(element);
                     let ptr = self
                         .cursor()
                         .offset_ptr(place_ptr.clone(), Value::new_i64(i as i64 * element_size as i64));
-                    self.cursor().store(ptr, element);
+                    self.eval_const_into(ptr, element);
+                }
+            }
+            ir_tree::Constant::Struct(struct_id, fields) => {
+                let struct_type = self.module.typesystem.get_struct(*struct_id);
+                for (field_def, field_value) in struct_type.fields.iter().zip(fields) {
+                    let ptr = self
+                        .cursor()
+                        .offset_ptr(place_ptr.clone(), Value::new_i64(field_def.offset as i64));
+                    self.eval_const_into(ptr, field_value);
                 }
             }
         }

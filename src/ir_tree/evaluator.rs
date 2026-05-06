@@ -115,9 +115,20 @@ impl EvalCtx<'_> {
                 let place_value = self.eval_place(place)?;
                 self.load(place_value, expr.ty)
             }
-            ExprKind::Field(struct_expr, _field_name) => {
-                let _struct_value = self.eval_expr(struct_expr)?;
-                todo!("accessing struct fields is not implemented yet")
+            ExprKind::Field(struct_expr, field_name) => {
+                let (struct_id, mut fields) = match self.eval_expr(struct_expr)? {
+                    Constant::Struct(struct_id, fields) => (struct_id, fields),
+                    _ => unreachable!(),
+                };
+                let field_index = self
+                    .module
+                    .typesystem
+                    .get_struct(struct_id)
+                    .fields
+                    .iter()
+                    .position(|f| f.name.value == *field_name)
+                    .unwrap();
+                fields.remove(field_index)
             }
             ExprKind::ArrayElement(expr, index) => {
                 let mut elements = match self.eval_expr(expr)? {
@@ -222,7 +233,18 @@ impl EvalCtx<'_> {
                     .collect::<Result<Vec<_>, _>>()?;
                 Constant::Array(expr.ty.array_element_type_id().unwrap(), elements)
             }
-            ExprKind::StructInitializer(_fields_exprs) => todo!("struct initializers are not supported yet"),
+            ExprKind::StructInitializer(fields_exprs) => {
+                let mut fields_constants = HashMap::new();
+                for (field_name, field_expr) in fields_exprs {
+                    fields_constants.insert(&**field_name, self.eval_expr(field_expr)?);
+                }
+                let mut fields_in_order = Vec::new();
+                let struct_id = expr.ty.as_struct().unwrap();
+                for field_def in &self.module.typesystem.get_struct(struct_id).fields {
+                    fields_in_order.push(fields_constants.remove(&*field_def.name.value).unwrap());
+                }
+                Constant::Struct(struct_id, fields_in_order)
+            }
             ExprKind::FunctionCall(function_id, arguments) => {
                 assert!(
                     self.module.functions[function_id].is_pure,
@@ -247,7 +269,22 @@ impl EvalCtx<'_> {
                 variable: *variable_id,
                 bytes_offset: 0,
             },
-            PlaceKind::Field(_, _) => todo!("accessing struct fields is not implemented yet"),
+            PlaceKind::Field(struct_place, field) => {
+                let struct_place_value = self.eval_place(struct_place)?;
+                let field_offset = self
+                    .module
+                    .typesystem
+                    .get_struct(struct_place.ty.as_struct().unwrap())
+                    .fields
+                    .iter()
+                    .find(|f| f.name.value == *field)
+                    .unwrap()
+                    .offset;
+                ConstantPlace {
+                    variable: struct_place_value.variable,
+                    bytes_offset: struct_place_value.bytes_offset + field_offset as usize,
+                }
+            }
             PlaceKind::ArrayElement(array_place, index_expr) => {
                 let array_place_value = self.eval_place(array_place)?;
                 let index_value = self.eval_expr(index_expr)?;

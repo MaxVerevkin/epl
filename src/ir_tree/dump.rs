@@ -192,6 +192,16 @@ impl Writer<'_> {
                 }
                 self.output.push(']');
             }
+            Constant::Struct(_, fields) => {
+                self.output.push('{');
+                for (i, field) in fields.iter().enumerate() {
+                    self.dump_constant(field);
+                    if i + 1 != fields.len() {
+                        self.output.push_str(", ");
+                    }
+                }
+                self.output.push('}');
+            }
         }
     }
 }

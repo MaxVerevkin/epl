@@ -20,6 +20,23 @@ fn constant_to_bytes_into(constant: &Constant, typesystem: &TypeSystem, output: 
                 constant_to_bytes_into(element, typesystem, output);
             }
         }
+        Constant::Struct(struct_id, fields) => {
+            let struct_type = typesystem.get_struct(*struct_id);
+            let mut written = 0;
+            for (field_def, field_value) in struct_type.fields.iter().zip(fields) {
+                while written < field_def.offset {
+                    // padding
+                    output.push(0);
+                    written += 1;
+                }
+                constant_to_bytes_into(field_value, typesystem, output);
+                written += field_def.ty.layout(typesystem).size;
+            }
+            for _ in written..struct_type.layout.size {
+                // padding
+                output.push(0);
+            }
+        }
     }
 }
 
@@ -42,7 +59,17 @@ pub fn constant_from_bytes(bytes: &[u8], ty: Type, typesystem: &TypeSystem) -> C
             IntType::I64 => Constant::I64(i64::from_le_bytes(bytes.try_into().unwrap())),
             IntType::U64 => Constant::U64(u64::from_le_bytes(bytes.try_into().unwrap())),
         },
-        Type::Struct(_struct_id) => todo!("reading struct values is not implemeneted yet"),
+        Type::Struct(struct_id) => {
+            let mut fields = Vec::new();
+            let struct_type = typesystem.get_struct(struct_id);
+            assert_eq!(struct_type.layout.size, bytes.len() as u64);
+            for field_def in &struct_type.fields {
+                let field_size = field_def.ty.layout(typesystem).size;
+                let field_bytes = &bytes[field_def.offset as usize..][..field_size as usize];
+                fields.push(constant_from_bytes(field_bytes, field_def.ty, typesystem));
+            }
+            Constant::Struct(struct_id, fields)
+        }
         Type::Ptr { .. } => panic!("reading pointers is not a pure operation"),
         Type::Array { element, length } => {
             let mut elements = Vec::new();

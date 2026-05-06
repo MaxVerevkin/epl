@@ -48,6 +48,14 @@ impl Type {
         }
     }
 
+    /// Returns the `StructId` of this type if it is a struct
+    pub fn as_struct(self) -> Option<StructId> {
+        match self {
+            Self::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if this data type is an integer that is signed
     pub fn is_signed_int(self) -> bool {
         matches!(self, Self::Int(i) if i.is_signed())

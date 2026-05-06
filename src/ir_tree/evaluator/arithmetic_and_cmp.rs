@@ -128,5 +128,6 @@ pub fn eval_cast(from: Constant, target_ty: Type) -> Result<Constant, Error> {
         Constant::I64(int) => const_cast_i64(int, target_ty),
         Constant::U64(int) => const_cast_u64(int, target_ty),
         Constant::Array(..) => unreachable!(),
+        Constant::Struct(..) => unreachable!(),
     })
 }
