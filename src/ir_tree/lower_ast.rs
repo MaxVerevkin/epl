@@ -896,9 +896,10 @@ impl<'a> FunctionLoweringCtx<'a> {
                     kind: ExprKind::Comptime(Box::new(lowered_cexpr)),
                 })
             }
-            ast::Expr::Range(_range_expr) => {
-                unimplemented!("range expressions cannot be evaluated yet")
-            }
+            ast::Expr::Range(_range_expr) => Err(Error::new(
+                "range expressions are only allowed in for loops: 'for i in a..b {}'",
+            )
+            .with_span(expr.span())),
             ast::Expr::Ident(ident) => {
                 let (var_id, ty) = self
                     .scope
