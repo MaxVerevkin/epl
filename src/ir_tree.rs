@@ -1,6 +1,6 @@
 mod checkers;
 mod dump;
-mod evalualtor;
+mod evaluator;
 mod lower_ast;
 mod opt;
 mod types;
@@ -173,7 +173,7 @@ impl Module {
             }
 
             while let Some(expr) = get_first_comptime_expr(&module.functions[&function_id]) {
-                let evaluated = evalualtor::eval_comptime_expr(expr, &module)?;
+                let evaluated = evaluator::eval_comptime_expr(expr, &module)?;
                 set_first_comptime_expr(module.functions.get_mut(&function_id).unwrap(), evaluated);
             }
         }
