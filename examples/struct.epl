@@ -1,8 +1,3 @@
-struct Vec2 {
-	x: i32,
-	y: i32,
-}
-
 fn vec2_add(lhs: Vec2, rhs: Vec2) -> Vec2 {
 	lhs.x += rhs.x;
 	lhs.y += rhs.y;
@@ -18,6 +13,11 @@ fn main() -> i32 {
 	vec2_print(vec);
 	vec2_print(vec2_add(vec, .{ x: 5, y: 5 }));
 	0
+}
+
+struct Vec2 {
+	x: i32,
+	y: i32,
 }
 
 fn printf(fmt: *i8, ...);

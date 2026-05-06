@@ -78,6 +78,21 @@ impl Module {
 
         for item in &ast.items {
             match &item.kind {
+                ast::ItemKind::Function(_) => (),
+                ast::ItemKind::Struct(s_def) => {
+                    let name = s_def.name.value.clone();
+                    let s = module
+                        .typesystem
+                        .struct_from_ast(&type_namespace, s_def, &item.annotations)?;
+                    if type_namespace.insert(name, s).is_some() {
+                        return Err(Error::new("type with this name already exists").with_span(s_def.name.span));
+                    }
+                }
+            }
+        }
+
+        for item in &ast.items {
+            match &item.kind {
                 ast::ItemKind::Function(function) => {
                     let decl =
                         Function::decl_from_ast(&mut module.typesystem, &type_namespace, function, &item.annotations)?;
@@ -89,15 +104,7 @@ impl Module {
                     }
                     module.functions.insert(decl.id, decl);
                 }
-                ast::ItemKind::Struct(s_def) => {
-                    let name = s_def.name.value.clone();
-                    let s = module
-                        .typesystem
-                        .struct_from_ast(&type_namespace, s_def, &item.annotations)?;
-                    if type_namespace.insert(name, s).is_some() {
-                        return Err(Error::new("type with this name already exists").with_span(s_def.name.span));
-                    }
-                }
+                ast::ItemKind::Struct(_) => (),
             }
         }
 
