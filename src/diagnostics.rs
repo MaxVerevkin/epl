@@ -18,6 +18,7 @@ impl SpanError for ast::Error {
                 crate::lex::ErrorKind::UnknownEscapeSequence(seq) => {
                     format!("unknown escape sequence {seq:?}")
                 }
+                crate::lex::ErrorKind::NumberLiteralTooLarge => String::from("number literal too large"),
             },
             ast::ErrorKind::UnexpectedToken { expected, got } => {
                 let mut s = format!("expected {expected}, found ");

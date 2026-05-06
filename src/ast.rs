@@ -329,7 +329,7 @@ pub struct LiteralExpr {
 #[derive(Debug, Clone)]
 pub enum LiteralExprValue {
     Undefined,
-    Number(i64, Option<Ident>),
+    Number(u128, Option<Ident>),
     String(String),
     Bool(bool),
 }

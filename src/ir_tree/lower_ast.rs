@@ -337,10 +337,9 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                             kind: ExprKind::InPlaceArithmetic(
                                                                 ArithmeticOp::Add,
                                                                 Place::var(var_id, var_type),
-                                                                Box::new(Expr::new_const(Constant::int(
-                                                                    1,
-                                                                    var_type_int,
-                                                                ))),
+                                                                Box::new(Expr::new_const(
+                                                                    Constant::int(1, var_type_int).unwrap(),
+                                                                )),
                                                             ),
                                                         },
                                                         lowered_body.body,
@@ -570,10 +569,15 @@ impl<'a> FunctionLoweringCtx<'a> {
                             literal_expr.span,
                         ));
                     }
+                    let Some(const_value) = Constant::int(*number, int_ty) else {
+                        return Err(
+                            Error::new(format!("number does not fit into {int_ty:?}")).with_span(literal_expr.span)
+                        );
+                    };
                     Ok(Expr {
                         ty: Type::Int(int_ty),
                         span,
-                        kind: ExprKind::Const(Constant::int(*number, int_ty)),
+                        kind: ExprKind::Const(const_value),
                     })
                 }
                 ast::LiteralExprValue::String(string) => {
@@ -796,7 +800,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         span,
                         kind: ExprKind::Arithmetic(
                             ArithmeticOp::Sub,
-                            Box::new(Expr::new_const(Constant::int(0, int_ty))),
+                            Box::new(Expr::new_const(Constant::int(0, int_ty).unwrap())),
                             Box::new(lowered_rhs),
                         ),
                     })

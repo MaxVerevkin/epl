@@ -344,15 +344,16 @@ impl Constant {
         }
     }
 
-    pub fn int(number: i64, ty: IntType) -> Self {
-        match ty {
-            IntType::I8 => Self::I8(number as _),
-            IntType::U8 => Self::U8(number as _),
-            IntType::I32 => Self::I32(number as _),
-            IntType::U32 => Self::U32(number as _),
-            IntType::I64 => Self::I64(number as _),
-            IntType::U64 => Self::U64(number as _),
-        }
+    /// Returns `None` if the number cannot fit into provided `IntType`
+    pub fn int(number: u128, ty: IntType) -> Option<Self> {
+        Some(match ty {
+            IntType::I8 => Self::I8(number.try_into().ok()?),
+            IntType::U8 => Self::U8(number.try_into().ok()?),
+            IntType::I32 => Self::I32(number.try_into().ok()?),
+            IntType::U32 => Self::U32(number.try_into().ok()?),
+            IntType::I64 => Self::I64(number.try_into().ok()?),
+            IntType::U64 => Self::U64(number.try_into().ok()?),
+        })
     }
 }
 

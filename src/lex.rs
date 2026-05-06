@@ -83,7 +83,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
 /// A literal token
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
-    Number(i64, Option<(String, Span)>),
+    Number(u128, Option<(String, Span)>),
     String(String),
 }
 
@@ -217,6 +217,7 @@ pub enum ErrorKind {
     UnexpectedChar(char),
     UnclosedDelimeter(char),
     UnknownEscapeSequence(String),
+    NumberLiteralTooLarge,
 }
 
 impl Iterator for Lexer<'_> {
@@ -308,16 +309,9 @@ impl Lexer<'_> {
     ///
     /// Panics if the next character is not a valid ident start.
     fn next_ident_or_keyword(&mut self) -> Result<(Span, Token), Error> {
-        let ch = self.peek_char().expect("next_ident_or_keyword called on EOF");
-        assert!(is_valid_ident_start(ch));
-        let mut span = self.consume_char();
-        let mut ident = ch.to_string();
-        while let Some(ch) = self.peek_char()
-            && is_valid_ident_char(ch)
-        {
-            span = self.consume_char().join(span);
-            ident.push(ch);
-        }
+        let (ident, span) = self
+            .consume_chars_while(is_valid_ident_start, is_valid_ident_char)
+            .unwrap();
         for &(keyword_str, keyword_token) in KEYWORD_MAP {
             if keyword_str == ident {
                 return Ok((span, Token::Keyword(keyword_token)));
@@ -373,48 +367,56 @@ impl Lexer<'_> {
         Ok((span, Token::Literal(Literal::String(string))))
     }
 
+    /// Consume chars while `pred` returns `true`. The first character is tested against `first_pred`.
+    fn consume_chars_while(
+        &mut self,
+        first_pred: impl Fn(char) -> bool,
+        pred: impl Fn(char) -> bool,
+    ) -> Option<(String, Span)> {
+        let start = self.offset;
+        let mut result = String::new();
+        while let Some(ch) = self.peek_char()
+            && if result.is_empty() { first_pred(ch) } else { pred(ch) }
+        {
+            result.push(ch);
+            self.offset += ch.len_utf8();
+        }
+        if result.is_empty() {
+            None
+        } else {
+            Some((
+                result,
+                Span {
+                    start,
+                    end: self.offset,
+                },
+            ))
+        }
+    }
+
     /// Get the next number literal token
     ///
     /// # Panics
     ///
     /// Panics if the next character is not an ASCII digit.
     fn next_number_literal(&mut self) -> Result<(Span, Token), Error> {
-        let span_start = self.offset;
-        let ch = self.peek_char().expect("next_number_literal called at EOF");
-        self.consume_char();
-        assert!(ch.is_ascii_digit());
-        let mut number = (ch as u8 - b'0') as i64;
-        while let Some(ch) = self.peek_char()
-            && ch.is_ascii_digit()
-        {
-            self.consume_char();
-            number = number * 10 + (ch as u8 - b'0') as i64;
-        }
-        let suffix = if let Some(ch) = self.peek_char()
-            && is_valid_ident_start(ch)
-        {
-            let span_start = self.offset;
-            let mut suffix = String::new();
-            while let Some(ch) = self.peek_char()
-                && is_valid_ident_char(ch)
-            {
-                self.consume_char();
-                suffix.push(ch);
-            }
-            Some((
-                suffix,
-                Span {
-                    start: span_start,
-                    end: self.offset,
-                },
-            ))
-        } else {
-            None
+        let (number_part, number_span) = self
+            .consume_chars_while(|ch| ch.is_ascii_digit(), |ch| ch.is_ascii_digit())
+            .unwrap();
+
+        let Ok(number) = number_part.parse::<u128>() else {
+            return Err(Error {
+                span: number_span,
+                kind: ErrorKind::NumberLiteralTooLarge,
+            });
         };
+
+        let suffix = self.consume_chars_while(is_valid_ident_start, is_valid_ident_char);
+
         Ok((
-            Span {
-                start: span_start,
-                end: self.offset,
+            match suffix.as_ref() {
+                Some(suffix) => number_span.join(suffix.1),
+                None => number_span,
             },
             Token::Literal(Literal::Number(number, suffix)),
         ))
