@@ -1,5 +1,5 @@
-fn main() -> unit
-    BLOCK TYPE=unit
+fn main() -> i32
+    BLOCK TYPE=i32
     |   DECLARE var_1 "primes" : [i32; 20]
     |   STORE TYPE=unit
     |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 20]
@@ -40,6 +40,7 @@ fn main() -> unit
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   FUNCTION_CALL("printf") TYPE=unit
     |   |   CONST_STRING("\n") TYPE=*i8
+    |   CONST 0 TYPE=i32
 
 fn is_prime(x: i32) -> bool
     BLOCK TYPE=bool

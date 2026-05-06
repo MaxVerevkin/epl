@@ -1,5 +1,6 @@
-fn main() {
+fn main() -> i32 {
 	print_array(fib_array());
+	0
 }
 
 fn fib_array() -> [i32; 10] {

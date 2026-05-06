@@ -1,6 +1,8 @@
-fn main() -> unit
-    FUNCTION_CALL("print_array") TYPE=unit
-    |   FUNCTION_CALL("fib_array") TYPE=[i32; 10]
+fn main() -> i32
+    BLOCK TYPE=i32
+    |   FUNCTION_CALL("print_array") TYPE=unit
+    |   |   FUNCTION_CALL("fib_array") TYPE=[i32; 10]
+    |   CONST 0 TYPE=i32
 
 fn fib_array() -> [i32; 10]
     BLOCK TYPE=[i32; 10]

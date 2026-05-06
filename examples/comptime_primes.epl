@@ -1,4 +1,4 @@
-fn main() {
+fn main() -> i32 {
 	let primes = comptime {
 		let lut: [i32; 20];
 		let ready = 0;
@@ -16,7 +16,8 @@ fn main() {
 	for i in 0u64..20 {
 		printf("%i ", primes[i]);
 	}
-	printf("\n")
+	printf("\n");
+	0
 }
 
 @pure

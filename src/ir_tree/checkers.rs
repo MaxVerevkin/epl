@@ -3,8 +3,33 @@ use std::collections::HashSet;
 use super::*;
 use crate::ir_tree::visit::ExprVisitor;
 
+pub fn run_checkers(function_id: FunctionId, module: &Module) -> Result<(), Error> {
+    let function = &module.functions[&function_id];
+    check_main_abi(function)?;
+    check_comptime_exprs(function, module)?;
+    check_pure_function(function, module)?;
+    Ok(())
+}
+
+/// Verify that the signature of `main` is `fn main() -> i32`
+fn check_main_abi(function: &Function) -> Result<(), Error> {
+    if function.name.value != "main" {
+        return Ok(());
+    }
+
+    if function.is_variadic || !function.args.is_empty() || function.return_ty != Type::Int(IntType::I32) {
+        return Err(
+            Error::new("incorrect 'main' function signature: must be 'fn main() -> i32'").with_span(function.name.span),
+        );
+    }
+
+    Ok(())
+}
+
 /// Verify that `comptime` exprs are valid
-pub fn check_comptime_exprs(body: &Expr, module: &Module) -> Result<(), Error> {
+fn check_comptime_exprs(function: &Function, module: &Module) -> Result<(), Error> {
+    let Some(body) = &function.body else { return Ok(()) };
+
     struct Visitor<'a> {
         result: Result<(), Error>,
         module: &'a Module,
@@ -28,8 +53,14 @@ pub fn check_comptime_exprs(body: &Expr, module: &Module) -> Result<(), Error> {
 }
 
 /// Verify that `@pure` functions are valid
-pub fn check_pure_function(body: &Expr, module: &Module) -> Result<(), Error> {
-    purity_check(Context::PureFunctionBody, body, module)
+fn check_pure_function(function: &Function, module: &Module) -> Result<(), Error> {
+    if !function.is_pure {
+        return Ok(());
+    }
+    match &function.body {
+        Some(body) => purity_check(Context::PureFunctionBody, body, module),
+        None => Err(Error::new("pure functions must have a body").with_span(function.name.span)),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

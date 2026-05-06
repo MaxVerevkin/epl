@@ -96,9 +96,6 @@ impl Module {
                 ast::ItemKind::Function(function) => {
                     let decl =
                         Function::decl_from_ast(&mut module.typesystem, &type_namespace, function, &item.annotations)?;
-                    if decl.is_pure && function.body.is_none() {
-                        return Err(Error::new("pure functions must have a body").with_span(decl.name.span));
-                    }
                     if functions_namespace
                         .insert(function.name.value.clone(), decl.id)
                         .is_some()
@@ -114,10 +111,10 @@ impl Module {
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(function) => {
+                    let function_id = functions_namespace[&function.name.value];
                     if let Some(body) = &function.body {
-                        let function_id = functions_namespace[&function.name.value];
                         let decl = &module.functions[&function_id];
-                        let mut body = lower_ast::lower_function_body(
+                        let body = lower_ast::lower_function_body(
                             decl,
                             body,
                             &functions_namespace,
@@ -125,15 +122,20 @@ impl Module {
                             &mut module.typesystem,
                             &type_namespace,
                         )?;
-                        checkers::check_comptime_exprs(&body, &module)?;
-                        if decl.is_pure {
-                            checkers::check_pure_function(&body, &module)?;
-                        }
-                        opt::BasicOptVisitor.visit_expr(&mut body);
                         module.functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
                 }
                 ast::ItemKind::Struct(_) => (),
+            }
+        }
+
+        for function_id in module.functions.keys() {
+            checkers::run_checkers(*function_id, &module)?;
+        }
+
+        for function in module.functions.values_mut() {
+            if let Some(body) = &mut function.body {
+                opt::BasicOptVisitor.visit_expr(body);
             }
         }
 
