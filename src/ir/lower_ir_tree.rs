@@ -457,6 +457,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
                 self.eval_struct_initializer_into(alloca, fields, &expr.ty)?
             }
+            ir_tree::ExprKind::Load(place) => self.eval_place_as_ptr(place)?,
             _ => {
                 let value = match self.eval_expr(expr)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
