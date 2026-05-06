@@ -126,7 +126,7 @@ pub struct Function {
     pub args: Vec<Type>,
     pub is_variadic: bool,
     #[expect(unused)]
-    pub never_returs: bool,
+    pub never_returns: bool,
     pub return_ty: Type,
     pub body: Option<FunctionBody>,
 }

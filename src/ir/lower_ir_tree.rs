@@ -13,7 +13,7 @@ pub fn lower_function(function: &ir_tree::Function, module: &ir_tree::Module) ->
             .map(|(_name, ty)| lower_type(module, *ty))
             .collect(),
         is_variadic: function.is_variadic,
-        never_returs: function.return_ty == ir_tree::Type::Never,
+        never_returns: function.return_ty == ir_tree::Type::Never,
         return_ty: lower_type(module, function.return_ty),
         body: None,
     };
