@@ -50,7 +50,7 @@ impl LlvmModule {
             let postorder = body.postorder();
             ctx.value_map.clear();
 
-            for (i, arg) in body.basic_blokcs[&body.entry].args.iter().enumerate() {
+            for (i, arg) in body.basic_blocks[&body.entry].args.iter().enumerate() {
                 ctx.value_map.insert(arg.clone(), fn_value.get_param(i));
             }
 
@@ -68,14 +68,14 @@ impl LlvmModule {
             for &basic_block_id in &postorder {
                 if basic_block_id != body.entry {
                     builder.position_at_end(basic_blocks_map[&basic_block_id]);
-                    for arg in &body.basic_blokcs[&basic_block_id].args {
+                    for arg in &body.basic_blocks[&basic_block_id].args {
                         ctx.value_map.insert(arg.clone(), builder.phi(ctx.build_type(arg.ty())));
                     }
                 }
             }
 
             for &basic_block_id in postorder.iter().rev() {
-                let basic_block_ir = &body.basic_blokcs[&basic_block_id];
+                let basic_block_ir = &body.basic_blocks[&basic_block_id];
                 builder.position_at_end(basic_blocks_map[&basic_block_id]);
 
                 for instruction in &basic_block_ir.instructions {
@@ -145,7 +145,7 @@ impl LlvmModule {
                 match &basic_block_ir.terminator {
                     ir::Terminator::Jump { to, args } => {
                         builder.jump(basic_blocks_map[to]);
-                        for (arg, arg_value) in body.basic_blokcs[to].args.iter().zip(args) {
+                        for (arg, arg_value) in body.basic_blocks[to].args.iter().zip(args) {
                             phi_add_incoming(
                                 ctx.value_map[arg],
                                 basic_blocks_map[&basic_block_id],
@@ -165,14 +165,14 @@ impl LlvmModule {
                             basic_blocks_map[if_true],
                             basic_blocks_map[if_false],
                         );
-                        for (arg, arg_value) in body.basic_blokcs[if_true].args.iter().zip(if_true_args) {
+                        for (arg, arg_value) in body.basic_blocks[if_true].args.iter().zip(if_true_args) {
                             phi_add_incoming(
                                 ctx.value_map[arg],
                                 basic_blocks_map[&basic_block_id],
                                 ctx.build_value(arg_value),
                             );
                         }
-                        for (arg, arg_value) in body.basic_blokcs[if_false].args.iter().zip(if_false_args) {
+                        for (arg, arg_value) in body.basic_blocks[if_false].args.iter().zip(if_false_args) {
                             phi_add_incoming(
                                 ctx.value_map[arg],
                                 basic_blocks_map[&basic_block_id],

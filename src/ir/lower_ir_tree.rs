@@ -68,7 +68,7 @@ fn lower_function_body(
     Ok(FunctionBody {
         allocas: builder.allocas,
         entry,
-        basic_blokcs: builder.basic_blocks,
+        basic_blocks: builder.basic_blocks,
     })
 }
 

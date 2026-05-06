@@ -136,7 +136,7 @@ pub struct Function {
 pub struct FunctionBody {
     pub allocas: Vec<Alloca>,
     pub entry: BasicBlockId,
-    pub basic_blokcs: HashMap<BasicBlockId, BasicBlock>,
+    pub basic_blocks: HashMap<BasicBlockId, BasicBlock>,
 }
 
 impl FunctionBody {
@@ -160,7 +160,7 @@ impl FunctionBody {
         }
 
         let mut order = Vec::new();
-        visit(&mut order, &mut HashSet::new(), &self.basic_blokcs, self.entry);
+        visit(&mut order, &mut HashSet::new(), &self.basic_blocks, self.entry);
         order
     }
 }

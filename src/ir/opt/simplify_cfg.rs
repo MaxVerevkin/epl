@@ -21,14 +21,14 @@ pub fn pass(function: &mut Function) {
             continue;
         }
 
-        if let [succ_id] = *body.basic_blokcs[&block_id].terminator.successors()
+        if let [succ_id] = *body.basic_blocks[&block_id].terminator.successors()
             && predecessor_map[&succ_id].len() == 1
         {
-            let succ = body.basic_blokcs.remove(&succ_id).unwrap();
+            let succ = body.basic_blocks.remove(&succ_id).unwrap();
             removed.insert(succ_id);
             queue.push(block_id);
 
-            let block = body.basic_blokcs.get_mut(&block_id).unwrap();
+            let block = body.basic_blocks.get_mut(&block_id).unwrap();
             block.instructions.extend(succ.instructions);
             let Terminator::Jump { to: _, args: succ_args } = std::mem::replace(&mut block.terminator, succ.terminator)
             else {
@@ -40,12 +40,12 @@ pub fn pass(function: &mut Function) {
         }
 
         if block_id != body.entry
-            && body.basic_blokcs[&block_id].instructions.is_empty()
-            && body.basic_blokcs[&block_id].args.is_empty()
-            && let &Terminator::Jump { to, .. } = &body.basic_blokcs[&block_id].terminator
+            && body.basic_blocks[&block_id].instructions.is_empty()
+            && body.basic_blocks[&block_id].args.is_empty()
+            && let &Terminator::Jump { to, .. } = &body.basic_blocks[&block_id].terminator
             && to != block_id
         {
-            let block = body.basic_blokcs.remove(&block_id).unwrap();
+            let block = body.basic_blocks.remove(&block_id).unwrap();
             removed.insert(block_id);
 
             let Terminator::Jump {
@@ -57,7 +57,7 @@ pub fn pass(function: &mut Function) {
             };
 
             for pred_id in &predecessor_map[&block_id] {
-                match &mut body.basic_blokcs.get_mut(pred_id).unwrap().terminator {
+                match &mut body.basic_blocks.get_mut(pred_id).unwrap().terminator {
                     Terminator::Jump { to, args } => {
                         *to = jump_to;
                         *args = jump_args.clone();
@@ -85,7 +85,7 @@ pub fn pass(function: &mut Function) {
         }
     }
 
-    for block in body.basic_blokcs.values_mut() {
+    for block in body.basic_blocks.values_mut() {
         for insn in &mut block.instructions {
             insn.kind.visit_operands_mut(|operand| {
                 rename_map.rename(operand);
@@ -99,12 +99,12 @@ pub fn pass(function: &mut Function) {
 
 fn eliminate_unreachable(body: &mut FunctionBody) {
     let reachable_blocks: HashSet<_> = body.postorder().into_iter().collect();
-    body.basic_blokcs.retain(|id, _bb| reachable_blocks.contains(id));
+    body.basic_blocks.retain(|id, _bb| reachable_blocks.contains(id));
 }
 
 fn build_predecessor_map(body: &FunctionBody) -> HashMap<BasicBlockId, Vec<BasicBlockId>> {
     let mut predecessor_map = HashMap::<BasicBlockId, Vec<BasicBlockId>>::new();
-    for (pred_id, block) in &body.basic_blokcs {
+    for (pred_id, block) in &body.basic_blocks {
         for succ in block.terminator.successors() {
             predecessor_map.entry(succ).or_default().push(*pred_id);
         }

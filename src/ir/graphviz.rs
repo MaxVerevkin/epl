@@ -21,7 +21,7 @@ pub fn function_subgraph(function: &Function, body: &FunctionBody) -> String {
         function.mangled_name, body.entry,
     );
 
-    for (&basic_block_id, basic_block) in &body.basic_blokcs {
+    for (&basic_block_id, basic_block) in &body.basic_blocks {
         retval.push_str(&format!(
             "{basic_block_id:?} [label=\"{}\"]\n",
             escape_label(&make_basic_block_label(basic_block_id, basic_block))

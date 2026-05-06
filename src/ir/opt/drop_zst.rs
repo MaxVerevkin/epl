@@ -17,7 +17,7 @@ pub fn pass(function: &mut Function) {
 
     body.allocas.retain(|a| a.layout.size > 0);
 
-    for block in body.basic_blokcs.values_mut() {
+    for block in body.basic_blocks.values_mut() {
         block.args.retain(|arg| !arg.ty().is_zst());
         block.instructions.retain_mut(|insn| match &mut insn.kind {
             InstructionKind::Load { ptr: _ } => !insn.definition_id.ty().is_zst(),
