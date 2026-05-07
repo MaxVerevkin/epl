@@ -21,23 +21,7 @@ Everything after `#` is treated as a comment.
 
 ## Keywords
 
-- `fn`
-- `return`
-- `break`
-- `continue`
-- `if`
-- `else`
-- `loop`
-- `while`
-- `for`
-- `in`
-- `let`
-- `true`
-- `false`
-- `struct`
-- `undefined`
-- `as`
-- `comptime`
+`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `undefined` `as` `comptime`
 
 ## Items
 
@@ -99,14 +83,19 @@ struct_initializer_fields ::= [ struct_initializer_field { ',' struct_initialize
 struct_initializer_field  ::= ident ':' expr
 expr_with_no_block       ::= expr except expr_with_block
 statement                ::= ';' | let_statement | expr_with_no_block ';' | expr_with_block
-block_expr               ::= '{' { statement } [ expr_with_no_block ] '}'
+block_expr               ::= '{' { statement } [ expr ] '}'
 if_expr                  ::= 'if' expr block_expr [ 'else' ( block_expr | if_expr ) ]
 loop_expr                ::= 'loop' block_expr
 while_expr               ::= 'while' expr block_expr
 for_expr                 ::= 'for' ident 'in' expr block_expr
 function_call_expr       ::= ident '(' [ expr { ',' expr } [ ',' ] ] ')'
 let_statement            ::= 'let' ident ':' type ';' | 'let' ident [ ':' type ] '=' expr ';'
-type                     ::= '!' | ident | '*' type | '[' type ';' expr ']'
+```
+
+## Types
+
+```ebnf
+type ::= '!' | ident | '*' type | '[' type ';' expr ']'
 ```
 
 ## Literals
@@ -114,7 +103,9 @@ type                     ::= '!' | ident | '*' type | '[' type ';' expr ']'
 ```ebnf
 literal               ::= number_literal | string_literal | bool_literal | 'undefined'
 number_literal        ::= /[0-9]+/ [ number_literal_suffix ]
-number_literal_suffix ::= ( 'u' | 'i' ) ( '8' | '32' | '64' )
+number_literal_suffix ::= ident
 string_literal        ::= '"' /[^"]*/ '"'
 bool_literal          ::= 'true' | 'false'
 ```
+
+There must be no whitespace between a number literal and its suffix.
