@@ -1,7 +1,19 @@
 # Syntax reference
 
-- source = item*
-- ident = [a-zA-Z_][a-zA-Z_0-9]* _except keywords_
+## Notation
+
+The grammar below uses EBNF-style notation:
+
+- `::=` defines a production.
+- `|` separates alternatives.
+- `{ ... }` means zero or more repetitions.
+- `[ ... ]` means an optional part.
+- Quoted text, such as `'fn'`, is a literal token.
+
+```ebnf
+source ::= { item }
+ident  ::= /[a-zA-Z_][a-zA-Z_0-9]*/ except keyword
+```
 
 ## Comments
 
@@ -29,58 +41,80 @@ Everything after `#` is treated as a comment.
 
 ## Items
 
-- item = annotation* (function | struct_def)
+```ebnf
+item ::= { annotation } ( function | struct_def )
+```
 
 ## Annotations
 
-annotation = `@` ident
+```ebnf
+annotation ::= '@' ident
+```
 
-## Fuctions
+## Functions
 
-- function = `fn` ident `(` (fn_args `,`?)? `)` (`->` type)? (block_expr | `;`)
-- fn_args =  fn_arg (`,` fn_arg)* (`,` `...`)? | `...`
-- fn_arg = (ident `:` type)
+```ebnf
+function ::= 'fn' ident '(' [ fn_args ] ')' [ '->' type ] ( block_expr | ';' )
+fn_args  ::= '...' | fn_arg { ',' fn_arg } [ ',' [ '...' ] ]
+fn_arg   ::= ident ':' type
+```
 
 ## Struct Definitions
 
-- struct = `struct` ident `{` struct_fields `}`
-- struct_fields = (struct_field, (,?))? | struct_field (, struct_field)* ,?
-- struct_field = ident `:` type
+```ebnf
+struct_def    ::= 'struct' ident '{' struct_fields '}'
+struct_fields ::= [ struct_field { ',' struct_field } [ ',' ] ]
+struct_field  ::= ident ':' type
+```
 
 ## Expressions
 
-- expr = `return` expr? | `break` expr? | `continue` | `comptime` expr | assigning_expr
-- assigning_expr = or_expr ( ( `=` | `+=` | `-=` | `*=` | `/=` | `%=` ) or_expr )?
-- or_expr = and_expr ( `||` and_expr )*
-- and_expr = comp_expr ( `&&` comp_expr )*
-- comp_expr = range_expr ( (`==` | `!=` | `<=` | `>=` | `<` | `>`) range_expr )?
-- range_expr = additive_expr ( `..` additive_expr )?
-- additive_expr = multiplicative_expr ( (`+` | `-`) multiplicative_expr )*
-- multiplicative_expr = as_expr ( (`*` | `/` | `%`) as_expr )*
-- as_expr = unary_expr ( `as` type )*
-- unary_expr = (`-` | `!` | `&`)? unary_expr | field_access_expr
-- field_access_expr = base_expr ( `.` `*` | `.` ident | `[` expr `]` )*
-- base_expr = literal | function_call_expr | ident | `(` expr `)` | expr_with_block | array_initializer
-- expr_with_block = block_expr | if_expr | loop_expr | while_expr | for_expr | struct_initializer
-- array_initializer = `[` (expr (`,` expr)* `,`?)? `]`
-- struct_initializer = ident? `.{` struct_initializer_fields `}`
-- struct_initializer_fields = (struct_initializer_field ,?)? | struct_initializer_field (, struct_initializer_field)* ,?
-- struct_initializer_field = ident `:` expr
-- expr_with_no_block = expr _except exrp_with_block_
-- statement = `;` | let_statement | expr_with_no_block `;` | expr_with_block
-- block_expr = `{` statement* expr_with_no_block? `}`
-- if_expr = `if` expr block_expr (`else` ( block_expr | if_expr ))?
-- loop_expr = `loop` block_expr
-- while_expr = `while` expr block_expr
-- for_expr = `for` ident `in` expr block_expr
-- function_call_expr = ident `(` expr (`,` expr)* `,`? `)` | ident `(` `)`
-- let_statement =  `let` ident `:` type `;` | `let` ident (`:` type)? `=` expr `;`
-- type = `!` | ident | `*` type | `[` type `;` expr `]`
+```ebnf
+expr ::= 'return' [ expr ]
+       | 'break' [ expr ]
+       | 'continue'
+       | 'comptime' expr
+       | assigning_expr
+
+assigning_expr       ::= or_expr [ ( '=' | '+=' | '-=' | '*=' | '/=' | '%=' ) or_expr ]
+or_expr              ::= and_expr { '||' and_expr }
+and_expr             ::= comp_expr { '&&' comp_expr }
+comp_expr            ::= range_expr [ ( '==' | '!=' | '<=' | '>=' | '<' | '>' ) range_expr ]
+range_expr           ::= additive_expr [ '..' additive_expr ]
+additive_expr        ::= multiplicative_expr { ( '+' | '-' ) multiplicative_expr }
+multiplicative_expr  ::= as_expr { ( '*' | '/' | '%' ) as_expr }
+as_expr              ::= unary_expr { 'as' type }
+unary_expr           ::= ( '-' | '!' | '&' ) unary_expr | field_access_expr
+field_access_expr    ::= base_expr { ( '.' '*' | '.' ident | '[' expr ']' ) }
+base_expr            ::= literal
+                       | function_call_expr
+                       | ident
+                       | '(' expr ')'
+                       | expr_with_block
+                       | array_initializer
+expr_with_block      ::= block_expr | if_expr | loop_expr | while_expr | for_expr | struct_initializer
+array_initializer    ::= '[' [ expr { ',' expr } [ ',' ] ] ']'
+struct_initializer   ::= [ ident ] '.{' struct_initializer_fields '}'
+struct_initializer_fields ::= [ struct_initializer_field { ',' struct_initializer_field } [ ',' ] ]
+struct_initializer_field  ::= ident ':' expr
+expr_with_no_block       ::= expr except expr_with_block
+statement                ::= ';' | let_statement | expr_with_no_block ';' | expr_with_block
+block_expr               ::= '{' { statement } [ expr_with_no_block ] '}'
+if_expr                  ::= 'if' expr block_expr [ 'else' ( block_expr | if_expr ) ]
+loop_expr                ::= 'loop' block_expr
+while_expr               ::= 'while' expr block_expr
+for_expr                 ::= 'for' ident 'in' expr block_expr
+function_call_expr       ::= ident '(' [ expr { ',' expr } [ ',' ] ] ')'
+let_statement            ::= 'let' ident ':' type ';' | 'let' ident [ ':' type ] '=' expr ';'
+type                     ::= '!' | ident | '*' type | '[' type ';' expr ']'
+```
 
 ## Literals
 
-- literal = number_literal | string_literal | bool_literal | `undefined`
-- number_literal = [0-9]+number_literal_suffix?
-- number_literal_suffix = (`u` | `i`) (`8` | `32` | `64`)
-- string_literal = `"` [^"] `"`
-- bool_literal = `true` | `false`
+```ebnf
+literal               ::= number_literal | string_literal | bool_literal | 'undefined'
+number_literal        ::= /[0-9]+/ [ number_literal_suffix ]
+number_literal_suffix ::= ( 'u' | 'i' ) ( '8' | '32' | '64' )
+string_literal        ::= '"' /[^"]*/ '"'
+bool_literal          ::= 'true' | 'false'
+```
