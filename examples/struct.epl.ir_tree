@@ -57,6 +57,8 @@ fn main() -> i32
     |   |   |   STRUCT_INITIALIZER TYPE=StructId(0)
     |   |   |   |   CONST 5 TYPE=i32
     |   |   |   |   CONST 5 TYPE=i32
+    |   FUNCTION_CALL("vec2_print") TYPE=unit
+    |   |   CONST {21, 12} TYPE=StructId(0)
     |   CONST 0 TYPE=i32
 
 fn printf(fmt: *i8, ...) -> unit
