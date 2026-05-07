@@ -83,7 +83,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
 /// A literal token
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
-    Number(u128, Option<(String, Span)>),
+    Number(i128, Option<(String, Span)>),
     String(String),
 }
 
@@ -404,7 +404,7 @@ impl Lexer<'_> {
             .consume_chars_while(|ch| ch.is_ascii_digit(), |ch| ch.is_ascii_digit())
             .unwrap();
 
-        let Ok(number) = number_part.parse::<u128>() else {
+        let Ok(number) = number_part.parse::<i128>() else {
             return Err(Error {
                 span: number_span,
                 kind: ErrorKind::NumberLiteralTooLarge,

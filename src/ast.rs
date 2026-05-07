@@ -329,8 +329,7 @@ pub struct LiteralExpr {
 #[derive(Debug, Clone)]
 pub enum LiteralExprValue {
     Undefined,
-    Number(u128, Option<Ident>),
-    NegativeNumber(i128, Option<Ident>),
+    Number(i128, Option<Ident>),
     String(String),
     Bool(bool),
 }
@@ -1006,19 +1005,10 @@ impl Parser<'_> {
                     Expr::Literal(LiteralExpr {
                         span,
                         value: LiteralExprValue::Number(number, suffix),
-                    }) => {
-                        let span = span.join(op_span);
-                        let Ok(number) = i128::try_from(number) else {
-                            return Err(Error {
-                                span: Some(span),
-                                kind: ErrorKind::Lex(lex::ErrorKind::NumberLiteralTooLarge),
-                            });
-                        };
-                        Expr::Literal(LiteralExpr {
-                            span,
-                            value: LiteralExprValue::NegativeNumber(-number, suffix),
-                        })
-                    }
+                    }) => Expr::Literal(LiteralExpr {
+                        span: span.join(op_span),
+                        value: LiteralExprValue::Number(-number, suffix),
+                    }),
                     rhs => Expr::Unary(UnaryExpr {
                         op: UnaryOp::Negate,
                         rhs: Box::new(rhs),
@@ -1348,7 +1338,6 @@ impl fmt::Debug for LiteralExpr {
         match &self.value {
             LiteralExprValue::Undefined => f.write_str("undefined")?,
             LiteralExprValue::Number(num, _suffix) => num.fmt(f)?,
-            LiteralExprValue::NegativeNumber(num, _suffix) => num.fmt(f)?,
             LiteralExprValue::String(s) => s.fmt(f)?,
             LiteralExprValue::Bool(b) => b.fmt(f)?,
         }
