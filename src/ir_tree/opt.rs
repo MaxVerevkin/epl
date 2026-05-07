@@ -22,7 +22,7 @@ impl ExprVisitorMut for BasicOptVisitor {
             *expr = ptr_expr;
         }
 
-        // Simplify empty blocks and needlesly nested blocks
+        // Simplify empty blocks and needlessly nested blocks
         if let ExprKind::Block(block) = &mut expr.kind {
             block.eliminate_dead_code();
             if block.variables.is_empty() {

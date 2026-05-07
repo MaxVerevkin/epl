@@ -35,7 +35,7 @@ pub fn eval_arithmetic(op: ArithmeticOp, lhs: Constant, rhs: Constant) -> Result
         (Constant::U64(lhs), Constant::U64(rhs)) => Constant::U64(const_arithmetic_u64(op, lhs, rhs)),
         (lhs, rhs) => {
             return Err(Error::new(format!(
-                "arithmetic: unuspported operation {lhs:?} {op:?} {rhs:?}"
+                "arithmetic: unsupported operation {lhs:?} {op:?} {rhs:?}"
             )));
         }
     })
@@ -79,7 +79,7 @@ pub fn eval_cmp(op: CmpOp, lhs: Constant, rhs: Constant) -> Result<bool, Error> 
         (Constant::U64(lhs), Constant::U64(rhs)) => const_cmp_u64(op, lhs, rhs),
         (lhs, rhs) => {
             return Err(Error::new(format!(
-                "comparison: unuspported operation {lhs:?} {op:?} {rhs:?}"
+                "comparison: unsupported operation {lhs:?} {op:?} {rhs:?}"
             )));
         }
     })

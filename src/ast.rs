@@ -4,7 +4,7 @@ use std::fmt;
 use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
 use crate::lex;
 
-/// The abstract sytax tree representation of a source code file
+/// The abstract syntax tree representation of a source code file
 #[derive(Debug, Clone)]
 pub struct Ast {
     pub items: Vec<Item>,
@@ -473,15 +473,15 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Pareser implementation
+/// Parser implementation
 impl Parser<'_> {
     /// Peek the next token without consuming it
     fn peek_token(&mut self) -> Result<Option<&lex::Token>, Error> {
-        self.loopahead(0)
+        self.lookahead(0)
     }
 
-    /// Peek n'th token without consuming any tokens
-    fn loopahead(&mut self, n: usize) -> Result<Option<&lex::Token>, Error> {
+    /// Peek the nth token without consuming any tokens
+    fn lookahead(&mut self, n: usize) -> Result<Option<&lex::Token>, Error> {
         while self.lookahead.len() <= n
             && let Some(next) = self.lexer.next()
         {
@@ -527,7 +527,7 @@ impl Parser<'_> {
         }
     }
 
-    /// Crate an error indicating unexpected token
+    /// Create an error indicating unexpected token
     fn consume_unexpected_token<T>(&mut self, expected: impl Into<String>) -> Result<T, Error> {
         let got = self.consume_token()?;
         Err(Error {
@@ -797,7 +797,7 @@ impl Parser<'_> {
         }))
     }
 
-    /// Parse an experission
+    /// Parse an expression
     fn next_expr(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
             Some(lex::Token::Keyword(lex::Keyword::Return)) => {
@@ -1091,13 +1091,13 @@ impl Parser<'_> {
         Ok(expr)
     }
 
-    /// Parse a base experission
+    /// Parse a base expression
     fn next_base_expr(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
             Some(lex::Token::Ident(_)) => {
-                if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
+                if self.lookahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
                     self.next_function_call_expr().map(Expr::FunctionCallExpr)
-                } else if self.loopahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
+                } else if self.lookahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
                     self.next_struct_initializer_expr().map(Expr::StructInitializer)
                 } else {
                     self.next_ident().map(Expr::Ident)
@@ -1172,7 +1172,7 @@ impl Parser<'_> {
         })
     }
 
-    /// Parse arraay initializer
+    /// Parse array initializer
     fn next_array_initializer_expr(&mut self) -> Result<ArrayInitializerExpr, Error> {
         let opening_bracket_span = self.expect_punct(lex::Punct::LeftBracket)?;
         let elements =

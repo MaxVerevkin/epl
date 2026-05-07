@@ -86,7 +86,7 @@ impl Scope {
         *self = *self.parent.take().unwrap();
     }
 
-    /// Lookup a variable by its name, recursively traversind the list of scopes
+    /// Lookup a variable by its name, recursively traversing the list of scopes
     fn lookup_variable(&self, name: &str) -> Option<(VariableId, Type)> {
         if let Some(definition_id) = self.variables.get(name) {
             return Some(*definition_id);
@@ -150,8 +150,9 @@ impl<'a> FunctionLoweringCtx<'a> {
 
                     (_, false) => {
                         return Err(Error::new(format!(
-                            "if experession expected to evalueate to type {expect_type:?}, so it must have an else branch"
-                        )).with_span(if_expr.if_keyword_span));
+                            "if expression expected to evaluate to type {expect_type:?}, so it must have an else branch"
+                        ))
+                        .with_span(if_expr.if_keyword_span));
                     }
 
                     (expect_type, true) => expect_type,
@@ -205,7 +206,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
                 }
                 let cond = self.lower_expr(&while_expr.cond, Some(Type::Bool))?;
                 let lowered_body = self.lower_loop_body(&while_expr.body, Some(Type::Unit))?;
@@ -254,7 +255,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
                 }
 
                 let ast::Expr::Range(range_expr) = &*e.iterator else {
@@ -401,7 +402,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 };
                 for expr in &lowered_elements {
                     if expr.ty != Type::Never && expr.ty != element_ty {
-                        return Err(Error::expr_type_missmatch(element_ty, expr.ty, expr.span.unwrap()));
+                        return Err(Error::expr_type_mismatch(element_ty, expr.ty, expr.span.unwrap()));
                     }
                 }
                 Ok(Expr {
@@ -429,7 +430,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         if let Some(expect_type) = expect_type
                             && expect_type != ty
                         {
-                            return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                            return Err(Error::expr_type_mismatch(expect_type, ty, expr.span()));
                         }
                         (ty, sid)
                     }
@@ -563,7 +564,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Int(int_ty)
                     {
-                        return Err(Error::expr_type_missmatch(
+                        return Err(Error::expr_type_mismatch(
                             expect_type,
                             Type::Int(int_ty),
                             literal_expr.span,
@@ -599,7 +600,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Int(int_ty)
                     {
-                        return Err(Error::expr_type_missmatch(
+                        return Err(Error::expr_type_mismatch(
                             expect_type,
                             Type::Int(int_ty),
                             literal_expr.span,
@@ -620,7 +621,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::I8_PTR
                     {
-                        Err(Error::expr_type_missmatch(expect_type, Type::I8_PTR, literal_expr.span))
+                        Err(Error::expr_type_mismatch(expect_type, Type::I8_PTR, literal_expr.span))
                     } else {
                         Ok(Expr {
                             ty: Type::I8_PTR,
@@ -633,7 +634,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
-                        Err(Error::expr_type_missmatch(expect_type, Type::Bool, literal_expr.span))
+                        Err(Error::expr_type_mismatch(expect_type, Type::Bool, literal_expr.span))
                     } else {
                         Ok(Expr {
                             ty: Type::Bool,
@@ -687,7 +688,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     && expect_type != callee.return_ty
                     && callee.return_ty != Type::Never
                 {
-                    return Err(Error::expr_type_missmatch(
+                    return Err(Error::expr_type_mismatch(
                         expect_type,
                         callee.return_ty,
                         function_call_expr.span(),
@@ -703,7 +704,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
                 }
                 let lowered_place = self.lower_expr(&e.place, None)?.expect_place()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
@@ -717,14 +718,14 @@ impl<'a> FunctionLoweringCtx<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != Type::Unit
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
                 }
                 let lowered_place = self.lower_expr(&e.place, None)?.expect_place()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
                 let operands_ty = lowered_place.ty;
                 if !operands_ty.is_int() {
                     return Err(Error::new(format!(
-                        "arithemitc can only be performed on integers, not {operands_ty:?}"
+                        "arithmetic can only be performed on integers, not {operands_ty:?}"
                     ))
                     .with_span(e.op_span));
                 }
@@ -739,7 +740,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
@@ -764,14 +765,14 @@ impl<'a> FunctionLoweringCtx<'a> {
                     let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
                     if !operands_ty.is_int() {
                         return Err(Error::new(format!(
-                            "arithemitc can only be performed on integers, not {operands_ty:?}"
+                            "arithmetic can only be performed on integers, not {operands_ty:?}"
                         ))
                         .with_span(binary_expr.op_span));
                     }
                     if let Some(expect_type) = expect_type
                         && expect_type != operands_ty
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, operands_ty, expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, operands_ty, expr.span()));
                     }
                     Ok(Expr {
                         ty: operands_ty,
@@ -783,7 +784,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(Type::Bool))?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(Type::Bool))?;
@@ -801,7 +802,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(Type::Bool))?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(Type::Bool))?;
@@ -829,7 +830,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Int(int_ty)
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, Type::Int(int_ty), expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, Type::Int(int_ty), expr.span()));
                     }
                     Ok(Expr {
                         ty: Type::Int(int_ty),
@@ -845,7 +846,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != Type::Bool
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
                     }
                     let lowered_rhs = self.lower_expr(&unary_expr.rhs, Some(Type::Bool))?;
                     Ok(Expr {
@@ -860,7 +861,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     if let Some(expect_type) = expect_type
                         && expect_type != ty
                     {
-                        return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, ty, expr.span()));
                     }
                     Ok(Expr {
                         ty,
@@ -874,7 +875,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != ty
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                    return Err(Error::expr_type_mismatch(expect_type, ty, expr.span()));
                 }
                 let lowered_expr = self.lower_expr(&as_cast_expr.expr, None)?; // TODO: pass ty as a hint (but not a requirement!)
                 match (lowered_expr.ty, ty) {
@@ -908,7 +909,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 if let Some(expect_type) = expect_type
                     && expect_type != ty
                 {
-                    return Err(Error::expr_type_missmatch(expect_type, ty, expr.span()));
+                    return Err(Error::expr_type_mismatch(expect_type, ty, expr.span()));
                 }
                 Ok(Expr {
                     ty,

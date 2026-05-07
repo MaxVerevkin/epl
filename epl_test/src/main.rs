@@ -112,7 +112,7 @@ fn ir_tree_snapshot_test(stats: &mut Stats, path: &Path, epl_exe: &str) {
         .expect("compiler invocation failed");
 
     if !result.status.success() {
-        stats.mark_fail(test_case, "compiler existed with non zero exit code");
+        stats.mark_fail(test_case, "compiler exited with non-zero exit code");
         return;
     }
 
@@ -131,7 +131,7 @@ fn ir_tree_snapshot_test(stats: &mut Stats, path: &Path, epl_exe: &str) {
             }
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            std::fs::write(ir_tree_path, result_str).expect("could not write expcted ir_tree output");
+            std::fs::write(ir_tree_path, result_str).expect("could not write expected ir_tree output");
             stats.mark_new(test_case);
         }
         Err(e) => {
@@ -153,7 +153,7 @@ fn ir_smoke_test(stats: &mut Stats, path: &Path, epl_exe: &str) {
         .expect("compiler invocation failed");
 
     if !result.status.success() {
-        stats.mark_fail(test_case, "compiler existed with non zero exit code");
+        stats.mark_fail(test_case, "compiler exited with non-zero exit code");
         return;
     }
 

@@ -1,7 +1,7 @@
 # LLVM Setup
 
 ```sh
-# Create installation directory, this is just example.
+# Create installation directory, this is just an example.
 mkdir /opt/llvm-22.1.2
 
 # Get the source code
@@ -20,10 +20,10 @@ cmake --build . --target install -j 8
 
 # Compiling EPL with LLVM
 
-`LLVM_SYS_221_PREFIX` environment variable must point to the LLVM's instalation directory during the build, e.g.
+`LLVM_SYS_221_PREFIX` environment variable must point to LLVM's installation directory during the build, e.g.
 
 ```
 LLVM_SYS_221_PREFIX="/opt/llvm-22.1.2" cargo build
 ```
 
-For convenience, you may set in in your local `.cargo/config.toml` under `[env]` section.
+For convenience, you may set it in your local `.cargo/config.toml` under the `[env]` section.

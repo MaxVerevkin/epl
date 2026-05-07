@@ -1,7 +1,7 @@
 //! Simplifies the control flow graph
 //!
 //! - Removes unreachable blocks.
-//! - Merges sucessors of in-degree 1 with their predecessor of out-degree 1.
+//! - Merges successors of in-degree 1 with their predecessor of out-degree 1.
 //! - Merges empty jump blocks into its predecessor of out-degree 1.
 
 use super::*;

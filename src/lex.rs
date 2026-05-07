@@ -215,7 +215,7 @@ pub struct Error {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorKind {
     UnexpectedChar(char),
-    UnclosedDelimeter(char),
+    UnclosedDelimiter(char),
     UnknownEscapeSequence(String),
     NumberLiteralTooLarge,
 }
@@ -335,7 +335,7 @@ impl Lexer<'_> {
             let Some(ch) = self.peek_char() else {
                 return Err(Error {
                     span: delim_span,
-                    kind: ErrorKind::UnclosedDelimeter('"'),
+                    kind: ErrorKind::UnclosedDelimiter('"'),
                 });
             };
 

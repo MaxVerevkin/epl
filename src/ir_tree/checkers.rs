@@ -129,7 +129,7 @@ fn purity_check(context: Context, expr: &Expr, module: &Module) -> Result<(), Er
                 },
                 ExprKind::Cast(from_expr) => {
                     if (from_expr.ty.is_int() && expr.ty.is_ptr()) || (from_expr.ty.is_ptr() && expr.ty.is_int()) {
-                        self.result = Err(Error::new("casting pointers to integers and vise versa is not pure")
+                        self.result = Err(Error::new("casting pointers to integers and vice versa is not pure")
                             .with_span(expr.span.unwrap()));
                     }
                 }

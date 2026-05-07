@@ -111,7 +111,7 @@ impl Type {
     }
 }
 
-/// Interegre data type
+/// Integer data type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntType {
     I8,
@@ -283,7 +283,7 @@ impl TypeSystem {
         Ok(Type::Struct(sid))
     }
 
-    /// Get a referencse to the struct declaration
+    /// Get a reference to the struct declaration
     pub fn get_struct(&self, sid: StructId) -> &Struct {
         &self.structs[sid.0]
     }

@@ -22,7 +22,7 @@ fn fib_it(n: u32) -> u32 {
 fn main() -> i32 {
 	for n in 0u32..10 {
 		printf("fib(%i) = %i\n", n, fib(n));
-		printf("fib_id(%i) = %i\n", n, fib_it(n));
+		printf("fib_it(%i) = %i\n", n, fib_it(n));
 	}
 	0
 }

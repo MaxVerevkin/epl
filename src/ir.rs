@@ -140,7 +140,7 @@ pub struct FunctionBody {
 }
 
 impl FunctionBody {
-    /// Return the basick blocks IDs in post order
+    /// Return the basic block IDs in postorder
     pub fn postorder(&self) -> Vec<BasicBlockId> {
         fn visit(
             order: &mut Vec<BasicBlockId>,

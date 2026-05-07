@@ -12,7 +12,7 @@ impl SpanError for ast::Error {
                 crate::lex::ErrorKind::UnexpectedChar(ch) => {
                     format!("unexpected character {ch:?}")
                 }
-                crate::lex::ErrorKind::UnclosedDelimeter(del) => {
+                crate::lex::ErrorKind::UnclosedDelimiter(del) => {
                     format!("unclosed delimiter {del:?}")
                 }
                 crate::lex::ErrorKind::UnknownEscapeSequence(seq) => {

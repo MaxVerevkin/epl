@@ -31,11 +31,11 @@ impl Error {
         }
     }
 
-    /// Create a new 'type missmatch' error with a given span
-    pub fn expr_type_missmatch(expected: Type, found: Type, span: lex::Span) -> Self {
+    /// Create a new 'type mismatch' error with a given span
+    pub fn expr_type_mismatch(expected: Type, found: Type, span: lex::Span) -> Self {
         Self {
             span: Some(span),
-            message: format!("expectd expr of type {expected:?}, found {found:?}"),
+            message: format!("expected expr of type {expected:?}, found {found:?}"),
         }
     }
 
@@ -141,7 +141,7 @@ impl Module {
         }
 
         for function_id in module.functions.keys().copied().collect::<Vec<_>>() {
-            // TODO: this is ridiculusly inefficient O(n^2), for something that could potentially be O(n).
+            // TODO: this is ridiculously inefficient O(n^2), for something that could potentially be O(n).
 
             fn get_first_comptime_expr(function: &Function) -> Option<&Expr> {
                 struct Visitor<'a>(Option<&'a Expr>);
@@ -191,7 +191,7 @@ impl Module {
     /// Dump the contents of this module in a human-readable representation.
     ///
     /// Note: the representation is not stable and should only be used for
-    /// demonstation/debugging purposes
+    /// demonstration/debugging purposes
     pub fn dump(&self) -> String {
         dump::dump(self)
     }

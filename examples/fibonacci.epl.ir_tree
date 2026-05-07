@@ -107,7 +107,7 @@ fn main() -> i32
     |   |   |   |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
     |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
-    |   |   |   |   |   |   |   CONST_STRING("fib_id(%i) = %i\n") TYPE=*i8
+    |   |   |   |   |   |   |   CONST_STRING("fib_it(%i) = %i\n") TYPE=*i8
     |   |   |   |   |   |   |   LOAD TYPE=u32
     |   |   |   |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=u32
     |   |   |   |   |   |   |   FUNCTION_CALL("fib_it") TYPE=u32
