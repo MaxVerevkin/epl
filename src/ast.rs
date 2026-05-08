@@ -97,7 +97,7 @@ pub struct Ident {
 }
 
 /// A type with its span
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Type {
     Never(lex::Span),
     Ident(Ident),
@@ -1300,6 +1300,21 @@ impl fmt::Debug for ItemKind {
 impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}@{}..{}", self.value, self.span.start, self.span.end)
+    }
+}
+
+impl fmt::Debug for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Never(_) => f.write_str("!"),
+            Self::Ident(ident) => ident.fmt(f),
+            Self::Ptr { pointee, .. } => write!(f, "ptr({pointee:?})"),
+            Self::Array {
+                element_type, length, ..
+            } => {
+                write!(f, "[{element_type:?}; {length:?}]")
+            }
+        }
     }
 }
 
