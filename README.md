@@ -1,7 +1,5 @@
 # My Final Year Project
 
-## Project proposal
-
 <details>
 <summary> Original project proposal </summary>
 
@@ -14,21 +12,8 @@ Motivation: Many modern languages implement some sort of compile-time evaluation
 
 - [Syntax reference](doc/syntax.md)
 - [Language reference](doc/language.md)
+- [Compiler architecture](doc/compiler.md)
 - [Building with LLVM](doc/llvm.md)
-
-## Current architecture overview
-
-The current pipeline is as follows:
-
-1. Source file is lexically analyzed and parsed into an abstract syntax tree (AST).
-2. AST is lowered to IR_TREE. Name resolution and type checking is performed in this step. IR_TREE resembles the original source code but is fully typed and certain constructs are expressed in simpler building blocks (such as for loop -> regular loop, logical and/or -> if expression).
-3. Very basic optimizations are performed on IR_TREE.
-4. IR_TREE is lowered to IR, which is a low-level, single static assignment (SSA), basic-block-based representation.
-5. The following optimization passes are run on the IR:
-    - `drop_zst` - Operations on zero-sized types (ZSTs) are eliminated.
-    - `simplify_cfg` - Remove unreachable basic blocks and merge.
-6. IR is trivially lowered to LLVM IR.
-7. LLVM performs its optimizations and emits an object file.
 
 ## Useful commands
 
