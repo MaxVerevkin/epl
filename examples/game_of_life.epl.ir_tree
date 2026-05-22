@@ -1,0 +1,525 @@
+fn main() -> i32
+    BLOCK TYPE=!
+    |   DECLARE var_1 "board" : StructId(0)
+    |   FUNCTION_CALL("clear_board") TYPE=unit
+    |   |   GET_POINTER TYPE=*StructId(0)
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(0)
+    |   FUNCTION_CALL("seed_board") TYPE=unit
+    |   |   GET_POINTER TYPE=*StructId(0)
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(0)
+    |   LOOP(loop_1) TYPE=!
+    |   |   BLOCK TYPE=unit
+    |   |   |   FUNCTION_CALL("print_board") TYPE=unit
+    |   |   |   |   GET_POINTER TYPE=*StructId(0)
+    |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(0)
+    |   |   |   FUNCTION_CALL("update_board") TYPE=unit
+    |   |   |   |   GET_POINTER TYPE=*StructId(0)
+    |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(0)
+    |   |   |   FUNCTION_CALL("usleep") TYPE=i32
+    |   |   |   |   CONST 250000 TYPE=u32
+    |   |   |   CONST UNIT TYPE=unit
+
+fn clear_board(board: *StructId(0)) -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_2 "board" : *StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_2) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   BLOCK TYPE=unit
+    |   |   DECLARE var_3 "<immutable-row>" : u64
+    |   |   DECLARE var_4 "<tmp-row-target>" : u64
+    |   |   DECLARE var_5 "row" : u64
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_3) [PLACE] TYPE=u64
+    |   |   |   CONST 0 TYPE=u64
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_4) [PLACE] TYPE=u64
+    |   |   |   CONST 20 TYPE=u64
+    |   |   LOOP(loop_2) TYPE=unit
+    |   |   |   IF TYPE=unit
+    |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=u64
+    |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=u64
+    |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=u64
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=u64
+    |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   DECLARE var_6 "<immutable-col>" : u64
+    |   |   |   |   |   |   DECLARE var_7 "<tmp-col-target>" : u64
+    |   |   |   |   |   |   DECLARE var_8 "col" : u64
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   CONST 0 TYPE=u64
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   LOOP(loop_3) TYPE=unit
+    |   |   |   |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   |   |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   CONST false TYPE=bool
+    |   |   |   |   |   |   |   |   BREAK(loop_3) TYPE=!
+    |   |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   |   |   BREAK(loop_2) TYPE=!
+    |   |   |   |   |   CONST UNIT TYPE=unit
+
+fn seed_board(board: *StructId(0)) -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_9 "board" : *StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   BLOCK TYPE=unit
+    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(0)
+    |   |   |   CONST 8 TYPE=u64
+    |   |   |   CONST 10 TYPE=u64
+    |   |   |   CONST true TYPE=bool
+    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(0)
+    |   |   |   CONST 9 TYPE=u64
+    |   |   |   CONST 11 TYPE=u64
+    |   |   |   CONST true TYPE=bool
+    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(0)
+    |   |   |   CONST 10 TYPE=u64
+    |   |   |   CONST 9 TYPE=u64
+    |   |   |   CONST true TYPE=bool
+    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(0)
+    |   |   |   CONST 10 TYPE=u64
+    |   |   |   CONST 10 TYPE=u64
+    |   |   |   CONST true TYPE=bool
+    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(0)
+    |   |   |   CONST 10 TYPE=u64
+    |   |   |   CONST 11 TYPE=u64
+    |   |   |   CONST true TYPE=bool
+
+fn print_board(board: *StructId(0)) -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_10 "board" : *StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_10) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   BLOCK TYPE=unit
+    |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   CONST_STRING("\n") TYPE=*i8
+    |   |   BLOCK TYPE=unit
+    |   |   |   DECLARE var_11 "<immutable-row>" : u64
+    |   |   |   DECLARE var_12 "<tmp-row-target>" : u64
+    |   |   |   DECLARE var_13 "row" : u64
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_11) [PLACE] TYPE=u64
+    |   |   |   |   CONST 0 TYPE=u64
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_12) [PLACE] TYPE=u64
+    |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   LOOP(loop_4) TYPE=unit
+    |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_11) [PLACE] TYPE=u64
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_12) [PLACE] TYPE=u64
+    |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_13) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   VARIABLE(var_11) [PLACE] TYPE=u64
+    |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_11) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   DECLARE var_14 "<immutable-col>" : u64
+    |   |   |   |   |   |   |   |   DECLARE var_15 "<tmp-col-target>" : u64
+    |   |   |   |   |   |   |   |   DECLARE var_16 "col" : u64
+    |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   VARIABLE(var_14) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   CONST 0 TYPE=u64
+    |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   VARIABLE(var_15) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   |   |   LOOP(loop_5) TYPE=unit
+    |   |   |   |   |   |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_14) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_15) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_16) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_14) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_14) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=*i8
+    |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_13) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_16) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CONST_STRING("#") TYPE=*i8
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CONST_STRING(".") TYPE=*i8
+    |   |   |   |   |   |   |   |   |   |   BREAK(loop_5) TYPE=!
+    |   |   |   |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   |   CONST_STRING("\n") TYPE=*i8
+    |   |   |   |   |   BREAK(loop_4) TYPE=!
+    |   |   |   |   |   |   CONST UNIT TYPE=unit
+
+fn update_board(board: *StructId(0)) -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_17 "board" : *StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   BLOCK TYPE=unit
+    |   |   DECLARE var_18 "next" : StructId(0)
+    |   |   BLOCK TYPE=unit
+    |   |   |   DECLARE var_19 "<immutable-row>" : u64
+    |   |   |   DECLARE var_20 "<tmp-row-target>" : u64
+    |   |   |   DECLARE var_21 "row" : u64
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_19) [PLACE] TYPE=u64
+    |   |   |   |   CONST 0 TYPE=u64
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_20) [PLACE] TYPE=u64
+    |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   LOOP(loop_6) TYPE=unit
+    |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_19) [PLACE] TYPE=u64
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_20) [PLACE] TYPE=u64
+    |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   VARIABLE(var_19) [PLACE] TYPE=u64
+    |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_19) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   DECLARE var_22 "<immutable-col>" : u64
+    |   |   |   |   |   |   |   DECLARE var_23 "<tmp-col-target>" : u64
+    |   |   |   |   |   |   |   DECLARE var_24 "col" : u64
+    |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   VARIABLE(var_22) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   CONST 0 TYPE=u64
+    |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   VARIABLE(var_23) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   |   LOOP(loop_7) TYPE=unit
+    |   |   |   |   |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_22) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_23) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_24) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_22) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_22) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   DECLARE var_25 "alive" : bool
+    |   |   |   |   |   |   |   |   |   |   |   DECLARE var_26 "neighbors" : u64
+    |   |   |   |   |   |   |   |   |   |   |   DECLARE var_27 "next_cell" : bool
+    |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_25) [PLACE] TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_24) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_alive_neighbors") TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_24) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_27) [PLACE] TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_25) [PLACE] TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CMP(Equal) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 2 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST true TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CMP(Equal) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 3 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CMP(Equal) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 3 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   GET_POINTER TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_24) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_27) [PLACE] TYPE=bool
+    |   |   |   |   |   |   |   |   |   BREAK(loop_7) TYPE=!
+    |   |   |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   |   |   |   BREAK(loop_6) TYPE=!
+    |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   STORE TYPE=unit
+    |   |   |   DEREFERENCE [PLACE] TYPE=StructId(0)
+    |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(0)
+    |   |   |   LOAD TYPE=StructId(0)
+    |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=StructId(0)
+
+fn get_alive_neighbors(board: *StructId(0), row: u64, col: u64) -> u64
+    BLOCK TYPE=u64
+    |   DECLARE var_28 "board" : *StructId(0)
+    |   DECLARE var_29 "row" : u64
+    |   DECLARE var_30 "col" : u64
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_28) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_29) [PLACE] TYPE=u64
+    |   |   ARGUMENT("row") TYPE=u64
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_30) [PLACE] TYPE=u64
+    |   |   ARGUMENT("col") TYPE=u64
+    |   BLOCK TYPE=u64
+    |   |   DECLARE var_31 "count" : u64
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_31) [PLACE] TYPE=u64
+    |   |   |   CONST 0 TYPE=u64
+    |   |   BLOCK TYPE=unit
+    |   |   |   DECLARE var_32 "<immutable-r>" : u64
+    |   |   |   DECLARE var_33 "<tmp-r-target>" : u64
+    |   |   |   DECLARE var_34 "r" : u64
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_32) [PLACE] TYPE=u64
+    |   |   |   |   ARITHMETIC(Sub) TYPE=u64
+    |   |   |   |   |   ARITHMETIC(Add) TYPE=u64
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_29) [PLACE] TYPE=u64
+    |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   STORE TYPE=unit
+    |   |   |   |   VARIABLE(var_33) [PLACE] TYPE=u64
+    |   |   |   |   ARITHMETIC(Add) TYPE=u64
+    |   |   |   |   |   ARITHMETIC(Add) TYPE=u64
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_29) [PLACE] TYPE=u64
+    |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   CONST 2 TYPE=u64
+    |   |   |   LOOP(loop_8) TYPE=unit
+    |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_32) [PLACE] TYPE=u64
+    |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   VARIABLE(var_33) [PLACE] TYPE=u64
+    |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_34) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   VARIABLE(var_32) [PLACE] TYPE=u64
+    |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   VARIABLE(var_32) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   DECLARE var_35 "<immutable-c>" : u64
+    |   |   |   |   |   |   |   DECLARE var_36 "<tmp-c-target>" : u64
+    |   |   |   |   |   |   |   DECLARE var_37 "c" : u64
+    |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   VARIABLE(var_35) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   ARITHMETIC(Sub) TYPE=u64
+    |   |   |   |   |   |   |   |   |   ARITHMETIC(Add) TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_30) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   VARIABLE(var_36) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   ARITHMETIC(Add) TYPE=u64
+    |   |   |   |   |   |   |   |   |   ARITHMETIC(Add) TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_30) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   |   |   |   CONST 2 TYPE=u64
+    |   |   |   |   |   |   |   LOOP(loop_9) TYPE=unit
+    |   |   |   |   |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_35) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_36) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_37) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_35) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_35) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   DECLARE var_38 "r" : u64
+    |   |   |   |   |   |   |   |   |   |   |   DECLARE var_39 "c" : u64
+    |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_38) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   ARITHMETIC(Rem) TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_34) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_39) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   ARITHMETIC(Rem) TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_37) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 20 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   IF TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CMP(NotEqual) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_38) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_29) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST true TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   CMP(NotEqual) TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_39) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_30) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_28) [PLACE] TYPE=*StructId(0)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_38) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_39) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CONST false TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_31) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   |   |   |   |   |   |   |   BREAK(loop_9) TYPE=!
+    |   |   |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   |   |   |   BREAK(loop_8) TYPE=!
+    |   |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   LOAD TYPE=u64
+    |   |   |   VARIABLE(var_31) [PLACE] TYPE=u64
+
+fn get_cell(board: *StructId(0), row: u64, col: u64) -> bool
+    BLOCK TYPE=bool
+    |   DECLARE var_40 "board" : *StructId(0)
+    |   DECLARE var_41 "row" : u64
+    |   DECLARE var_42 "col" : u64
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_40) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_41) [PLACE] TYPE=u64
+    |   |   ARGUMENT("row") TYPE=u64
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_42) [PLACE] TYPE=u64
+    |   |   ARGUMENT("col") TYPE=u64
+    |   ARRAY_ELEMENT TYPE=bool
+    |   |   ARRAY_ELEMENT TYPE=[bool; 20]
+    |   |   |   FIELD_ACCESS(rows) TYPE=[[bool; 20]; 20]
+    |   |   |   |   LOAD TYPE=StructId(0)
+    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(0)
+    |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   VARIABLE(var_40) [PLACE] TYPE=*StructId(0)
+    |   |   |   LOAD TYPE=u64
+    |   |   |   |   VARIABLE(var_41) [PLACE] TYPE=u64
+    |   |   LOAD TYPE=u64
+    |   |   |   VARIABLE(var_42) [PLACE] TYPE=u64
+
+fn set_cell(board: *StructId(0), row: u64, col: u64, alive: bool) -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_43 "board" : *StructId(0)
+    |   DECLARE var_44 "row" : u64
+    |   DECLARE var_45 "col" : u64
+    |   DECLARE var_46 "alive" : bool
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_43) [PLACE] TYPE=*StructId(0)
+    |   |   ARGUMENT("board") TYPE=*StructId(0)
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_44) [PLACE] TYPE=u64
+    |   |   ARGUMENT("row") TYPE=u64
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_45) [PLACE] TYPE=u64
+    |   |   ARGUMENT("col") TYPE=u64
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_46) [PLACE] TYPE=bool
+    |   |   ARGUMENT("alive") TYPE=bool
+    |   STORE TYPE=unit
+    |   |   ARRAY_ELEMENT [PLACE] TYPE=bool
+    |   |   |   ARRAY_ELEMENT [PLACE] TYPE=[bool; 20]
+    |   |   |   |   FIELD("rows") [PLACE] TYPE=[[bool; 20]; 20]
+    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(0)
+    |   |   |   |   |   |   LOAD TYPE=*StructId(0)
+    |   |   |   |   |   |   |   VARIABLE(var_43) [PLACE] TYPE=*StructId(0)
+    |   |   |   |   LOAD TYPE=u64
+    |   |   |   |   |   VARIABLE(var_44) [PLACE] TYPE=u64
+    |   |   |   LOAD TYPE=u64
+    |   |   |   |   VARIABLE(var_45) [PLACE] TYPE=u64
+    |   |   LOAD TYPE=bool
+    |   |   |   VARIABLE(var_46) [PLACE] TYPE=bool
+
+fn printf(fmt: *i8, ...) -> unit
+
+fn usleep(usec: u32) -> i32
+
+
