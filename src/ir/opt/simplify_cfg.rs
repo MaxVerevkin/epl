@@ -3,6 +3,7 @@
 //! - Removes unreachable blocks.
 //! - Merges successors of in-degree 1 with their predecessor of out-degree 1.
 //! - Merges empty jump blocks into its predecessor of out-degree 1.
+//! - Breaks critical edges.
 
 use super::*;
 
@@ -95,6 +96,8 @@ pub fn pass(function: &mut Function) {
             rename_map.rename(operand);
         });
     }
+
+    break_critical_edges(body, &predecessor_map);
 }
 
 fn eliminate_unreachable(body: &mut FunctionBody) {
@@ -142,4 +145,48 @@ impl RenameMap {
             *operand = renamed_to.clone();
         }
     }
+}
+
+fn break_critical_edges(body: &mut FunctionBody, predecessor_map: &HashMap<BasicBlockId, Vec<BasicBlockId>>) {
+    for block_id in body.basic_blocks.keys().copied().collect::<Vec<_>>() {
+        let successors = body.basic_blocks[&block_id].terminator.successors();
+        if successors.len() > 1 {
+            for successor_id in successors {
+                if predecessor_map.get(&successor_id).is_some_and(|preds| preds.len() > 1) {
+                    break_critical_edge(body, block_id, successor_id);
+                }
+            }
+        }
+    }
+}
+
+fn break_critical_edge(body: &mut FunctionBody, from: BasicBlockId, to: BasicBlockId) {
+    let new_block_id = BasicBlockId::new();
+    let args = match &mut body.basic_blocks.get_mut(&from).unwrap().terminator {
+        Terminator::Jump { .. } | Terminator::Return(_) | Terminator::Unreachable => unreachable!(),
+        Terminator::CondJump {
+            cond: _,
+            if_true,
+            if_true_args,
+            if_false,
+            if_false_args,
+        } => {
+            if *if_true == to {
+                *if_true = new_block_id;
+                std::mem::take(if_true_args)
+            } else {
+                assert_eq!(*if_false, to);
+                *if_false = new_block_id;
+                std::mem::take(if_false_args)
+            }
+        }
+    };
+    body.basic_blocks.insert(
+        new_block_id,
+        BasicBlock {
+            args: Vec::new(),
+            instructions: Vec::new(),
+            terminator: Terminator::Jump { to, args },
+        },
+    );
 }

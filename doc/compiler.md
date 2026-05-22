@@ -203,8 +203,8 @@ After IR lowering, `ir::opt::basic_passes` runs two passes:
   arguments, block arguments, allocas, loads, stores, and normalizes zero-sized
   returns to `unit`.
 - `simplify_cfg` removes unreachable blocks, merges a block with its only
-  successor when the successor has a single predecessor, and redirects empty jump
-  blocks into their targets.
+  successor when the successor has a single predecessor, redirects empty jump
+  blocks into their targets, and breaks critical edges.
 
 ## IR to LLVM IR
 
