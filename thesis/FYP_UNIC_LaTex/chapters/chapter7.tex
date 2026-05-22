@@ -1,0 +1,243 @@
+\chapter{Compile-Time Evaluation}
+\label{chap:comptime}
+
+Compile-time evaluation is the most distinctive feature of \epl{}. It allows a
+programmer to write ordinary \epl{} expressions that the compiler executes while
+compiling the program. The result is inserted back into the program as a
+constant. This chapter explains why the feature exists, how purity is enforced,
+how the evaluator represents values and memory, and how pure functions are
+called during compilation.
+
+\section{Purpose}
+
+Without compile-time evaluation, a programmer who wants a precomputed table must
+either write the table by hand, generate it with an external script, or compute
+it at run time. Each option has a drawback. Hand-written tables are error-prone.
+External generators add another tool and another language to the build process.
+Run-time computation repeats work that could have been done once during
+compilation.
+
+\texttt{comptime} provides another option. The programmer writes a normal
+expression. The compiler type checks it, proves that it is valid for
+compile-time execution, interprets it, and replaces it with a constant. The
+example in Listing \ref{lst:comptime-primes-full} computes the first twenty odd
+prime numbers during compilation and then prints them at run time.
+
+\begin{lstlisting}[language=EPL,caption={Compile-time prime table example},label={lst:comptime-primes-full}]
+fn main() -> i32 {
+	let primes = comptime {
+		let lut: [i32; 20];
+		let ready = 0;
+		let next = 3;
+		while ready < 20 {
+			while !is_prime(next) {
+				next += 2;
+			}
+			lut[ready as u64] = next;
+			ready += 1;
+			next += 2;
+		}
+		lut
+	};
+	for i in 0u64..20 {
+		printf("%i ", primes[i]);
+	}
+	printf("\n");
+	0
+}
+\end{lstlisting}
+
+The important point is that the loop in the \texttt{comptime} block does not
+remain in the generated run-time program. It is executed by the compiler, and
+the result is a constant array in \irtree{}.
+
+\section{Purity Boundary}
+
+Executing arbitrary program code inside the compiler would be unsafe and
+non-deterministic. A compile-time expression should not read run-time variables,
+follow raw pointers, call external functions, or depend on the state of the
+future process. \epl{} therefore defines a purity boundary.
+
+A \texttt{comptime} expression may use:
+
+\begin{itemize}
+  \item numeric and boolean literals;
+  \item arithmetic, comparison, boolean operations, and integer casts;
+  \item blocks, conditionals, and loops;
+  \item local variables declared inside the compile-time expression;
+  \item assignment to those local variables;
+  \item arrays and structs;
+  \item \texttt{break} and \texttt{continue} for loops inside the expression;
+  \item calls to functions annotated with \texttt{@pure}.
+\end{itemize}
+
+It may not use:
+
+\begin{itemize}
+  \item string literals;
+  \item surrounding run-time variables or function arguments;
+  \item pointer address-of or dereference operations;
+  \item impure function calls;
+  \item \texttt{return} from the enclosing function;
+  \item loops or variables outside the compile-time expression's context.
+\end{itemize}
+
+This purity boundary is enforced after lowering to \irtree{}. The checker walks
+the expression tree and validates each operation. Checking \irtree{} instead of
+the AST is important because the tree has resolved IDs and types. The checker
+can distinguish a variable declared inside the compile-time expression from a
+variable in an enclosing run-time scope.
+
+\section{Pure Functions}
+
+The \texttt{@pure} annotation marks a function that is valid to call from
+compile-time code. A pure function must have a body. It may use its own
+arguments, local variables, local mutation, ordinary control flow, and calls to
+other pure functions. It may not call impure functions, use strings, take
+addresses, or dereference pointers.
+
+Listing \ref{lst:pure-is-prime} shows a pure function from the examples.
+
+\begin{lstlisting}[language=EPL,caption={Pure function used by comptime},label={lst:pure-is-prime}]
+@pure
+fn is_prime(x: i32) -> bool {
+	if x <= 1 {
+		return false;
+	}
+	if x == 2 {
+		return true;
+	}
+	if x % 2 == 0 {
+		return false;
+	}
+	let i = 3;
+	while i <= x / 2 {
+		if x % i == 0 {
+			return false;
+		}
+		i += 2;
+	}
+	true
+}
+\end{lstlisting}
+
+This function uses local mutation and early returns, but it does not depend on
+run-time state. Therefore the compile-time evaluator can call it with constant
+arguments.
+
+\section{Evaluator Structure}
+
+The evaluator is implemented in \texttt{src/ir\_tree/evaluator.rs}. It evaluates
+\irtree{} expressions and returns an \texttt{ir\_tree::Constant}. The public
+entry point for compile-time expressions is \texttt{eval\_comptime\_expr}. Pure
+function calls are handled by a separate internal function,
+\texttt{eval\_pure\_function}.
+
+The evaluator uses a recursive expression interpreter. It pattern matches on
+\texttt{ExprKind}. Constants evaluate to themselves. Loads read from compile-time
+memory. Stores write to compile-time memory and return unit. Arithmetic and
+comparison call helper routines. Conditionals evaluate the condition and then
+one branch. Loops repeatedly evaluate the body until a matching break is
+encountered. Function calls evaluate their arguments and then interpret the body
+of the pure callee.
+
+\section{Control-Flow Signals}
+
+The evaluator needs to support \texttt{return}, \texttt{break}, and
+\texttt{continue}. These are not ordinary values because they change control
+flow. The implementation represents them as internal evaluation errors:
+\texttt{Return(Constant)}, \texttt{Break(LoopId, Constant)}, and
+\texttt{Continue(LoopId)}.
+
+This design is similar to using exceptions internally in an interpreter. When a
+loop body produces a \texttt{Break} with the loop's own ID, the loop consumes the
+signal and produces the break value. When it produces a \texttt{Continue} with
+the loop's own ID, the loop starts the next iteration. If the signal belongs to
+an outer loop or a return, it propagates outward.
+
+At the top level of a \texttt{comptime} expression, \texttt{return},
+out-of-context \texttt{break}, and out-of-context \texttt{continue} should be
+impossible because the purity checker rejects them. If one appears there, it is
+a compiler bug.
+
+\section{Constant Memory}
+
+Local mutation inside \texttt{comptime} requires memory. The evaluator cannot
+only store a map from variables to high-level constants because field and array
+element assignment require partial updates. For example:
+
+\begin{lstlisting}[language=EPL,caption={Partial compile-time mutation}]
+let lut: [i32; 20];
+lut[ready as u64] = next;
+\end{lstlisting}
+
+The evaluator represents each local variable as a byte buffer sized according to
+the same type layout used by the compiler. A compile-time place is represented
+as a variable ID plus a byte offset. Loading converts bytes back into a constant.
+Storing converts a constant into bytes and writes them into the buffer.
+
+The helper module \texttt{const\_abi.rs} performs conversion between constants
+and byte buffers. It handles integers, booleans, arrays, structs, unit, and
+undefined values. For structs, it respects field offsets and padding. For arrays,
+it serializes elements in order using the element layout.
+
+This design keeps compile-time mutation consistent with the run-time layout used
+later by lower IR and LLVM generation.
+The byte-addressed model was also chosen so that pointer support could be added
+to compile-time evaluation later without replacing the evaluator's storage
+abstraction. Such support would be restricted to pointers into local
+compile-time variables, with checked pointer arithmetic, explicit pointer casts,
+and dereferences validated against the known local memory ranges.
+
+\section{Arithmetic and Casts}
+
+The evaluator's arithmetic helper supports all integer types. It uses wrapping
+operations for addition, subtraction, multiplication, division, and remainder.
+Comparison supports booleans and integers. Cast evaluation supports
+integer-to-integer casts by using Rust casts to model truncation and extension.
+
+Pointer constants are not supported by compile-time evaluation. This is an
+intentional restriction. A pointer value would either point into compile-time
+memory, which has no valid run-time address, or into run-time memory, which does
+not exist yet. Rejecting pointer operations keeps the compile-time value model
+simple and deterministic.
+
+\section{Case Study: Struct Computation}
+
+The struct example demonstrates that compile-time evaluation is not limited to
+primitive integers. The program defines a \texttt{Vec2} struct and a pure
+\texttt{vec2\_add} function. At run time it prints ordinary struct values. At
+compile time it also evaluates:
+
+\begin{lstlisting}[language=EPL,caption={Compile-time struct expression}]
+vec2_print(comptime vec2_add(.{ x: 1, y: 2 }, .{ y: 10, x: 20 }));
+\end{lstlisting}
+
+The \irtree{} snapshot shows that this call becomes a constant struct:
+
+\begin{lstlisting}[caption={Struct constant after compile-time evaluation}]
+FUNCTION_CALL("vec2_print") TYPE=unit
+|   CONST {21, 12} TYPE=StructId(0)
+\end{lstlisting}
+
+The field order in the initializer does not matter. Semantic analysis maps
+fields by name, and constant construction stores them in declaration order.
+
+\section{Benefits and Tradeoffs}
+
+The benefit of this design is that compile-time evaluation reuses the normal
+language. There is no separate macro language, no string-based code generation,
+and no second parser. The compiler can type check code once, then either lower
+it to run time or interpret it during compilation.
+
+The tradeoff is that purity rules must be conservative. Some operations that
+could theoretically be made safe are rejected. For example, the evaluator could
+eventually support references into compile-time-only memory, but the current
+pointer model does not distinguish compile-time pointers from run-time pointers.
+Rejecting pointer operations is simpler and safer for this implementation.
+
+The current evaluator is also not optimized for speed. It repeatedly traverses
+the module to find and replace compile-time expressions. The documentation notes
+that this is inefficient. For the project examples it is sufficient, but a
+larger compiler would use a more direct worklist or integrate evaluation into
+semantic lowering.

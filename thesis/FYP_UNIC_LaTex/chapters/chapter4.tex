@@ -1,0 +1,174 @@
+\chapter{Compiler Architecture}
+\label{chap:architecture}
+
+This chapter describes the architecture of the \epl{} compiler as implemented in
+the repository. The compiler is a Rust workspace with two crates. The main crate,
+\texttt{epl}, contains the compiler and command-line interface. The helper crate,
+\texttt{epl\_test}, contains the snapshot and smoke-test harness.
+
+\section{Repository Structure}
+
+The source tree is intentionally small. The main compiler modules are located in
+\texttt{src/}. Documentation is located in \texttt{doc/}. Example programs and
+their expected \irtree{} snapshots are located in \texttt{examples/}. Additional
+regression tests are located in \texttt{tests/}.
+
+\begin{table}[H]
+  \centering
+  \footnotesize
+  \begin{tabular}{p{0.40\textwidth}p{0.45\textwidth}}
+    \toprule
+    Path & Purpose \\
+    \midrule
+    \texttt{src/lex.rs} & Lexer, tokens, spans, and lexical errors. \\
+    \texttt{src/ast.rs} & AST definitions and recursive descent parser. \\
+    \texttt{src/ir\_tree.rs} & Typed tree IR data structures and module construction. \\
+    \texttt{src/ir\_tree/lower\_ast.rs} & Semantic lowering from AST to \irtree{}. \\
+    \texttt{src/ir\_tree/checkers.rs} & Main signature, purity, and compile-time checks. \\
+    \texttt{src/ir\_tree/evaluator.rs} & Compile-time evaluator. \\
+    \texttt{src/ir.rs} & Lower IR data structures. \\
+    \texttt{src/ir/lower\_ir\_tree.rs} & Lowering from \irtree{} to CFG IR. \\
+    \texttt{src/ir/opt/} & Lower IR cleanup passes. \\
+    \texttt{src/llvm.rs} & LLVM module construction and object emission. \\
+    \texttt{src/diagnostics.rs} & Shared diagnostic printing. \\
+    \texttt{epl\_test/src/main.rs} & Test harness over examples and tests. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Main implementation files in the \epl{} repository}
+  \label{tab:repo-files}
+\end{table}
+
+\section{Command-Line Interface}
+
+The compiler executable accepts a command and a source file. The command chooses
+which pipeline stage is printed or emitted. This is useful both for users and for
+compiler development because each representation can be inspected independently.
+
+\begin{lstlisting}[caption={Compiler command-line modes}]
+epl ast <file>
+epl ir_tree <file>
+epl ir <file>
+epl cfg <file>
+epl llvm-ir <file>
+epl llvm-obj <file>
+\end{lstlisting}
+
+\texttt{ast} prints the parsed AST. \texttt{ir\_tree} prints the typed tree.
+\texttt{ir} prints the lower IR debug representation. \texttt{cfg} prints a
+Graphviz DOT graph of the lower IR control-flow graph. \texttt{llvm-ir} prints
+the generated LLVM module. \texttt{llvm-obj} asks LLVM to emit a native object
+file named \texttt{a.out.o}.
+
+The commands are not separate compilers. They call the same staged functions:
+parse to AST, lower to \irtree{}, lower to IR, build an LLVM module, and
+optionally emit an object file. If an earlier stage fails, diagnostics are
+printed and the process exits.
+
+\section{Pipeline Overview}
+
+The full compiler pipeline can be summarized as:
+
+\begin{lstlisting}[caption={Compiler pipeline}]
+source text
+  -> lexical tokens
+  -> AST
+  -> typed IR_TREE
+  -> evaluated comptime constants
+  -> lower CFG IR
+  -> cleaned CFG IR
+  -> LLVM IR
+  -> native object file
+\end{lstlisting}
+
+Each stage has a deliberately narrow responsibility. The lexer does not know
+about types. The parser does not resolve variable names. \irtree{} lowering
+performs most semantic checks. The compile-time evaluator operates on typed
+\irtree{} expressions rather than the AST. Lower IR generation makes control
+flow and memory operations explicit. LLVM generation maps this lower IR to the
+LLVM C API.
+
+This separation is important for debugging. When an example does not compile,
+the developer can inspect the AST to see whether parsing was correct, inspect
+the \irtree{} snapshot to see whether semantic lowering was correct, inspect the
+lower IR to understand CFG construction, or inspect LLVM IR to debug backend
+generation.
+
+\section{Entity Identifiers}
+
+Source names are convenient for programmers but inconvenient for compiler
+internals. A local variable can shadow another local variable with the same
+name. A loop may contain nested loops. A function declaration may be referenced
+before its body appears. The compiler therefore uses generated entity IDs for
+functions, variables, and loops after semantic lowering.
+
+The \texttt{make\_entity\_id!} macro creates small strongly typed wrappers around
+non-zero integer IDs. The typed wrappers prevent accidentally mixing a function
+ID with a variable ID or loop ID. They also provide compact debug formatting,
+such as \texttt{fn\_1}, \texttt{var\_3}, and \texttt{loop\_2}. This is a small
+implementation detail, but it improves the readability of generated snapshots.
+
+\section{Type System Context}
+
+The type system stores built-in types, struct definitions, and interned type
+IDs. Struct and array types need layout information. The compiler computes each
+struct's field offsets, size, and alignment when the struct definition is
+processed. Array layout is computed from the element layout and length. Pointer
+layout uses the target pointer size stored in the type system context. The
+current implementation uses an 8-byte pointer size, matching common 64-bit
+targets.
+
+The type system uses a distinction between a \texttt{Type} value and a
+\texttt{TypeId}. Many types can be stored directly in a compact enum, but typed
+pointers and arrays need stable references to pointee or element types.
+\texttt{TypeId} provides this stable reference. For example, \texttt{*T} stores
+the ID of \texttt{T}, and \texttt{[T; N]} stores the ID of \texttt{T} plus the
+array length.
+
+\section{Diagnostics}
+
+The compiler stages expose different error types, but they all adapt to a shared
+diagnostic interface. The diagnostic printer displays the message, file path,
+line number, source line, and a caret underline for the span. This is why the
+lexer and parser retain byte offsets and why later semantic errors carry spans
+from AST nodes.
+
+Good diagnostics matter even in a small compiler. A type error without a source
+location is difficult to fix. A parser error that does not say what token was
+expected is frustrating. The current diagnostic system is simple, but it already
+captures the most important user-facing behavior: an error points to the source
+fragment that caused it.
+
+\section{Documentation and Examples}
+
+The repository includes four documentation files: syntax reference, language
+reference, compiler architecture, and LLVM setup. These files serve two
+purposes. First, they document the user-visible language rules. Second, they
+provide a specification against which the implementation and thesis can be
+checked.
+
+The examples cover hello world, recursion, iterative loops, arrays, structs,
+pointers, external \texttt{exit}, \texttt{else if}, and compile-time prime
+generation. Each example has a neighboring \irtree{} snapshot. The snapshots
+are not only tests. They are executable documentation of lowering decisions,
+such as how \texttt{for} loops become hidden counter variables or how a
+\texttt{comptime} block becomes a constant array.
+
+\section{Build Environment}
+
+The Rust workspace uses edition 2024 and depends on \texttt{llvm-sys} version
+\texttt{221.0.0}. The project includes a Cargo configuration file that points
+\texttt{LLVM\_SYS\_221\_PREFIX} to an LLVM 22.1.2 installation. The compiler can
+be built with:
+
+\begin{lstlisting}[caption={Building the compiler}]
+cargo build
+\end{lstlisting}
+
+The test harness can then be run with:
+
+\begin{lstlisting}[caption={Running the EPL test harness}]
+cargo run -p epl_test ./target/debug/epl examples tests
+\end{lstlisting}
+
+The command in Listing above is also used in Chapter \ref{chap:testing} to
+report the verification status of the implementation.

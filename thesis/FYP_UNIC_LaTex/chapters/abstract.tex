@@ -1,0 +1,17 @@
+\noindent This thesis presents the design and implementation of \epl, a small
+ahead-of-time compiled programming language for systems programming experiments.
+The compiler is implemented in Rust and translates a single \epl{} source file
+through a hand-written lexer, recursive descent parser, typed tree intermediate
+representation, control-flow graph intermediate representation, and LLVM IR.
+LLVM is then used to emit a native object file that can be linked by a system C
+compiler.
+
+\noindent The main contribution of the project is the \texttt{comptime}
+mechanism. Compile-time expressions are type checked, checked for purity,
+interpreted by the compiler, and replaced by constants before lower-level code
+generation. The evaluator supports integer arithmetic, booleans, arrays,
+structs, local mutation, loops, and calls to functions annotated with
+\texttt{@pure}.
+
+\noindent The thesis documents the language semantics, compiler architecture,
+compile-time evaluator, LLVM backend, diagnostics, and testing strategy.

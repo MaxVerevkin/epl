@@ -1,0 +1,199 @@
+\chapter{LLVM Backend and Linking}
+\label{chap:llvm}
+
+The final compiler stage maps lower IR to LLVM IR and asks LLVM to emit a native
+object file. This chapter explains the LLVM backend implementation, including
+function declaration, type mapping, value mapping, basic block construction, phi
+node construction, object emission, and linking.
+
+\section{Why LLVM}
+
+Writing a complete native backend is a large project. A backend must understand
+instruction selection, register allocation, stack layout, object file formats,
+relocations, calling conventions, debug information, and target-specific
+details. LLVM provides reusable infrastructure for many of these tasks
+\cite{lattner2004llvm,llvm_langref}. By targeting LLVM IR, \epl{} can focus on
+source-language design and compiler lowering while still producing native object
+files.
+
+The project originally considered multiple possible backends in its proposal,
+including LLVM and self-contained minimal backends. The implemented compiler
+uses LLVM because it gives the project an end-to-end native-code path within the
+time available for a final year project.
+
+\section{LLVM Module Construction}
+
+The LLVM backend is implemented in \texttt{src/llvm.rs}. The main public
+function is \texttt{LlvmModule::from\_ir}. It takes lower IR and returns an LLVM
+module wrapper. The wrapper owns an LLVM context and LLVM module pointer and
+disposes of them when dropped.
+
+LLVM construction happens in two phases. First, the compiler declares every
+function and records its LLVM function type and LLVM function value. This allows
+calls to functions defined later in the file. Second, the compiler emits the body
+of each function that has a body. External declarations are left as LLVM
+declarations.
+
+This two-phase structure mirrors semantic analysis. Function signatures are
+known before bodies are emitted. This is necessary for recursion and forward
+calls.
+
+\section{Type Mapping}
+
+The LLVM type mapping is direct:
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{p{0.30\textwidth}p{0.45\textwidth}}
+    \toprule
+    Lower IR type & LLVM type \\
+    \midrule
+    \texttt{Unit} & empty LLVM struct \\
+    \texttt{Bool} & \texttt{i1} \\
+    \texttt{I8} & \texttt{i8} \\
+    \texttt{I32} & \texttt{i32} \\
+    \texttt{I64} & \texttt{i64} \\
+    \texttt{Ptr} & opaque LLVM pointer \\
+    \texttt{Struct} & LLVM struct with lowered field types \\
+    \texttt{Array} & LLVM array with lowered element type and length \\
+    \bottomrule
+  \end{tabular}
+  \caption{Mapping from lower IR types to LLVM types}
+  \label{tab:llvm-types}
+\end{table}
+
+LLVM uses a distinct \texttt{i1} type for booleans. Integer widths map
+directly. Pointers use LLVM opaque pointers. Unit values become an empty struct,
+although lower IR cleanup removes most zero-sized operations before LLVM
+generation.
+
+\section{Values}
+
+The backend maintains a map from lower IR definitions to LLVM values. Function
+arguments are inserted into the map from the LLVM function parameters. Allocation
+slots are emitted in the entry block using LLVM \texttt{alloca} and inserted
+into the map. Instruction results are inserted as instructions are emitted.
+Block arguments are inserted as LLVM phi nodes before block instructions are
+emitted.
+
+Constants are translated as needed. Boolean constants become LLVM integer
+constants of type \texttt{i1}. Number constants become LLVM integer constants of
+the correct width. Undefined values become LLVM \texttt{undef}. String constants
+are emitted as global arrays initialized with the string data and null
+terminator.
+
+\section{Basic Blocks and Phi Nodes}
+
+For each lower IR basic block, the backend creates an LLVM basic block. It then
+creates phi nodes for non-entry block arguments. The actual incoming values are
+filled when predecessor terminators are emitted.
+
+This maps lower IR block arguments to LLVM's phi-node representation. For a
+jump terminator, the backend emits an LLVM branch and then adds incoming values
+to the target block's phi nodes. For a conditional jump, it emits an LLVM
+conditional branch and adds incoming values to the phi nodes of both successors.
+
+This design keeps lower IR independent from LLVM's exact phi instruction API
+while still preserving SSA-style value merging.
+
+\section{Instruction Emission}
+
+Each lower IR instruction maps to one or more LLVM builder calls:
+
+\begin{itemize}
+  \item \texttt{Load} maps to \texttt{LLVMBuildLoad2};
+  \item \texttt{Store} maps to \texttt{LLVMBuildStore};
+  \item \texttt{FunctionCall} maps to \texttt{LLVMBuildCall2};
+  \item \texttt{Cmp} maps to \texttt{LLVMBuildICmp} with signed or unsigned
+        predicates;
+  \item \texttt{Arithmetic} maps to add, sub, mul, signed/unsigned division, or
+        signed/unsigned remainder;
+  \item \texttt{Not} maps to XOR with \texttt{true};
+  \item \texttt{OffsetPtr} maps to \texttt{LLVMBuildGEP2} over \texttt{i8};
+  \item \texttt{Zext}, \texttt{Sext}, and \texttt{Truncate} map to LLVM integer
+        cast instructions.
+\end{itemize}
+
+Signedness is handled at the instruction level. For example, a lower IR
+comparison stores whether the operands should be interpreted as signed. The LLVM
+backend chooses \texttt{LLVMIntSLT} or \texttt{LLVMIntULT} for less-than based
+on that flag.
+
+\section{Terminator Emission}
+
+Lower IR terminators map directly to LLVM terminators. A jump becomes an LLVM
+branch. A conditional jump becomes an LLVM conditional branch. A return becomes
+an LLVM return with a value. An unreachable terminator becomes LLVM
+\texttt{unreachable}.
+
+The backend must ensure that each LLVM basic block ends with exactly one
+terminator. This is one reason lower IR separates instructions from terminators.
+The structure prevents accidental emission of non-terminator instructions after
+a branch or return.
+
+\section{Module Verification}
+
+After constructing the LLVM module, the compiler calls \texttt{LLVMVerifyModule}.
+If verification fails, the compiler prints the LLVM verifier error and exits.
+Verification is important because LLVM IR has structural rules that are easy to
+violate when building IR through an API. Examples include missing terminators,
+phi nodes with incorrect incoming blocks, mismatched call signatures, or invalid
+types.
+
+LLVM verification does not prove that the original \epl{} program is safe or
+that the generated code is semantically correct. It only checks LLVM IR
+well-formedness. It is nevertheless an important backend safety net.
+
+\section{Object File Emission}
+
+The \texttt{llvm-obj} command calls \texttt{LlvmModule::compile}. The compile
+method initializes LLVM targets, obtains the default target triple, creates a
+target machine, sets the module data layout and target triple, and asks LLVM to
+emit an object file named \texttt{a.out.o}.
+
+The compiler currently emits object files with no LLVM optimization pipeline
+enabled. There is commented code showing where a pass pipeline could be run in
+the future. This is a reasonable current decision because the project focuses on
+correct lowering rather than performance optimization.
+
+\section{Linking}
+
+The compiler stops at an object file. To produce an executable, the object file
+is linked with a system C compiler:
+
+\begin{lstlisting}[caption={Compiling and linking an EPL program}]
+cargo run -- llvm-obj examples/hello_world.epl
+cc a.out.o
+./a.out
+\end{lstlisting}
+
+This link step resolves external declarations such as \texttt{printf} and
+\texttt{exit}. It also lets the platform C toolchain handle startup files and
+libc linkage. A future compiler could invoke the linker automatically, but
+keeping the link step explicit makes the current architecture simpler.
+
+\section{FFI Limits}
+
+Although \epl{} can call simple external C functions, it should not be described
+as having a complete C FFI. The implemented path works for examples such as
+\texttt{printf(fmt: *i8, ...)} and \texttt{exit(code: i32) -> !}. It does not
+fully model all C ABI cases.
+
+Important missing cases include by-value aggregate arguments and returns,
+platform-specific varargs details, exact C \texttt{void} mapping for every
+signature shape, structure packing pragmas, integer promotion rules for
+varargs, callbacks, and library header parsing. These features are not needed to
+demonstrate the compiler pipeline, but they are important for future work if
+\epl{} is to call arbitrary C libraries reliably.
+
+\section{Backend Tradeoffs}
+
+The LLVM backend is direct and readable. It does not attempt to hide LLVM behind
+a large abstraction layer. The advantage is that every lower IR construct has an
+obvious LLVM emission point. The disadvantage is that target-specific details
+are partly delegated to LLVM without building a higher-level ABI model inside
+\epl{}.
+
+For a final year compiler project, this is an appropriate tradeoff. It produces
+native object code, gives access to LLVM verification, and keeps the backend
+small enough to reason about.

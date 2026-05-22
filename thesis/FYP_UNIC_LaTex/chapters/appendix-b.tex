@@ -1,0 +1,189 @@
+\chapter{Selected EPL Programs}
+\label{app:examples}
+
+This appendix includes representative programs from the repository. They are
+used by the test harness and by the thesis discussion.
+
+\section{Hello World}
+
+\begin{lstlisting}[language=EPL,caption={examples/hello\_world.epl}]
+fn main() -> i32 {
+	printf("hello world\n");
+	0
+}
+
+fn printf(fmt: *i8, ...);
+\end{lstlisting}
+
+\section{Fibonacci}
+
+\begin{lstlisting}[language=EPL,caption={examples/fibonacci.epl}]
+fn fib(n: u32) -> u32 {
+	if n < 2 {
+		n
+	} else {
+		fib(n - 2) + fib(n - 1)
+	}
+}
+
+fn fib_it(n: u32) -> u32 {
+	let a: u32 = 0;
+	let b: u32 = 1;
+	let i: u32 = 0;
+	while i < n {
+		let tmp = a;
+		a = b;
+		b += tmp;
+		i += 1;
+	}
+	a
+}
+
+fn main() -> i32 {
+	for n in 0u32..10 {
+		printf("fib(%i) = %i\n", n, fib(n));
+		printf("fib_it(%i) = %i\n", n, fib_it(n));
+	}
+	0
+}
+
+fn printf(fmt: *i8, ...);
+\end{lstlisting}
+
+\section{Compile-Time Primes}
+
+\begin{lstlisting}[language=EPL,caption={examples/comptime\_primes.epl}]
+fn main() -> i32 {
+	let primes = comptime {
+		let lut: [i32; 20];
+		let ready = 0;
+		let next = 3;
+		while ready < 20 {
+			while !is_prime(next) {
+				next += 2;
+			}
+			lut[ready as u64] = next;
+			ready += 1;
+			next += 2;
+		}
+		lut
+	};
+	for i in 0u64..20 {
+		printf("%i ", primes[i]);
+	}
+	printf("\n");
+	0
+}
+
+@pure
+fn is_prime(x: i32) -> bool {
+	if x <= 1 {
+		return false;
+	}
+	if x == 2 {
+		return true;
+	}
+	if x % 2 == 0 {
+		return false;
+	}
+	let i = 3;
+	while i <= x / 2 {
+		if x % i == 0 {
+			return false;
+		}
+		i += 2;
+	}
+	true
+}
+
+fn printf(fmt: *i8, ...);
+\end{lstlisting}
+
+\section{Conway's Game of Life}
+
+\begin{lstlisting}[language=EPL,caption={examples/game\_of\_life.epl}]
+struct Board {
+	rows: [[bool; 20]; 20]
+}
+
+fn main() -> i32 {
+	let board: Board;
+	clear_board(&board);
+	seed_board(&board);
+
+	loop {
+		print_board(&board);
+		update_board(&board);
+		usleep(250000);
+	}
+}
+
+fn clear_board(board: *Board) {
+	for row in 0u64..20 {
+		for col in 0u64..20 {
+			set_cell(board, row, col, false);
+		}
+	}
+}
+
+fn seed_board(board: *Board) {
+	set_cell(board, 8, 10, true);
+	set_cell(board, 9, 11, true);
+	set_cell(board, 10, 9, true);
+	set_cell(board, 10, 10, true);
+	set_cell(board, 10, 11, true);
+}
+
+fn print_board(board: *Board) {
+	printf("\n");
+	for row in 0u64..20 {
+		for col in 0u64..20 {
+			printf(if get_cell(board, row, col) { "#" } else { "." });
+		}
+		printf("\n");
+	}
+}
+
+fn update_board(board: *Board) {
+	let next: Board;
+
+	for row in 0u64..20 {
+		for col in 0u64..20 {
+			let alive = get_cell(board, row, col);
+			let neighbors = get_alive_neighbors(board, row, col);
+			let next_cell = if alive { neighbors == 2 || neighbors == 3 } else { neighbors == 3 };
+			set_cell(&next, row, col, next_cell);
+		}
+	}
+
+	board.* = next;
+}
+
+fn get_alive_neighbors(board: *Board, row: u64, col: u64) -> u64 {
+	let count = 0u64;
+
+	for r in (row + 20 - 1)..(row + 20 + 2) {
+		for c in (col + 20 - 1)..(col + 20 + 2) {
+			let r = r % 20;
+			let c = c % 20;
+			if (r != row || c != col) && get_cell(board, r, c) {
+				count += 1;
+			}
+		}
+	}
+
+	count
+}
+
+fn get_cell(board: *Board, row: u64, col: u64) -> bool {
+	board.*.rows[row][col]
+}
+
+fn set_cell(board: *Board, row: u64, col: u64, alive: bool) {
+	board.*.rows[row][col] = alive;
+}
+
+fn printf(fmt: *i8, ...);
+fn usleep(usec: u32) -> i32;
+\end{lstlisting}
+

@@ -1,0 +1,172 @@
+\chapter{Front End Implementation}
+\label{chap:front-end}
+
+The front end of a compiler converts source text into a structured form that can
+be analyzed. In \epl{}, the front end consists of the lexer and parser. The
+lexer produces tokens with spans. The parser consumes those tokens and constructs
+an AST. This chapter explains the implementation choices and how the source
+language is represented before semantic analysis.
+
+\section{Lexer Design}
+
+The lexer is implemented in \texttt{src/lex.rs}. It is a Rust iterator over
+\texttt{Result<(Span, Token), Error>}. Each successful item contains a span and a
+token. Each failed item contains a lexical error with the span where the problem
+was found.
+
+The lexer stores two pieces of state: the current byte offset and a reference to
+the source string. On each iteration it skips whitespace and comments, then tries
+to recognize the next token. Comments start with \texttt{\#} and continue until
+the end of the line. This simple rule avoids interaction with nested block
+comments or preprocessor-like behavior.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\begin{minipage}{0.86\textwidth}
+  \centering
+  \begin{tabular}{c}
+  read next character \\
+  $\downarrow$ \\
+  whitespace or comment? skip and repeat \\
+  $\downarrow$ \\
+  identifier start? read identifier or keyword \\
+  $\downarrow$ \\
+  digit? read number and optional suffix \\
+  $\downarrow$ \\
+  quote? read string literal \\
+  $\downarrow$ \\
+  punctuation prefix? emit punctuation \\
+  $\downarrow$ \\
+  otherwise lexical error
+  \end{tabular}
+  \end{minipage}}
+  \caption{Control flow of the \epl{} lexer}
+  \label{fig:lexer-flow}
+\end{figure}
+
+\section{Tokens}
+
+The token enum has four main variants: keyword, identifier, literal, and
+punctuation. Keywords are stored in a fixed keyword enum. Identifiers store their
+source string. Literals currently include number literals and string literals.
+Punctuation includes operators and delimiters such as \texttt{+},
+\texttt{==}, \texttt{->}, \texttt{...}, the dot-left-brace token, parentheses, braces, and
+brackets.
+
+The lexer checks punctuation by trying entries in a punctuation table ordered
+from longer strings to shorter strings. This matters because \texttt{...} must
+be recognized before \texttt{..}, \texttt{==} before \texttt{=}, and
+\texttt{->} before \texttt{-}. The implementation keeps this priority visible in
+one table.
+
+Number literals are parsed as \texttt{i128} first. This lets the lexer accept a
+large neutral representation before semantic analysis chooses the target integer
+type. If the number text does not fit into \texttt{i128}, the lexer reports
+\texttt{NumberLiteralTooLarge}. A number may be followed by an identifier suffix
+without whitespace, such as \texttt{42u64}. The suffix is stored with its own
+span so semantic analysis can report unknown suffixes precisely.
+
+String literals support a small set of escape sequences for newline, carriage
+return, tab, and a literal backslash. Unknown escape sequences and unclosed
+strings are lexical errors. The language does not currently include character
+literals or raw strings.
+
+\section{Spans}
+
+A span is a half-open byte range \texttt{start..end} into the source string.
+Spans are attached to tokens, AST identifiers, type nodes, expression nodes, and
+many semantic errors. The \texttt{Span::join} method creates a larger span
+covering two smaller spans. This is useful when an expression spans multiple
+tokens, for example when a binary expression spans from the start of its left
+operand to the end of its right operand.
+
+The diagnostic printer uses spans to compute the line number and underline. This
+is why even small AST nodes, such as identifiers and punctuation-driven
+constructs, preserve source locations. A compiler that drops source locations in
+the parser can still compile code, but it cannot explain errors well.
+
+\section{Parser Design}
+
+The parser is implemented in \texttt{src/ast.rs}. It owns the lexer and a small
+lookahead queue. The parser exposes a single public entry point:
+\texttt{Parser::new(src).parse()}. The result is an \texttt{Ast} containing a
+vector of top-level items.
+
+The parser is recursive descent. Each grammar category is represented by a
+method. For example, \texttt{next\_function} parses a function item,
+\texttt{next\_type} parses a type, \texttt{next\_block\_expr} parses a block,
+and expression precedence is implemented by methods such as
+\texttt{next\_or\_expr}, \texttt{next\_and\_expr},
+\texttt{next\_comp\_expr}, \texttt{next\_additive\_expr}, and
+\texttt{next\_multiplicative\_expr}.
+
+The parser performs syntax validation but not full semantic validation. It can
+reject duplicate annotations on an item, reject \texttt{let name;} without type
+or initializer, require variadic \texttt{...} to be the final function
+parameter, and report unexpected tokens. It does not check whether a type name
+exists, whether a variable is in scope, whether a function call has the correct
+argument types, or whether an arithmetic operator is applied to integers. Those
+checks belong to semantic lowering.
+
+\section{Top-Level Items}
+
+An \epl{} source file is parsed as zero or more top-level items. Each item may
+have annotations. The parser stores annotations in a \texttt{BTreeSet} keyed by
+annotation name, which makes duplicate detection simple.
+
+Function parsing handles both definitions and declarations. The parser reads the
+\texttt{fn} keyword, the function name, parameter list, optional return type,
+and then either a block body or a semicolon. A semicolon means that the function
+is a declaration. Variadic functions are represented by a boolean flag on the
+AST function.
+
+Struct parsing reads a name and a comma-delimited list of fields. Field types
+are parsed as AST type nodes, not resolved to semantic types yet. This is
+important because struct processing later uses the global type namespace and
+computes layout.
+
+\section{Expression Parsing}
+
+The expression grammar is layered by precedence. Assignment has low precedence,
+logical operators are above assignment, comparison is above logical operators,
+range is above comparison, addition is above range, multiplication is above
+addition, casts are above multiplication, unary operators are above casts, and
+field/index/dereference access is above unary operations.
+
+The parser treats several constructs as expression forms:
+\texttt{return}, \texttt{break}, \texttt{continue}, \texttt{comptime}, blocks,
+\texttt{if}, \texttt{loop}, \texttt{while}, \texttt{for}, array initializers,
+struct initializers, calls, casts, unary operations, binary operations,
+assignments, identifiers, and literals.
+
+Blocks require a small parsing rule because \epl{} distinguishes statements
+from the final expression. A block may contain semicolons, \texttt{let}
+statements, expression statements, and an optional final expression. If the next
+expression is followed by a closing brace, it becomes the final expression. If it
+is followed by a semicolon, it becomes an expression statement.
+
+\section{AST Shape}
+
+The AST is deliberately close to source syntax. The \texttt{Expr} enum includes
+variants for \texttt{While}, \texttt{For}, \texttt{Range}, \texttt{LogicalAnd}
+and \texttt{LogicalOr} as binary operations, \texttt{AsCast}, \texttt{Comptime},
+and other source-level forms. Later stages lower these into a smaller semantic
+core. For example, \texttt{while} does not survive as a distinct lower construct;
+it becomes a \texttt{loop} containing an \texttt{if}.
+
+Keeping the AST close to source syntax has two advantages. First, it makes AST
+debug output useful when diagnosing parser behavior. Second, it avoids mixing
+syntax parsing with language design decisions that are easier to make after
+types are known.
+
+\section{Parser Error Handling}
+
+Parser errors contain an optional span and an error kind. Unexpected token errors
+record both the expected description and the token that was actually found.
+Lexical errors are wrapped so the parser can expose one error type to the rest
+of the compiler.
+
+The parser stops at the first error. It does not implement error recovery or
+multi-error reporting. For a teaching compiler this is acceptable, but it is a
+clear area for future improvement. Production compilers often try to recover
+after syntax errors so they can report several problems in one run.

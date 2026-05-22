@@ -1,0 +1,97 @@
+\chapter{Representative Generated Output}
+\label{app:generated}
+
+This appendix includes selected generated output used to inspect the compiler
+pipeline. The output is shortened where necessary for readability.
+
+\section{IR\_TREE for Hello World}
+
+\begin{lstlisting}[caption={Typed tree for hello world}]
+fn main() -> i32
+    BLOCK TYPE=i32
+    |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   CONST_STRING("hello world\n") TYPE=*i8
+    |   CONST 0 TYPE=i32
+
+fn printf(fmt: *i8, ...) -> unit
+\end{lstlisting}
+
+\section{IR\_TREE for Redundant Pointer Operations}
+
+\begin{lstlisting}[caption={Simplified redundant address and dereference operations}]
+fn main() -> i32
+    BLOCK TYPE=i32
+    |   DECLARE var_1 "a" : i32
+    |   DECLARE var_2 "a_ptr" : *i32
+    |   DECLARE var_3 "b" : i32
+    |   DECLARE var_4 "c" : *i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   CONST 42 TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_2) [PLACE] TYPE=*i32
+    |   |   GET_POINTER TYPE=*i32
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_3) [PLACE] TYPE=i32
+    |   |   LOAD TYPE=i32
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_4) [PLACE] TYPE=*i32
+    |   |   LOAD TYPE=*i32
+    |   |   |   VARIABLE(var_2) [PLACE] TYPE=*i32
+    |   CONST 0 TYPE=i32
+\end{lstlisting}
+
+\section{IR\_TREE for Compile-Time Primes}
+
+\begin{lstlisting}[caption={Compile-time prime table after evaluation}]
+fn main() -> i32
+    BLOCK TYPE=i32
+    |   DECLARE var_1 "primes" : [i32; 20]
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 20]
+    |   |   CONST [3, 5, 7, 11, 13, 17, 19, 23, 29, 31,
+    |   |          37, 41, 43, 47, 53, 59, 61, 67, 71, 73]
+    |   |          TYPE=[i32; 20]
+    |   ...
+\end{lstlisting}
+
+\section{Diagnostic Form}
+
+The diagnostic printer reports an error message, file and line, the relevant
+source line, and a caret underline. A representative diagnostic has this shape:
+
+\begin{lstlisting}[caption={Representative diagnostic shape}]
+error: expected expr of type i32, found bool
+at example.epl:3
+    let x: i32 = true;
+                 ^^^^
+\end{lstlisting}
+
+\section{Build and Test Commands}
+
+\begin{lstlisting}[caption={Commands used to build and test the project}]
+cargo build
+cargo run -p epl_test ./target/debug/epl examples tests
+\end{lstlisting}
+
+The test run in this thesis completed with:
+
+\begin{lstlisting}[caption={Observed test result}]
+DONE (24 passed, 0 failed, 0 new)
+\end{lstlisting}
+
+\section{Useful Inspection Commands}
+
+\begin{lstlisting}[caption={Compiler inspection commands}]
+target/debug/epl ast examples/hello_world.epl
+target/debug/epl ir_tree examples/comptime_primes.epl
+target/debug/epl ir examples/fibonacci.epl
+target/debug/epl cfg examples/fibonacci.epl
+target/debug/epl llvm-ir examples/hello_world.epl
+target/debug/epl llvm-obj examples/hello_world.epl
+\end{lstlisting}
+
+The object-file command emits \texttt{a.out.o}. The executable can be produced
+by linking that object with a system C compiler.
