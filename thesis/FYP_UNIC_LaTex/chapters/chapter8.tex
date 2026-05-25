@@ -197,6 +197,58 @@ debugging feature, but it is also useful for learning. Many compiler concepts
 are easier to understand when control flow is visible as a graph instead of only
 as a linear debug dump.
 
+The following two examples illustrate how source language constructs map to
+basic blocks in the generated CFG.
+
+Listing~\ref{lst:select-src} shows a function that selects between two values
+using a conditional expression. The generated CFG in
+Figure~\ref{fig:cfg-select} reveals the four-block structure produced by
+conditional lowering: an entry block that evaluates \texttt{flag} and emits a
+conditional jump, a true block, a false block, and a continuation block that
+receives the selected value as a block argument.
+
+\begin{lstlisting}[language=EPL,caption={select.epl: conditional expression},label={lst:select-src}]
+fn select(a: i32, b: i32, flag: bool) -> i32 {
+    if flag { a } else { b }
+}
+\end{lstlisting}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{images/select.png}
+  \caption{CFG for \texttt{select}: entry block branches to the true and false
+           blocks, which both pass their result to a shared continuation block
+           argument}
+  \label{fig:cfg-select}
+\end{figure}
+
+Listing~\ref{lst:sum-range-src} shows a function that accumulates a sum over a
+range using a \texttt{while} loop. The generated CFG in
+Figure~\ref{fig:cfg-sum-range} shows the loop structure: an entry block that
+falls through to the body block, a body block that performs the loop work and
+loops back to itself via a conditional jump, and a continuation block reached
+when the loop condition is false.
+
+\begin{lstlisting}[language=EPL,caption={sum\_range.epl: while loop accumulation},label={lst:sum-range-src}]
+fn sum_range(from: i32, to: i32) -> i32 {
+    let sum = 0;
+    while from < to {
+        sum += from;
+        from += 1;
+    }
+    sum
+}
+\end{lstlisting}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{images/sum_range.png}
+  \caption{CFG for \texttt{sum\_range}: the body block loops back to itself
+           while the condition holds, and exits to the continuation block when
+           the condition fails}
+  \label{fig:cfg-sum-range}
+\end{figure}
+
 \section{Tradeoffs}
 
 The lower IR is intentionally pragmatic. It is not a research-grade SSA
