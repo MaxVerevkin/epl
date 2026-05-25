@@ -1,0 +1,36 @@
+fn sum_range(from: i32, to: i32) -> i32
+    BLOCK TYPE=i32
+    |   DECLARE var_1 "from" : i32
+    |   DECLARE var_2 "to" : i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   ARGUMENT("from") TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_2) [PLACE] TYPE=i32
+    |   |   ARGUMENT("to") TYPE=i32
+    |   BLOCK TYPE=i32
+    |   |   DECLARE var_3 "sum" : i32
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_3) [PLACE] TYPE=i32
+    |   |   |   CONST 0 TYPE=i32
+    |   |   LOOP(loop_1) TYPE=unit
+    |   |   |   IF TYPE=unit
+    |   |   |   |   CMP(Less) TYPE=bool
+    |   |   |   |   |   LOAD TYPE=i32
+    |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   |   |   |   LOAD TYPE=i32
+    |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=i32
+    |   |   |   |   BLOCK TYPE=unit
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=i32
+    |   |   |   |   |   |   LOAD TYPE=i32
+    |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
+    |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   |   |   |   |   CONST 1 TYPE=i32
+    |   |   |   |   BREAK(loop_1) TYPE=!
+    |   |   |   |   |   CONST UNIT TYPE=unit
+    |   |   LOAD TYPE=i32
+    |   |   |   VARIABLE(var_3) [PLACE] TYPE=i32
+
+

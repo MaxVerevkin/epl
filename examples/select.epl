@@ -1,0 +1,3 @@
+fn select(a: i32, b: i32, flag: bool) -> i32 {
+	if flag { a } else { b }
+}

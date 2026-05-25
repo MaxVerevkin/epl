@@ -1,0 +1,23 @@
+fn select(a: i32, b: i32, flag: bool) -> i32
+    BLOCK TYPE=i32
+    |   DECLARE var_1 "a" : i32
+    |   DECLARE var_2 "b" : i32
+    |   DECLARE var_3 "flag" : bool
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   ARGUMENT("a") TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_2) [PLACE] TYPE=i32
+    |   |   ARGUMENT("b") TYPE=i32
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_3) [PLACE] TYPE=bool
+    |   |   ARGUMENT("flag") TYPE=bool
+    |   IF TYPE=i32
+    |   |   LOAD TYPE=bool
+    |   |   |   VARIABLE(var_3) [PLACE] TYPE=bool
+    |   |   LOAD TYPE=i32
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=i32
+    |   |   LOAD TYPE=i32
+    |   |   |   VARIABLE(var_2) [PLACE] TYPE=i32
+
+

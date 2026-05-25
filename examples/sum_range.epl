@@ -1,0 +1,8 @@
+fn sum_range(from: i32, to: i32) -> i32 {
+	let sum = 0;
+	while from < to {
+		sum += from;
+		from += 1;
+	}
+	sum
+}
