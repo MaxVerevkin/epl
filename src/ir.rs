@@ -372,6 +372,54 @@ impl fmt::Debug for Value {
 
 impl fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} <- {:?}", self.definition_id, self.kind)
+        match &self.kind {
+            InstructionKind::Load { ptr } => {
+                write!(f, "{:?} := load {ptr:?}", self.definition_id)
+            }
+            InstructionKind::Store { ptr, value } => {
+                write!(f, "store {ptr:?}, {value:?}")
+            }
+            InstructionKind::FunctionCall { name, args } => {
+                write!(f, "{:?} := call {name:?}, {args:?}", self.definition_id)
+            }
+            InstructionKind::Cmp { op, signed, lhs, rhs } => {
+                write!(
+                    f,
+                    "{:?} := {} {op:?} {lhs:?}, {rhs:?}",
+                    self.definition_id,
+                    if *signed { "signed" } else { "unsigned" },
+                )
+            }
+            InstructionKind::Arithmetic { op, signed, lhs, rhs } => {
+                write!(
+                    f,
+                    "{:?} := {} {} {lhs:?}, {rhs:?}",
+                    self.definition_id,
+                    if *signed { "signed" } else { "unsigned" },
+                    match op {
+                        ArithmeticOp::Add => "add",
+                        ArithmeticOp::Sub => "sub",
+                        ArithmeticOp::Mul => "mul",
+                        ArithmeticOp::Div => "div",
+                        ArithmeticOp::Rem => "rem",
+                    }
+                )
+            }
+            InstructionKind::Not { value } => {
+                write!(f, "{:?} := not {value:?}", self.definition_id)
+            }
+            InstructionKind::OffsetPtr { ptr, offset } => {
+                write!(f, "{:?} := offset_ptr {ptr:?} {offset:?}", self.definition_id)
+            }
+            InstructionKind::Zext { int } => {
+                write!(f, "{:?} := zext {int:?}", self.definition_id)
+            }
+            InstructionKind::Sext { int } => {
+                write!(f, "{:?} := sext {int:?}", self.definition_id)
+            }
+            InstructionKind::Truncate { int } => {
+                write!(f, "{:?} := truncate {int:?}", self.definition_id)
+            }
+        }
     }
 }
