@@ -181,6 +181,12 @@ impl<'a> BodyLoweringCtx<'a> {
                 };
                 match value.as_ref() {
                     ir_tree::Expr {
+                        kind: ir_tree::ExprKind::Const(value),
+                        ..
+                    } => {
+                        self.eval_const_into(place_ptr, value);
+                    }
+                    ir_tree::Expr {
                         kind: ir_tree::ExprKind::ArrayInitializer(elements),
                         ..
                     } => {
