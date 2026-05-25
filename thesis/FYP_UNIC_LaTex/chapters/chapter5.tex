@@ -19,6 +19,7 @@ the source string. On each iteration it skips whitespace and comments, then trie
 to recognize the next token. Comments start with \texttt{\#} and continue until
 the end of the line. This simple rule avoids interaction with nested block
 comments or preprocessor-like behavior.
+Figure~\ref{fig:lexer-flow} shows the control flow of this token-reading loop.
 
 \begin{figure}[H]
   \centering

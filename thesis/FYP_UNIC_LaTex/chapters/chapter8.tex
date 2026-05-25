@@ -31,6 +31,8 @@ Block arguments are important. When a conditional or loop produces a value, the
 continuation block receives that value as a block argument. During LLVM
 generation, block arguments become phi nodes. This avoids carrying explicit phi
 instructions in lower IR while still modeling value merging.
+Figure~\ref{fig:block-args} illustrates the four-block pattern produced by a
+conditional that yields a value.
 
 \begin{figure}[H]
   \centering
