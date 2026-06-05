@@ -268,6 +268,8 @@ impl TypeSystem {
             Type::Never | Type::Unit | Type::Bool | Type::Int(_) | Type::Ptr { .. } => (),
         }
 
+        path_stack.pop();
+
         Ok(())
     }
 
