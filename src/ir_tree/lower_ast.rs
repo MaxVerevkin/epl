@@ -710,7 +710,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
                     let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
                     match (cmp_op, operands_ty) {
-                        (_, Type::Int(_)) => (),
+                        (_, Type::Int(_) | Type::Ptr { .. }) => (),
                         (CmpOp::Equal | CmpOp::NotEqual, Type::Bool) => (),
                         _ => {
                             return Err(Error::new(format!("cannot compare {operands_ty:?} with {cmp_op:?}"))
