@@ -59,8 +59,8 @@ fn list_print(list: *StructId(1)) -> unit
     |   |   DECLARE var_6 "ptr" : *StructId(2)
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   FIELD_ACCESS(head) TYPE=*StructId(2)
-    |   |   |   |   LOAD TYPE=StructId(1)
+    |   |   |   LOAD TYPE=*StructId(2)
+    |   |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
     |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
     |   |   |   |   |   |   LOAD TYPE=*StructId(1)
     |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=*StructId(1)
@@ -77,8 +77,8 @@ fn list_print(list: *StructId(1)) -> unit
     |   |   |   |   |   |   CMP(NotEqual) TYPE=bool
     |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
     |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   |   FIELD_ACCESS(head) TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   LOAD TYPE=StructId(1)
+    |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
+    |   |   |   |   |   |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
     |   |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
     |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
     |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=*StructId(1)
@@ -87,15 +87,15 @@ fn list_print(list: *StructId(1)) -> unit
     |   |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   CONST_STRING("%i") TYPE=*i8
-    |   |   |   |   |   |   FIELD_ACCESS(value) TYPE=i32
-    |   |   |   |   |   |   |   LOAD TYPE=StructId(2)
+    |   |   |   |   |   |   LOAD TYPE=i32
+    |   |   |   |   |   |   |   FIELD("value") [PLACE] TYPE=i32
     |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(2)
     |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
     |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
     |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   FIELD_ACCESS(next) TYPE=*StructId(2)
-    |   |   |   |   |   |   |   LOAD TYPE=StructId(2)
+    |   |   |   |   |   |   LOAD TYPE=*StructId(2)
+    |   |   |   |   |   |   |   FIELD("next") [PLACE] TYPE=*StructId(2)
     |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(2)
     |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
     |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
@@ -128,8 +128,8 @@ fn list_insert(list: *StructId(1), value: i32) -> unit
     |   |   |   STRUCT_INITIALIZER TYPE=StructId(2)
     |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=i32
-    |   |   |   |   FIELD_ACCESS(head) TYPE=*StructId(2)
-    |   |   |   |   |   LOAD TYPE=StructId(1)
+    |   |   |   |   LOAD TYPE=*StructId(2)
+    |   |   |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
     |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
     |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
     |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*StructId(1)

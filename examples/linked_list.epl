@@ -22,20 +22,20 @@ fn list_new() -> List {
 }
 
 fn list_print(list: *List) {
-	let ptr = list.*.head;
+	let ptr = list.head;
 	printf("[");
 	while ptr != null {
-		if ptr != list.*.head { printf(", "); }
-		printf("%i", ptr.*.value);
-		ptr = ptr.*.next;
+		if ptr != list.head { printf(", "); }
+		printf("%i", ptr.value);
+		ptr = ptr.next;
 	}
 	printf("]\n");
 }
 
 fn list_insert(list: *List, value: i32) {
 	let new_head = malloc(16) as *Node;
-	new_head.* = Node.{ value: value, next: list.*.head };
-	list.*.head = new_head;
+	new_head.* = .{ value: value, next: list.head };
+	list.head = new_head;
 }
 
 fn malloc(size: u64) -> ptr;
