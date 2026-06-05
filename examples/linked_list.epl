@@ -17,19 +17,14 @@ struct Node {
 	next: *Node,
 }
 
-fn null_ptr() -> ptr {
-	let null: u64 = 0;
-	(&null as *ptr).*
-}
-
 fn list_new() -> List {
-	.{ head: null_ptr() as *Node }
+	.{ head: null }
 }
 
 fn list_print(list: *List) {
 	let ptr = list.*.head;
 	printf("[");
-	while ptr != null_ptr() as *Node {
+	while ptr != null {
 		if ptr != list.*.head { printf(", "); }
 		printf("%i", ptr.*.value);
 		ptr = ptr.*.next;

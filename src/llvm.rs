@@ -545,6 +545,7 @@ impl BuildCtx<'_> {
             match value {
                 ir::Value::Zst => LLVMConstStructInContext(self.module.context, [].as_mut_ptr(), 0, 0),
                 ir::Value::Undefined(ty) => LLVMGetUndef(self.build_type(ty)),
+                ir::Value::Null => LLVMConstNull(LLVMPointerTypeInContext(self.module.context, 0)),
                 ir::Value::Bool(bool) => LLVMConstInt(LLVMInt1TypeInContext(self.module.context), *bool as u64, 0),
                 ir::Value::String(string) => {
                     let data = CString::new(string.clone()).unwrap();

@@ -479,6 +479,7 @@ impl<'a> BodyLoweringCtx<'a> {
     fn eval_const(&mut self, value: &ir_tree::Constant) -> Value {
         match value {
             ir_tree::Constant::Undefined(ty) => Value::Undefined(lower_type(self.module, *ty)),
+            ir_tree::Constant::Null(_) => Value::Null,
             ir_tree::Constant::Unit => Value::Zst,
             ir_tree::Constant::Bool(bool) => Value::Bool(*bool),
             ir_tree::Constant::I8(int) => Value::Number {
@@ -517,6 +518,7 @@ impl<'a> BodyLoweringCtx<'a> {
     fn eval_const_into(&mut self, place_ptr: Value, value: &ir_tree::Constant) {
         match value {
             ir_tree::Constant::Undefined(_)
+            | ir_tree::Constant::Null(_)
             | ir_tree::Constant::Unit
             | ir_tree::Constant::Bool(_)
             | ir_tree::Constant::I8(_)

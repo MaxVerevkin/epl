@@ -1,5 +1,4 @@
 use super::*;
-use crate::common::Layout;
 use crate::ir_tree::types::*;
 
 /// Get a type of a struct definition from its AST representation

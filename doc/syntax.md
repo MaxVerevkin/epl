@@ -21,7 +21,7 @@ Everything after `#` is treated as a comment.
 
 ## Keywords
 
-`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `enum` `undefined` `as` `comptime`
+`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `enum` `undefined` `as` `comptime` `null`
 
 ## Items
 

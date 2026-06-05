@@ -58,6 +58,7 @@ pub enum Keyword {
     Undefined,
     As,
     Comptime,
+    Null,
 }
 
 /// A mapping from strings to keyword tokens
@@ -80,6 +81,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("undefined", Keyword::Undefined),
     ("as", Keyword::As),
     ("comptime", Keyword::Comptime),
+    ("null", Keyword::Null),
 ];
 
 /// A literal token

@@ -119,6 +119,7 @@ pub fn eval_cast(from: Constant, target_ty: Type) -> Result<Constant, Error> {
 
     Ok(match from {
         Constant::Undefined(_) => todo!(),
+        Constant::Null(_) => todo!(),
         Constant::Unit => unreachable!(),
         Constant::Bool(_) => unreachable!(),
         Constant::I8(int) => const_cast_i8(int, target_ty),

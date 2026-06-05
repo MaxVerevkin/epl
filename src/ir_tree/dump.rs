@@ -173,6 +173,7 @@ impl Writer<'_> {
 
     fn dump_constant(&mut self, value: &Constant) {
         match value {
+            Constant::Null(_) => self.output.push_str("NULL"),
             Constant::Undefined(_) => self.output.push_str("UNDEFINED"),
             Constant::Unit => self.output.push_str("UNIT"),
             Constant::Bool(bool) => write!(self.output, "{bool}").unwrap(),

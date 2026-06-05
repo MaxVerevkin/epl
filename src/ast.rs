@@ -72,6 +72,7 @@ pub struct StructField {
 
 /// An enum definition
 #[derive(Debug, Clone)]
+#[expect(unused)]
 pub struct Enum {
     pub name: Ident,
     pub entries: Vec<EnumEntry>,
@@ -79,6 +80,7 @@ pub struct Enum {
 
 /// Aa entry of an enum definition
 #[derive(Debug, Clone)]
+#[expect(unused)]
 pub struct EnumEntry {
     pub name: Ident,
     pub ty: Option<Type>,
@@ -324,6 +326,7 @@ pub struct LiteralExpr {
 #[derive(Debug, Clone)]
 pub enum LiteralExprValue {
     Undefined,
+    Null,
     Number(i128, Option<Ident>),
     String(String),
     Bool(bool),
@@ -1148,6 +1151,13 @@ impl Parser<'_> {
                     value: LiteralExprValue::Undefined,
                 }))
             }
+            Some(lex::Token::Keyword(lex::Keyword::Null)) => {
+                let (span, _) = self.consume_token()?.unwrap();
+                Ok(Expr::Literal(LiteralExpr {
+                    span,
+                    value: LiteralExprValue::Null,
+                }))
+            }
             Some(lex::Token::Punct(lex::Punct::LeftParen)) => {
                 self.consume_token()?;
                 let expr = self.next_expr()?;
@@ -1376,6 +1386,7 @@ impl fmt::Debug for LiteralExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.value {
             LiteralExprValue::Undefined => f.write_str("undefined")?,
+            LiteralExprValue::Null => f.write_str("null")?,
             LiteralExprValue::Number(num, _suffix) => num.fmt(f)?,
             LiteralExprValue::String(s) => s.fmt(f)?,
             LiteralExprValue::Bool(b) => b.fmt(f)?,

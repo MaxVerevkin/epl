@@ -332,6 +332,7 @@ impl Terminator {
 pub enum Value {
     Zst,
     Undefined(Type),
+    Null,
     Bool(bool),
     String(String),
     Number { data: i64, ty: Type },
@@ -344,6 +345,7 @@ impl Value {
         match self {
             Self::Zst => Type::Unit,
             Self::Undefined(ty) => ty.clone(),
+            Self::Null => Type::Ptr,
             Self::Bool(_) => Type::Bool,
             Self::String(_) => Type::Ptr,
             Self::Number { data: _, ty } => ty.clone(),
@@ -362,6 +364,7 @@ impl fmt::Debug for Value {
         match self {
             Self::Zst => f.write_str("ZST"),
             Self::Undefined(_) => f.write_str("undefined"),
+            Self::Null => f.write_str("null"),
             Self::Bool(bool) => bool.fmt(f),
             Self::String(str) => str.fmt(f),
             Self::Number { data, ty: _ } => data.fmt(f),

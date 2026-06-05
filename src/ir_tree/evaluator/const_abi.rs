@@ -7,6 +7,7 @@ fn constant_to_bytes_into(constant: &Constant, typesystem: &TypeSystem, output: 
                 output.push(0);
             }
         }
+        Constant::Null(_) => unimplemented!(),
         Constant::Unit => (),
         Constant::Bool(x) => output.push(*x as u8),
         Constant::I8(x) => output.push(*x as u8),

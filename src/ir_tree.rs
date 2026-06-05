@@ -350,6 +350,7 @@ pub enum PlaceKind {
 #[derive(Debug, Clone)]
 pub enum Constant {
     Undefined(Type),
+    Null(Option<TypeId>),
     Unit,
     Bool(bool),
     I8(i8),
@@ -366,6 +367,7 @@ impl Constant {
     pub fn ty(&self) -> Type {
         match self {
             Self::Undefined(ty) => *ty,
+            Self::Null(ty) => Type::Ptr { pointee: *ty },
             Self::Unit => Type::Unit,
             Self::Bool(_) => Type::Bool,
             Self::I8(_) => Type::Int(IntType::I8),

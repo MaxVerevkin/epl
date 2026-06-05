@@ -618,6 +618,24 @@ impl<'a> FunctionLoweringCtx<'a> {
                         kind: ExprKind::Const(Constant::Undefined(ty)),
                     })
                 }
+                ast::LiteralExprValue::Null => {
+                    let pointee = match expect_type {
+                        None => None,
+                        Some(Type::Ptr { pointee }) => pointee,
+                        Some(expect_type) => {
+                            return Err(Error::expr_type_mismatch(
+                                expect_type,
+                                Type::Ptr { pointee: None },
+                                literal_expr.span,
+                            ));
+                        }
+                    };
+                    Ok(Expr {
+                        ty: Type::Ptr { pointee },
+                        span,
+                        kind: ExprKind::Const(Constant::Null(pointee)),
+                    })
+                }
             },
             ast::Expr::FunctionCallExpr(function_call_expr) => {
                 let callee_id = self
