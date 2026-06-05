@@ -21,12 +21,12 @@ Everything after `#` is treated as a comment.
 
 ## Keywords
 
-`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `undefined` `as` `comptime`
+`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `enum` `undefined` `as` `comptime`
 
 ## Items
 
 ```ebnf
-item ::= { annotation } ( function | struct_def )
+item ::= { annotation } ( function | struct_def | enum_def )
 ```
 
 ## Annotations
@@ -49,6 +49,14 @@ fn_arg   ::= ident ':' type
 struct_def    ::= 'struct' ident '{' struct_fields '}'
 struct_fields ::= [ struct_field { ',' struct_field } [ ',' ] ]
 struct_field  ::= ident ':' type
+```
+
+## Enum Definitions
+
+```ebnf
+enum_def    ::= 'enum' ident '{' enum_entries '}'
+enum_entries ::= [ enum_entry { ',' enum_entry } [ ',' ] ]
+enum_entry  ::= ident [ '(' type ')' ]
 ```
 
 ## Expressions

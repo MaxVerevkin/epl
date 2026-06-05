@@ -6,7 +6,7 @@ mod opt;
 mod types;
 mod visit;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 pub use types::{IntType, Type, TypeId, TypeSystem};
 
@@ -89,6 +89,9 @@ impl Module {
                         return Err(Error::new("type with this name already exists").with_span(s_def.name.span));
                     }
                 }
+                ast::ItemKind::Enum(_e_def) => {
+                    unimplemented!("enum support is not here yet");
+                }
             }
         }
 
@@ -105,7 +108,7 @@ impl Module {
                     }
                     module.functions.insert(decl.id, decl);
                 }
-                ast::ItemKind::Struct(_) => (),
+                ast::ItemKind::Struct(_) | ast::ItemKind::Enum(_) => (),
             }
         }
 
@@ -126,7 +129,7 @@ impl Module {
                         module.functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
                 }
-                ast::ItemKind::Struct(_) => (),
+                ast::ItemKind::Struct(_) | ast::ItemKind::Enum(_) => (),
             }
         }
 
@@ -214,7 +217,7 @@ impl Function {
         typesystem: &mut TypeSystem,
         type_namespace: &HashMap<String, Type>,
         ast: &ast::Function,
-        annotations: &BTreeSet<ast::Annotation>,
+        annotations: &[ast::Annotation],
     ) -> Result<Self, Error> {
         let mut is_pure = false;
         for annotation in annotations {

@@ -244,7 +244,7 @@ impl TypeSystem {
         &mut self,
         type_namespace: &HashMap<String, Type>,
         ast: &ast::Struct,
-        annotations: &BTreeSet<ast::Annotation>,
+        annotations: &[ast::Annotation],
     ) -> Result<Type, Error> {
         if let Some(annotation) = annotations.iter().next() {
             return Err(

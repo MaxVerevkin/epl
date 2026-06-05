@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 
 use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
@@ -13,7 +13,7 @@ pub struct Ast {
 /// A top level item
 #[derive(Clone, Debug)]
 pub struct Item {
-    pub annotations: BTreeSet<Annotation>,
+    pub annotations: Vec<Annotation>,
     pub kind: ItemKind,
 }
 
@@ -22,26 +22,6 @@ pub struct Item {
 pub struct Annotation {
     pub at_symbol_span: lex::Span,
     pub ident: Ident,
-}
-
-impl PartialEq for Annotation {
-    fn eq(&self, other: &Self) -> bool {
-        self.ident.value == other.ident.value
-    }
-}
-
-impl Eq for Annotation {}
-
-impl PartialOrd for Annotation {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Annotation {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.ident.value.cmp(&other.ident.value)
-    }
 }
 
 impl Annotation {
@@ -56,6 +36,7 @@ impl Annotation {
 pub enum ItemKind {
     Function(Function),
     Struct(Struct),
+    Enum(Enum),
 }
 
 /// A function definition or declaration
@@ -87,6 +68,20 @@ pub struct Struct {
 pub struct StructField {
     pub name: Ident,
     pub ty: Type,
+}
+
+/// An enum definition
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: Ident,
+    pub entries: Vec<EnumEntry>,
+}
+
+/// Aa entry of an enum definition
+#[derive(Debug, Clone)]
+pub struct EnumEntry {
+    pub name: Ident,
+    pub ty: Option<Type>,
 }
 
 /// An identifier with its span
@@ -588,32 +583,32 @@ impl Parser<'_> {
 
     /// Parse item
     fn next_item(&mut self) -> Result<Option<Item>, Error> {
-        let mut annotations = BTreeSet::new();
+        let mut annotations = Vec::<Annotation>::new();
 
         while self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::At)) {
             let (at_symbol_span, _) = self.consume_token()?.unwrap();
             let ident = self.next_ident()?;
             let annotation = Annotation { at_symbol_span, ident };
-            let span = annotation.span();
-            let duplicate = !annotations.insert(annotation);
-            if duplicate {
+            if annotations.iter().any(|a| a.ident.value == annotation.ident.value) {
                 return Err(Error {
-                    span: Some(span),
+                    span: Some(annotation.span()),
                     kind: ErrorKind::DuplicateAnnotation,
                 });
             }
+            annotations.push(annotation);
         }
 
         match self.peek_token()? {
             Some(lex::Token::Keyword(lex::Keyword::Fn)) => self.next_function(annotations).map(Some),
             Some(lex::Token::Keyword(lex::Keyword::Struct)) => self.next_struct(annotations).map(Some),
+            Some(lex::Token::Keyword(lex::Keyword::Enum)) => self.next_enum(annotations).map(Some),
             None => Ok(None),
             _ => self.consume_unexpected_token("an item (function or struct)"),
         }
     }
 
     /// Parse function
-    fn next_function(&mut self, annotations: BTreeSet<Annotation>) -> Result<Item, Error> {
+    fn next_function(&mut self, annotations: Vec<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Fn)?;
         let name = self.next_ident()?;
         self.expect_punct(lex::Punct::LeftParen)?;
@@ -694,7 +689,7 @@ impl Parser<'_> {
     }
 
     /// Parse struct
-    fn next_struct(&mut self, annotations: BTreeSet<Annotation>) -> Result<Item, Error> {
+    fn next_struct(&mut self, annotations: Vec<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Struct)?;
         let name = self.next_ident()?;
         self.expect_punct(lex::Punct::LeftBrace)?;
@@ -708,6 +703,31 @@ impl Parser<'_> {
         Ok(Item {
             annotations,
             kind: ItemKind::Struct(Struct { name, fields }),
+        })
+    }
+
+    /// Parse enum
+    fn next_enum(&mut self, annotations: Vec<Annotation>) -> Result<Item, Error> {
+        self.expect_keyword(lex::Keyword::Enum)?;
+        let name = self.next_ident()?;
+        self.expect_punct(lex::Punct::LeftBrace)?;
+        let entries = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBrace, |parser| {
+            let entry_name = parser.next_ident()?;
+            let ty = match parser.peek_token()? {
+                Some(&lex::Token::Punct(lex::Punct::LeftParen)) => {
+                    parser.consume_token()?;
+                    let ty = parser.next_type()?;
+                    parser.expect_punct(lex::Punct::RightParen)?;
+                    Some(ty)
+                }
+                _ => None,
+            };
+            Ok(EnumEntry { name: entry_name, ty })
+        })?;
+        self.expect_punct(lex::Punct::RightBrace)?;
+        Ok(Item {
+            annotations,
+            kind: ItemKind::Enum(Enum { name, entries }),
         })
     }
 
@@ -1289,9 +1309,13 @@ impl fmt::Debug for ItemKind {
                 f.write_str("Item::")?;
                 function.fmt(f)
             }
-            Self::Struct(r#struct) => {
+            Self::Struct(s) => {
                 f.write_str("Item::")?;
-                r#struct.fmt(f)
+                s.fmt(f)
+            }
+            Self::Enum(e) => {
+                f.write_str("Item::")?;
+                e.fmt(f)
             }
         }
     }
