@@ -72,11 +72,11 @@ fn get_alive_neighbors(board: *Board, row: u64, col: u64) -> u64 {
 }
 
 fn get_cell(board: *Board, row: u64, col: u64) -> bool {
-	board.*.rows[row][col]
+	board.rows[row][col]
 }
 
 fn set_cell(board: *Board, row: u64, col: u64, alive: bool) {
-	board.*.rows[row][col] = alive;
+	board.rows[row][col] = alive;
 }
 
 fn printf(fmt: *i8, ...);

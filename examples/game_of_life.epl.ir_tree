@@ -476,8 +476,8 @@ fn get_cell(board: *StructId(1), row: u64, col: u64) -> bool
     |   |   ARGUMENT("col") TYPE=u64
     |   ARRAY_ELEMENT TYPE=bool
     |   |   ARRAY_ELEMENT TYPE=[bool; 20]
-    |   |   |   FIELD_ACCESS(rows) TYPE=[[bool; 20]; 20]
-    |   |   |   |   LOAD TYPE=StructId(1)
+    |   |   |   LOAD TYPE=[[bool; 20]; 20]
+    |   |   |   |   FIELD("rows") [PLACE] TYPE=[[bool; 20]; 20]
     |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
     |   |   |   |   |   |   LOAD TYPE=*StructId(1)
     |   |   |   |   |   |   |   VARIABLE(var_40) [PLACE] TYPE=*StructId(1)

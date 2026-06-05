@@ -907,8 +907,11 @@ impl<'a> FunctionLoweringCtx<'a> {
             }
             ast::Expr::FieldAccess(e) => {
                 let lowered_lhs = self.lower_expr(&e.lhs, None)?;
-                let struct_id = match lowered_lhs.ty {
-                    Type::Struct(struct_id) => struct_id,
+                let (struct_id, need_deref) = match lowered_lhs.ty {
+                    Type::Struct(struct_id) => (struct_id, false),
+                    Type::Ptr { pointee: Some(pointee) } if self.typesystem.get_type(pointee).as_struct().is_some() => {
+                        (self.typesystem.get_type(pointee).as_struct().unwrap(), true)
+                    }
                     _ => return Err(Error::new("only structs have fields").with_span(e.dot_span)),
                 };
                 let struct_ty = self.typesystem.get_struct(struct_id);
@@ -922,10 +925,27 @@ impl<'a> FunctionLoweringCtx<'a> {
                             struct_ty.name.value, e.field.value
                         ))
                     })?;
-                Ok(Expr {
-                    ty: field.ty,
-                    span,
-                    kind: ExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
+                Ok(if need_deref {
+                    let struct_place = Place {
+                        ty: Type::Struct(struct_id),
+                        span,
+                        kind: PlaceKind::Dereference(Box::new(lowered_lhs)),
+                    };
+                    Expr {
+                        ty: field.ty,
+                        span,
+                        kind: ExprKind::Load(Place {
+                            ty: field.ty,
+                            span,
+                            kind: PlaceKind::Field(Box::new(struct_place), field.name.value.clone()),
+                        }),
+                    }
+                } else {
+                    Expr {
+                        ty: field.ty,
+                        span,
+                        kind: ExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
+                    }
                 })
             }
             ast::Expr::Dereference(e) => {
