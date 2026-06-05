@@ -282,7 +282,7 @@ impl EvalCtx<'_> {
                     .offset;
                 ConstantPlace {
                     variable: struct_place_value.variable,
-                    bytes_offset: struct_place_value.bytes_offset + field_offset as usize,
+                    bytes_offset: struct_place_value.bytes_offset + field_offset.unwrap() as usize,
                 }
             }
             PlaceKind::ArrayElement(array_place, index_expr) => {

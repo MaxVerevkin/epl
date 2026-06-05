@@ -77,15 +77,18 @@ impl Module {
         type_namespace.insert(String::from("u64"), Type::Int(IntType::U64));
         type_namespace.insert(String::from("ptr"), Type::OPAQUE_PTR);
 
+        // Pass 1 - collect type names
+        let mut struct_ids = Vec::new();
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(_) => (),
                 ast::ItemKind::Struct(s_def) => {
-                    let name = s_def.name.value.clone();
-                    let s = module
-                        .typesystem
-                        .struct_from_ast(&type_namespace, s_def, &item.annotations)?;
-                    if type_namespace.insert(name, s).is_some() {
+                    let id = module.typesystem.alloc_struct_id();
+                    struct_ids.push(id);
+                    if type_namespace
+                        .insert(s_def.name.value.clone(), Type::Struct(id))
+                        .is_some()
+                    {
                         return Err(Error::new("type with this name already exists").with_span(s_def.name.span));
                     }
                 }
@@ -93,6 +96,33 @@ impl Module {
                     unimplemented!("enum support is not here yet");
                 }
             }
+        }
+
+        // Pass 2 - Lower type definitions
+        for item in &ast.items {
+            match &item.kind {
+                ast::ItemKind::Function(_) => (),
+                ast::ItemKind::Struct(s_def) => {
+                    let id = type_namespace[&s_def.name.value].as_struct().unwrap();
+
+                    let def = lower_ast::decl::lower_struct_decl(
+                        &mut module.typesystem,
+                        &type_namespace,
+                        s_def,
+                        &item.annotations,
+                    )?;
+
+                    module.typesystem.define_struct(id, def);
+                }
+                ast::ItemKind::Enum(_e_def) => {
+                    unimplemented!("enum support is not here yet");
+                }
+            }
+        }
+
+        // Pass 3 - Resolve layouts
+        for &id in &struct_ids {
+            module.typesystem.resolve_layout(Type::Struct(id), &mut Vec::new())?;
         }
 
         for item in &ast.items {

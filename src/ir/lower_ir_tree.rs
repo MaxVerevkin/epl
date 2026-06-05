@@ -46,7 +46,7 @@ fn lower_type(module: &ir_tree::Module, ty: ir_tree::Type) -> Type {
         ir_tree::Type::Struct(struct_id) => {
             let s = module.typesystem.get_struct(struct_id);
             let fields = s.fields.iter().map(|field| lower_type(module, field.ty)).collect();
-            Type::Struct(fields, s.layout)
+            Type::Struct(fields, s.layout.unwrap())
         }
     }
 }
@@ -547,7 +547,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 for (field_def, field_value) in struct_type.fields.iter().zip(fields) {
                     let ptr = self
                         .cursor()
-                        .offset_ptr(place_ptr.clone(), Value::new_i64(field_def.offset as i64));
+                        .offset_ptr(place_ptr.clone(), Value::new_i64(field_def.offset.unwrap() as i64));
                     self.eval_const_into(ptr, field_value);
                 }
             }

@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use super::*;
 use crate::ast;
 use crate::common::Layout;
@@ -82,7 +84,7 @@ impl Type {
                 .fields
                 .iter()
                 .find(|f| f.name.value == name)
-                .map(|f| f.offset),
+                .map(|f| f.offset.unwrap()),
             _ => None,
         }
     }
@@ -100,7 +102,7 @@ impl Type {
                 size: typesystem.ptr_size,
                 align: typesystem.ptr_size,
             },
-            Self::Struct(sid) => typesystem.get_struct(sid).layout,
+            Self::Struct(sid) => typesystem.get_struct(sid).layout.unwrap(),
             Self::Array { element, length } => {
                 let mut layout = typesystem.get_type(element).layout(typesystem);
                 layout.size = layout.size.next_multiple_of(layout.align);
@@ -143,14 +145,14 @@ impl IntType {
 
 /// The ID of a structure type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StructId(usize);
+pub struct StructId(NonZeroUsize);
 
 /// A description of a structure
 #[derive(Debug)]
 pub struct Struct {
     pub name: ast::Ident,
     pub fields: Vec<StructField>,
-    pub layout: Layout,
+    pub layout: Option<Layout>, // None during IR_TREE construction
 }
 
 /// A field of a struct definition
@@ -158,7 +160,7 @@ pub struct Struct {
 pub struct StructField {
     pub name: ast::Ident,
     pub ty: Type,
-    pub offset: u64,
+    pub offset: Option<u64>, // None during IR_TREE construction
 }
 
 /// The ID of a type
@@ -174,7 +176,7 @@ impl TypeId {
 #[derive(Debug)]
 pub struct TypeSystem {
     ptr_size: u64,
-    structs: Vec<Struct>,
+    structs: Vec<Option<Struct>>,
     types_with_ids: Vec<Type>,
     type_lut: HashMap<Type, TypeId>,
 }
@@ -184,10 +186,89 @@ impl TypeSystem {
     pub fn new(ptr_size: u64) -> Self {
         Self {
             ptr_size,
-            structs: Vec::new(),
+            structs: vec![None], // Dummy zero'th struct
             types_with_ids: vec![Type::Int(IntType::I8)],
             type_lut: [(Type::Int(IntType::I8), TypeId::I8)].into_iter().collect(),
         }
+    }
+
+    /// Allocate the next struct ID. The struct must be then defined via `define_struct` for the ID to be usable.
+    pub fn alloc_struct_id(&mut self) -> StructId {
+        let id = StructId(NonZeroUsize::new(self.structs.len()).unwrap());
+        self.structs.push(None);
+        id
+    }
+
+    /// Define the structure
+    ///
+    /// # Panics
+    ///
+    /// Panics if called more than once for the same ID.
+    pub fn define_struct(&mut self, id: StructId, def: Struct) {
+        if self.structs[id.0.get()].is_some() {
+            panic!("define_struct() called twice with the same ID");
+        }
+
+        self.structs[id.0.get()] = Some(def);
+    }
+
+    /// Resolve the layout of a struct, recursively resolving layouts as needed.
+    pub fn resolve_layout(&mut self, ty: Type, path_stack: &mut Vec<Type>) -> Result<(), Error> {
+        path_stack.push(ty);
+
+        if let Some(i) = path_stack.iter().position(|x| *x == ty)
+            && i + 1 != path_stack.len()
+        {
+            use std::fmt::Write;
+            let mut msg = String::from("could not resolve type layout, dependency cycle detected: ");
+            for (entry_i, entry) in path_stack[i..].iter().enumerate() {
+                if entry_i != 0 {
+                    msg.push_str(" -> ");
+                }
+                write!(msg, "{entry:?}").unwrap();
+            }
+            let span = match path_stack.first().unwrap() {
+                Type::Struct(struct_id) => self.get_struct(*struct_id).name.span,
+                Type::Never | Type::Unit | Type::Bool | Type::Int(_) | Type::Ptr { .. } | Type::Array { .. } => {
+                    unreachable!()
+                }
+            };
+            return Err(Error::new(msg).with_span(span));
+        }
+
+        match ty {
+            Type::Struct(struct_id) => {
+                let field_layouts = self
+                    .get_struct(struct_id)
+                    .fields
+                    .iter()
+                    .map(|f| f.ty)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|ty| {
+                        self.resolve_layout(ty, path_stack)?;
+                        Ok(ty.layout(self))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let s = self.structs[struct_id.0.get()].as_mut().unwrap();
+                let mut size = 0u64;
+                let mut align = 1;
+                for (field, layout) in s.fields.iter_mut().zip(field_layouts) {
+                    size = size.next_multiple_of(layout.align);
+                    align = align.max(layout.align);
+                    field.offset = Some(size);
+                    size += layout.size;
+                }
+                s.layout = Some(Layout { size, align });
+            }
+            Type::Array { element, length: _ } => {
+                self.resolve_layout(self.get_type(element), path_stack)?;
+            }
+            Type::Never | Type::Unit | Type::Bool | Type::Int(_) | Type::Ptr { .. } => (),
+        }
+
+        Ok(())
     }
 
     /// Returns the target pointer size
@@ -239,53 +320,16 @@ impl TypeSystem {
         }
     }
 
-    /// Get a type of a struct definition from its AST representation
-    pub fn struct_from_ast(
-        &mut self,
-        type_namespace: &HashMap<String, Type>,
-        ast: &ast::Struct,
-        annotations: &[ast::Annotation],
-    ) -> Result<Type, Error> {
-        if let Some(annotation) = annotations.iter().next() {
-            return Err(
-                Error::new(format!("unknown annotation: {:?}", annotation.ident.value)).with_span(annotation.span())
-            );
-        }
-
-        let mut fields: Vec<StructField> = Vec::new();
-        let mut size = 0u64;
-        let mut align = 1;
-        for field in &ast.fields {
-            if fields.iter().any(|x| x.name.value == field.name.value) {
-                return Err(Error::new("field with this name already exists").with_span(field.name.span));
-            }
-            let ty = self.type_from_ast(type_namespace, &field.ty)?;
-            let layout = ty.layout(self);
-            size = size.next_multiple_of(layout.align);
-            align = align.max(layout.align);
-            fields.push(StructField {
-                name: field.name.clone(),
-                ty,
-                offset: size,
-            });
-            size += layout.size;
-        }
-
-        let sid = StructId(self.structs.len());
-        self.structs.push(Struct {
-            name: ast.name.clone(),
-            fields,
-            layout: Layout {
-                size: size.next_multiple_of(align),
-                align,
-            },
-        });
-        Ok(Type::Struct(sid))
-    }
-
     /// Get a reference to the struct declaration
+    ///
+    /// # Panics
+    ///
+    /// Panics if called with an ID that was not yet defined via `define_struct`.
     pub fn get_struct(&self, sid: StructId) -> &Struct {
-        &self.structs[sid.0]
+        match &self.structs[sid.0.get()] {
+            Some(def) => def,
+            None => panic!("get_struct called with ID that was not defined"),
+        }
     }
 
     /// Get the actual type by ID

@@ -24,7 +24,7 @@ fn constant_to_bytes_into(constant: &Constant, typesystem: &TypeSystem, output: 
             let struct_type = typesystem.get_struct(*struct_id);
             let mut written = 0;
             for (field_def, field_value) in struct_type.fields.iter().zip(fields) {
-                while written < field_def.offset {
+                while written < field_def.offset.unwrap() {
                     // padding
                     output.push(0);
                     written += 1;
@@ -32,7 +32,7 @@ fn constant_to_bytes_into(constant: &Constant, typesystem: &TypeSystem, output: 
                 constant_to_bytes_into(field_value, typesystem, output);
                 written += field_def.ty.layout(typesystem).size;
             }
-            for _ in written..struct_type.layout.size {
+            for _ in written..struct_type.layout.unwrap().size {
                 // padding
                 output.push(0);
             }
@@ -62,10 +62,10 @@ pub fn constant_from_bytes(bytes: &[u8], ty: Type, typesystem: &TypeSystem) -> C
         Type::Struct(struct_id) => {
             let mut fields = Vec::new();
             let struct_type = typesystem.get_struct(struct_id);
-            assert_eq!(struct_type.layout.size, bytes.len() as u64);
+            assert_eq!(struct_type.layout.unwrap().size, bytes.len() as u64);
             for field_def in &struct_type.fields {
                 let field_size = field_def.ty.layout(typesystem).size;
-                let field_bytes = &bytes[field_def.offset as usize..][..field_size as usize];
+                let field_bytes = &bytes[field_def.offset.unwrap() as usize..][..field_size as usize];
                 fields.push(constant_from_bytes(field_bytes, field_def.ty, typesystem));
             }
             Constant::Struct(struct_id, fields)

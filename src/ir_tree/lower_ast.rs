@@ -1,3 +1,5 @@
+pub mod decl;
+
 use std::collections::HashMap;
 
 use super::*;
