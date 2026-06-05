@@ -1,5 +1,0 @@
-To compile the thesis you will need:
-* texlive, which contains all the packages of latex
-* pygmentize
-
-You just run 'make' from the terminal in the folder of the thesis
