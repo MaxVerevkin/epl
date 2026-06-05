@@ -1,0 +1,47 @@
+fn main() -> i32 {
+	let list = list_new();
+	for i in 1..6 {
+		list_print(&list);
+		list_insert(&list, i);
+	}
+	list_print(&list);
+	0
+}
+
+struct List {
+	head: *Node,
+}
+
+struct Node {
+	value: i32,
+	next: *Node,
+}
+
+fn null_ptr() -> ptr {
+	let null: u64 = 0;
+	(&null as *ptr).*
+}
+
+fn list_new() -> List {
+	.{ head: null_ptr() as *Node }
+}
+
+fn list_print(list: *List) {
+	let ptr = list.*.head;
+	printf("[");
+	while ptr != null_ptr() as *Node {
+		if ptr != list.*.head { printf(", "); }
+		printf("%i", ptr.*.value);
+		ptr = ptr.*.next;
+	}
+	printf("]\n");
+}
+
+fn list_insert(list: *List, value: i32) {
+	let new_head = malloc(16) as *Node;
+	new_head.* = Node.{ value: value, next: list.*.head };
+	list.*.head = new_head;
+}
+
+fn malloc(size: u64) -> ptr;
+fn printf(fmt: *i8, ...);
