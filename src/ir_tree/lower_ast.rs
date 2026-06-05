@@ -744,8 +744,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                     })
                 }
                 BinaryOp::Arithmetic(arithmetic_op) => {
-                    let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
-                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
+                    let lowered_lhs = self.lower_expr(&binary_expr.lhs, expect_type)?;
+                    let lowered_rhs = self.lower_expr(
+                        &binary_expr.rhs,
+                        Some(coalesce_types(lowered_lhs.ty, expect_type.unwrap_or(lowered_lhs.ty))),
+                    )?;
                     let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
                     if !operands_ty.is_int() {
                         return Err(Error::new(format!(
