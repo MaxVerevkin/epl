@@ -39,6 +39,13 @@ impl Error {
         }
     }
 
+    pub fn unknown_annotation(annotation: &ast::Annotation) -> Self {
+        Self {
+            span: Some(annotation.span()),
+            message: format!("unknown annotation: {:?}", annotation.ident.value),
+        }
+    }
+
     /// Assign a span to this error
     pub fn with_span(mut self, span: lex::Span) -> Self {
         self.span = Some(span);
@@ -105,7 +112,7 @@ impl Module {
                 ast::ItemKind::Struct(s_def) => {
                     let id = type_namespace[&s_def.name.value].as_struct().unwrap();
 
-                    let def = lower_ast::decl::lower_struct_decl(
+                    let def = lower_ast::decl::lower_struct(
                         &mut module.typesystem,
                         &type_namespace,
                         s_def,
@@ -125,11 +132,16 @@ impl Module {
             module.typesystem.resolve_layout(Type::Struct(id), &mut Vec::new())?;
         }
 
+        // Pass 4 - collect function declarations
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(function) => {
-                    let decl =
-                        Function::decl_from_ast(&mut module.typesystem, &type_namespace, function, &item.annotations)?;
+                    let decl = lower_ast::decl::lower_function(
+                        &mut module.typesystem,
+                        &type_namespace,
+                        function,
+                        &item.annotations,
+                    )?;
                     if functions_namespace
                         .insert(function.name.value.clone(), decl.id)
                         .is_some()
@@ -142,6 +154,7 @@ impl Module {
             }
         }
 
+        // Pass 5 - lower function bodies
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(function) => {
@@ -239,52 +252,6 @@ pub struct Function {
     pub is_variadic: bool,
     pub is_pure: bool,
     pub body: Option<Expr>,
-}
-
-impl Function {
-    /// Construct a function declaration from its AST
-    fn decl_from_ast(
-        typesystem: &mut TypeSystem,
-        type_namespace: &HashMap<String, Type>,
-        ast: &ast::Function,
-        annotations: &[ast::Annotation],
-    ) -> Result<Self, Error> {
-        let mut is_pure = false;
-        for annotation in annotations {
-            match annotation.ident.value.as_str() {
-                "pure" => is_pure = true,
-                other => {
-                    return Err(Error::new(format!("unknown annotation: {other:?}")).with_span(annotation.span()));
-                }
-            }
-        }
-
-        let mut args: Vec<(String, Type)> = Vec::new();
-        for arg in &ast.args {
-            if args.iter().any(|x| x.0 == arg.name.value) {
-                return Err(Error::new("argument with this name already exists").with_span(arg.name.span));
-            }
-            args.push((
-                arg.name.value.clone(),
-                typesystem.type_from_ast(type_namespace, &arg.ty)?,
-            ));
-        }
-
-        Ok(Self {
-            id: FunctionId::new(),
-            name: ast.name.clone(),
-            args,
-            return_ty: ast
-                .return_ty
-                .as_ref()
-                .map(|ty| typesystem.type_from_ast(type_namespace, ty))
-                .transpose()?
-                .unwrap_or(Type::Unit),
-            is_variadic: ast.is_variadic,
-            is_pure,
-            body: None,
-        })
-    }
 }
 
 #[derive(Debug)]
