@@ -1,9 +1,13 @@
 #![allow(clippy::result_large_err)]
 
+use crate::context::{Context, run_with_context};
+
 mod ast;
 mod common;
+mod context;
 mod diagnostics;
 mod entity_id;
+mod interning;
 mod ir;
 mod ir_tree;
 mod lex;
@@ -29,7 +33,7 @@ fn main() {
             println!("{:#?}", ast(&file, &src));
         }
         "ir_tree" => {
-            println!("{}", ir_tree(&file, &src).dump());
+            run_with_context(8, |ctx| println!("{}", ir_tree(ctx, &file, &src).dump()));
         }
         "ir" => {
             println!("{:#?}", ir(&file, &src));
@@ -61,17 +65,19 @@ fn ast(file: &str, src: &str) -> ast::Ast {
     })
 }
 
-fn ir_tree(file: &str, src: &str) -> ir_tree::Module {
-    ir_tree::Module::from_ast(&ast(file, src)).unwrap_or_else(|err| {
+fn ir_tree<'ctx>(ctx: Context<'ctx>, file: &str, src: &str) -> ir_tree::Module<'ctx> {
+    ir_tree::Module::from_ast(ctx, &ast(file, src)).unwrap_or_else(|err| {
         diagnostics::print_error(file, src, err);
         std::process::exit(1);
     })
 }
 
 fn ir(file: &str, src: &str) -> ir::Ir {
-    ir::Ir::from_ir_tree(&ir_tree(file, src)).unwrap_or_else(|err| {
-        diagnostics::print_error(file, src, err);
-        std::process::exit(1);
+    run_with_context(8, |ctx| {
+        ir::Ir::from_ir_tree(&ir_tree(ctx, file, src)).unwrap_or_else(|err| {
+            diagnostics::print_error(file, src, err);
+            std::process::exit(1);
+        })
     })
 }
 

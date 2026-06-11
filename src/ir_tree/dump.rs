@@ -24,15 +24,15 @@ pub fn dump(module: &Module) -> String {
     writer.output
 }
 
-struct Writer<'a> {
+struct Writer<'a, 'ctx> {
     output: String,
-    function: Option<&'a Function>,
-    module: &'a Module,
+    function: Option<&'a Function<'ctx>>,
+    module: &'a Module<'ctx>,
     indent_level: u32,
 }
 
-impl ExprVisitor<'_> for Writer<'_> {
-    fn visit_expr(&mut self, expr: &Expr) {
+impl<'a, 'ctx> ExprVisitor<'a, 'ctx> for Writer<'a, 'ctx> {
+    fn visit_expr(&mut self, expr: &'a Expr<'ctx>) {
         self.indent();
 
         match &expr.kind {
@@ -42,7 +42,10 @@ impl ExprVisitor<'_> for Writer<'_> {
             }
             ExprKind::ConstString(str) => write!(self.output, "CONST_STRING({str:?})").unwrap(),
             ExprKind::Load(_) => self.output.push_str("LOAD"),
-            ExprKind::Field(_, field) => write!(self.output, "FIELD_ACCESS({field})").unwrap(),
+            ExprKind::Field(lhs, field_id) => {
+                let field_name = lhs.ty.as_struct().unwrap().0.get_field_name(*field_id);
+                write!(self.output, "FIELD({})", field_name.value).unwrap();
+            }
             ExprKind::ArrayElement(_, _) => self.output.push_str("ARRAY_ELEMENT"),
             ExprKind::Store(_, _) => self.output.push_str("STORE"),
             ExprKind::GetPointer(_) => self.output.push_str("GET_POINTER"),
@@ -72,7 +75,7 @@ impl ExprVisitor<'_> for Writer<'_> {
         }
 
         self.output.push_str(" TYPE=");
-        self.dump_type(expr.ty);
+        expr.ty.render_into(&mut self.output);
         self.output.push('\n');
 
         self.indent_level += 1;
@@ -80,7 +83,7 @@ impl ExprVisitor<'_> for Writer<'_> {
             for decl in &bexpr.variables {
                 self.indent();
                 write!(self.output, "DECLARE {:?} {:?} : ", decl.id, decl.debug_name).unwrap();
-                self.dump_type(decl.ty);
+                decl.ty.render_into(&mut self.output);
                 self.output.push('\n');
             }
         }
@@ -88,18 +91,21 @@ impl ExprVisitor<'_> for Writer<'_> {
         self.indent_level -= 1;
     }
 
-    fn visit_place(&mut self, place: &Place) {
+    fn visit_place(&mut self, place: &'a Place<'ctx>) {
         self.indent();
 
         match &place.kind {
             PlaceKind::Dereference(_) => self.output.push_str("DEREFERENCE"),
             PlaceKind::Variable(variable_id) => write!(self.output, "VARIABLE({variable_id:?})").unwrap(),
-            PlaceKind::Field(_, field) => write!(self.output, "FIELD({field:?})").unwrap(),
+            PlaceKind::Field(lhs, field_id) => {
+                let field_name = lhs.ty.as_struct().unwrap().0.get_field_name(*field_id);
+                write!(self.output, "FIELD({})", field_name.value).unwrap();
+            }
             PlaceKind::ArrayElement(_, _) => self.output.push_str("ARRAY_ELEMENT"),
         }
 
         self.output.push_str(" [PLACE] TYPE=");
-        self.dump_type(place.ty);
+        place.ty.render_into(&mut self.output);
         self.output.push('\n');
 
         self.indent_level += 1;
@@ -108,7 +114,7 @@ impl ExprVisitor<'_> for Writer<'_> {
     }
 }
 
-impl Writer<'_> {
+impl<'ctx> Writer<'_, 'ctx> {
     fn indent(&mut self) {
         if self.indent_level > 0 {
             self.output.push(' ');
@@ -124,41 +130,14 @@ impl Writer<'_> {
         }
     }
 
-    fn dump_type(&mut self, ty: Type) {
-        match ty {
-            Type::Never => self.output.push('!'),
-            Type::Unit => self.output.push_str("unit"),
-            Type::Bool => self.output.push_str("bool"),
-            Type::Int(int_type) => self.output.push_str(match int_type {
-                IntType::I8 => "i8",
-                IntType::U8 => "u8",
-                IntType::I32 => "i32",
-                IntType::U32 => "u32",
-                IntType::I64 => "i64",
-                IntType::U64 => "u64",
-            }),
-            Type::Struct(struct_id) => write!(self.output, "{struct_id:?}").unwrap(),
-            Type::Ptr { pointee: None } => self.output.push_str("ptr"),
-            Type::Ptr { pointee: Some(pointee) } => {
-                self.output.push('*');
-                self.dump_type(self.module.typesystem.get_type(pointee));
-            }
-            Type::Array { element, length } => {
-                self.output.push('[');
-                self.dump_type(self.module.typesystem.get_type(element));
-                write!(self.output, "; {length}]").unwrap();
-            }
-        }
-    }
-
-    fn dump_function_desc(&mut self, function: &Function) {
+    fn dump_function_desc(&mut self, function: &Function<'ctx>) {
         self.output.push_str("fn ");
         self.output.push_str(&function.name.value);
         self.output.push('(');
         for (arg_i, (arg_name, arg_ty)) in function.args.iter().enumerate() {
             self.output.push_str(arg_name);
             self.output.push_str(": ");
-            self.dump_type(*arg_ty);
+            arg_ty.render_into(&mut self.output);
             if arg_i + 1 != function.args.len() || function.is_variadic {
                 self.output.push_str(", ");
             }
@@ -167,7 +146,7 @@ impl Writer<'_> {
             self.output.push_str("...");
         }
         self.output.push_str(") -> ");
-        self.dump_type(function.return_ty);
+        function.return_ty.render_into(&mut self.output);
         self.output.push('\n');
     }
 

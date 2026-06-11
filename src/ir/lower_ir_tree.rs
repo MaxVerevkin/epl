@@ -4,7 +4,10 @@ use super::*;
 use crate::ir_tree;
 
 /// Lower IR_TREE function to IR function.
-pub fn lower_function(function: &ir_tree::Function, module: &ir_tree::Module) -> Result<Function, Error> {
+pub fn lower_function<'ctx>(
+    function: &ir_tree::Function<'ctx>,
+    module: &ir_tree::Module<'ctx>,
+) -> Result<Function, Error> {
     let mut ir_function = Function {
         mangled_name: function.name.value.clone(),
         args: function
@@ -13,7 +16,7 @@ pub fn lower_function(function: &ir_tree::Function, module: &ir_tree::Module) ->
             .map(|(_name, ty)| lower_type(module, *ty))
             .collect(),
         is_variadic: function.is_variadic,
-        never_returns: function.return_ty == ir_tree::Type::Never,
+        never_returns: function.return_ty.is_never(),
         return_ty: lower_type(module, function.return_ty),
         body: None,
     };
@@ -29,32 +32,42 @@ pub fn lower_function(function: &ir_tree::Function, module: &ir_tree::Module) ->
 }
 
 /// Lower IR_TREE type to IR type
-fn lower_type(module: &ir_tree::Module, ty: ir_tree::Type) -> Type {
-    match ty {
-        ir_tree::Type::Never | ir_tree::Type::Unit => Type::Unit,
-        ir_tree::Type::Bool => Type::Bool,
-        ir_tree::Type::Ptr { .. } => Type::Ptr,
-        ir_tree::Type::Int(int_type) => match int_type {
+fn lower_type<'ctx>(module: &ir_tree::Module<'ctx>, ty: ir_tree::Type<'ctx>) -> Type {
+    match ty.info() {
+        ir_tree::TypeInfo::Never | ir_tree::TypeInfo::Unit => Type::Unit,
+        ir_tree::TypeInfo::Bool => Type::Bool,
+        ir_tree::TypeInfo::Ptr { .. } => Type::Ptr,
+        ir_tree::TypeInfo::Int(int_type) => match int_type {
             ir_tree::IntType::I8 | ir_tree::IntType::U8 => Type::I8,
             ir_tree::IntType::I32 | ir_tree::IntType::U32 => Type::I32,
             ir_tree::IntType::I64 | ir_tree::IntType::U64 => Type::I64,
         },
-        ir_tree::Type::Array { element, length } => {
-            let element = lower_type(module, module.typesystem.get_type(element));
-            Type::Array(Box::new(element), length)
+        ir_tree::TypeInfo::Array { element_ty, length } => {
+            let element = lower_type(module, *element_ty);
+            Type::Array(Box::new(element), *length)
         }
-        ir_tree::Type::Struct(struct_id) => {
-            let s = module.typesystem.get_struct(struct_id);
-            let fields = s.fields.iter().map(|field| lower_type(module, field.ty)).collect();
-            Type::Struct(fields, s.layout.unwrap())
+        ir_tree::TypeInfo::Struct {
+            struct_,
+            type_arguments,
+        } => {
+            let fields = struct_
+                .info()
+                .fields
+                .iter()
+                .map(|f| lower_type(module, module.ctx.type_of_struct_field(f.1, type_arguments)))
+                .collect::<Vec<_>>();
+            Type::Struct(fields, ty.layout(module.ctx))
+        }
+        ir_tree::TypeInfo::TypeParameter { .. } => {
+            panic!("generic type parameters are expected to be instantiated before IR lowering");
         }
     }
 }
 
-fn lower_function_body(
-    module: &ir_tree::Module,
+fn lower_function_body<'ctx>(
+    module: &ir_tree::Module<'ctx>,
     function: &Function,
-    body: &ir_tree::Expr,
+    body: &ir_tree::Expr<'ctx>,
 ) -> Result<FunctionBody, Error> {
     let mut builder = BodyLoweringCtx::new(module, function);
 
@@ -73,8 +86,8 @@ fn lower_function_body(
 }
 
 /// IR_TREE -> IR function body lowering context
-struct BodyLoweringCtx<'a> {
-    module: &'a ir_tree::Module,
+struct BodyLoweringCtx<'a, 'ctx> {
+    module: &'a ir_tree::Module<'ctx>,
     allocas: Vec<Alloca>,
     arguments: Vec<DefinitionId>,
     variable_map: HashMap<ir_tree::VariableId, DefinitionId>,
@@ -97,9 +110,9 @@ impl From<DefinitionId> for EvalResult<Value> {
     }
 }
 
-impl<'a> BodyLoweringCtx<'a> {
+impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
     /// Create a new lowering context
-    fn new(module: &'a ir_tree::Module, function: &'a Function) -> Self {
+    fn new(module: &'a ir_tree::Module<'ctx>, function: &'a Function) -> Self {
         let mut arguments = Vec::new();
         let mut entry_block_args = Vec::new();
         for arg_ty in &function.args {
@@ -155,7 +168,7 @@ impl<'a> BodyLoweringCtx<'a> {
     }
 
     /// Evaluate an expression
-    fn eval_expr(&mut self, expr: &ir_tree::Expr) -> Result<EvalResult, Error> {
+    fn eval_expr(&mut self, expr: &ir_tree::Expr<'ctx>) -> Result<EvalResult, Error> {
         let ty = lower_type(self.module, expr.ty);
         Ok(match &expr.kind {
             ir_tree::ExprKind::Const(value) => EvalResult::Value(self.eval_const(value)),
@@ -190,10 +203,7 @@ impl<'a> BodyLoweringCtx<'a> {
                         kind: ir_tree::ExprKind::ArrayInitializer(elements),
                         ..
                     } => {
-                        let array_element_ty = lower_type(
-                            self.module,
-                            value.ty.array_element_type(&self.module.typesystem).unwrap(),
-                        );
+                        let array_element_ty = lower_type(self.module, value.ty.as_array().unwrap().0);
                         match self.eval_array_initializer_into(place_ptr, elements, &array_element_ty)? {
                             EvalResult::Never => return Ok(EvalResult::Never),
                             EvalResult::Value(_) => (),
@@ -225,7 +235,7 @@ impl<'a> BodyLoweringCtx<'a> {
             ir_tree::ExprKind::Block(block_expr) => {
                 for decl in &block_expr.variables {
                     let var_ty = lower_type(self.module, decl.ty);
-                    let alloca = self.alloca(var_ty.layout(self.module));
+                    let alloca = self.alloca(var_ty.layout(self.module.ctx));
                     self.variable_map.insert(decl.id, alloca);
                 }
                 for (expr_i, expr) in block_expr.exprs.iter().enumerate() {
@@ -366,7 +376,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 let value = DefinitionId::new(ty);
                 self.current_block_id = continuation_id;
                 self.current_block_args.push(value.clone());
-                if expr.ty == ir_tree::Type::Never {
+                if expr.ty.is_never() {
                     EvalResult::Never
                 } else {
                     EvalResult::Value(Value::Definition(value))
@@ -382,7 +392,7 @@ impl<'a> BodyLoweringCtx<'a> {
                 }
                 let name = self.module.functions[function_id].name.value.clone();
                 let val_def_id = self.cursor().function_call(name, arg_vals, ty);
-                if expr.ty == ir_tree::Type::Never {
+                if expr.ty.is_never() {
                     self.finalize_block(Terminator::Unreachable);
                     EvalResult::Never
                 } else {
@@ -425,11 +435,12 @@ impl<'a> BodyLoweringCtx<'a> {
         })
     }
 
-    fn eval_expr_as_readonly_ptr(&mut self, expr: &ir_tree::Expr) -> Result<EvalResult, Error> {
+    fn eval_expr_as_readonly_ptr(&mut self, expr: &ir_tree::Expr<'ctx>) -> Result<EvalResult, Error> {
         let ty = lower_type(self.module, expr.ty);
         Ok(match &expr.kind {
-            ir_tree::ExprKind::Field(lhs, field) => {
-                let field_offset = lhs.ty.get_field_offset(field, &self.module.typesystem).unwrap();
+            ir_tree::ExprKind::Field(lhs, field_id) => {
+                let (_struct_, type_arguments) = lhs.ty.as_struct().unwrap();
+                let field_offset = self.module.ctx.offset_of_struct_field(*field_id, type_arguments);
                 let lhs_ptr = match self.eval_expr_as_readonly_ptr(lhs)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
@@ -445,7 +456,7 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                let element_layout = ty.layout(self.module);
+                let element_layout = ty.layout(self.module.ctx);
                 let ptr_offset = self.cursor().arithmetic(
                     ArithmeticOp::Mul,
                     false,
@@ -455,12 +466,12 @@ impl<'a> BodyLoweringCtx<'a> {
                 EvalResult::Value(self.cursor().offset_ptr(array_ptr, Value::Definition(ptr_offset)))
             }
             ir_tree::ExprKind::ArrayInitializer(exprs) => {
-                let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
+                let alloca = Value::Definition(self.alloca(ty.layout(self.module.ctx)));
                 let element_ty = ty.array_element_type().unwrap();
                 self.eval_array_initializer_into(alloca, exprs, element_ty)?
             }
             ir_tree::ExprKind::StructInitializer(fields) => {
-                let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
+                let alloca = Value::Definition(self.alloca(ty.layout(self.module.ctx)));
                 self.eval_struct_initializer_into(alloca, fields, &expr.ty)?
             }
             ir_tree::ExprKind::Load(place) => self.eval_place_as_ptr(place)?,
@@ -469,14 +480,14 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                let alloca = self.alloca(ty.layout(self.module));
+                let alloca = self.alloca(ty.layout(self.module.ctx));
                 self.cursor().store(Value::Definition(alloca.clone()), value);
                 EvalResult::Value(Value::Definition(alloca))
             }
         })
     }
 
-    fn eval_const(&mut self, value: &ir_tree::Constant) -> Value {
+    fn eval_const(&mut self, value: &ir_tree::Constant<'ctx>) -> Value {
         match value {
             ir_tree::Constant::Undefined(ty) => Value::Undefined(lower_type(self.module, *ty)),
             ir_tree::Constant::Null(_) => Value::Null,
@@ -507,15 +518,16 @@ impl<'a> BodyLoweringCtx<'a> {
                 ty: Type::I64,
             },
             ir_tree::Constant::Array(..) | ir_tree::Constant::Struct(..) => {
-                let ty = lower_type(self.module, value.ty());
-                let alloca = Value::Definition(self.alloca(ty.layout(self.module)));
+                let ty = lower_type(self.module, value.ty(self.module.ctx));
+                let layout = ty.layout(self.module.ctx);
+                let alloca = Value::Definition(self.alloca(layout));
                 self.eval_const_into(alloca.clone(), value);
                 Value::Definition(self.cursor().load(alloca, ty))
             }
         }
     }
 
-    fn eval_const_into(&mut self, place_ptr: Value, value: &ir_tree::Constant) {
+    fn eval_const_into(&mut self, place_ptr: Value, value: &ir_tree::Constant<'ctx>) {
         match value {
             ir_tree::Constant::Undefined(_)
             | ir_tree::Constant::Null(_)
@@ -530,13 +542,9 @@ impl<'a> BodyLoweringCtx<'a> {
                 let value = self.eval_const(value);
                 self.cursor().store(place_ptr, value)
             }
-            ir_tree::Constant::Array(element_ty, elements) => {
-                let element_size = self
-                    .module
-                    .typesystem
-                    .get_type(*element_ty)
-                    .layout(&self.module.typesystem)
-                    .size;
+            ir_tree::Constant::Array(ty, elements) => {
+                let element_ty = ty.as_array().unwrap().0;
+                let element_size = element_ty.layout(self.module.ctx).size;
                 for (i, element) in elements.iter().enumerate() {
                     let ptr = self
                         .cursor()
@@ -544,12 +552,11 @@ impl<'a> BodyLoweringCtx<'a> {
                     self.eval_const_into(ptr, element);
                 }
             }
-            ir_tree::Constant::Struct(struct_id, fields) => {
-                let struct_type = self.module.typesystem.get_struct(*struct_id);
-                for (field_def, field_value) in struct_type.fields.iter().zip(fields) {
-                    let ptr = self
-                        .cursor()
-                        .offset_ptr(place_ptr.clone(), Value::new_i64(field_def.offset.unwrap() as i64));
+            ir_tree::Constant::Struct(ty, fields) => {
+                let (struct_, type_arguments) = ty.as_struct().unwrap();
+                for ((_, field_id), field_value) in struct_.info().fields.iter().zip(fields) {
+                    let offset = self.module.ctx.offset_of_struct_field(*field_id, type_arguments) as i64;
+                    let ptr = self.cursor().offset_ptr(place_ptr.clone(), Value::new_i64(offset));
                     self.eval_const_into(ptr, field_value);
                 }
             }
@@ -560,7 +567,7 @@ impl<'a> BodyLoweringCtx<'a> {
     fn eval_array_initializer_into(
         &mut self,
         place_ptr: Value,
-        exprs: &[ir_tree::Expr],
+        exprs: &[ir_tree::Expr<'ctx>],
         element_ty: &Type,
     ) -> Result<EvalResult, Error> {
         let mut elements = Vec::new();
@@ -571,7 +578,7 @@ impl<'a> BodyLoweringCtx<'a> {
             }
         }
 
-        let element_layout = element_ty.layout(self.module);
+        let element_layout = element_ty.layout(self.module.ctx);
         for (i, element) in elements.into_iter().enumerate() {
             let ptr = self
                 .cursor()
@@ -586,15 +593,16 @@ impl<'a> BodyLoweringCtx<'a> {
     fn eval_struct_initializer_into(
         &mut self,
         place_ptr: Value,
-        fields: &[(String, ir_tree::Expr)],
-        struct_ty: &ir_tree::Type,
+        fields: &[(ir_tree::StructFieldId, ir_tree::Expr<'ctx>)],
+        struct_ty: &ir_tree::Type<'ctx>,
     ) -> Result<EvalResult, Error> {
         let mut exprs = Vec::new();
-        for (field_name, field_expr) in fields {
+        let (_struct, type_arguments) = struct_ty.as_struct().unwrap();
+        for (field_id, field_expr) in fields {
             match self.eval_expr(field_expr)? {
                 EvalResult::Never => return Ok(EvalResult::Never),
                 EvalResult::Value(val) => {
-                    let offset = struct_ty.get_field_offset(field_name, &self.module.typesystem).unwrap();
+                    let offset = self.module.ctx.offset_of_struct_field(*field_id, type_arguments);
                     exprs.push((offset, val));
                 }
             }
@@ -614,14 +622,15 @@ impl<'a> BodyLoweringCtx<'a> {
         Ok(EvalResult::Value(place_ptr))
     }
 
-    fn eval_place_as_ptr(&mut self, expr: &ir_tree::Place) -> Result<EvalResult, Error> {
+    fn eval_place_as_ptr(&mut self, expr: &ir_tree::Place<'ctx>) -> Result<EvalResult, Error> {
         Ok(match &expr.kind {
             ir_tree::PlaceKind::Dereference(ptr) => self.eval_expr(ptr)?,
             ir_tree::PlaceKind::Variable(var_id) => {
                 EvalResult::Value(Value::Definition(self.variable_map[var_id].clone()))
             }
-            ir_tree::PlaceKind::Field(place, field_name) => {
-                let field_offset = place.ty.get_field_offset(field_name, &self.module.typesystem).unwrap();
+            ir_tree::PlaceKind::Field(place, field_id) => {
+                let (_struct, type_arguments) = place.ty.as_struct().unwrap();
+                let field_offset = self.module.ctx.offset_of_struct_field(*field_id, type_arguments);
                 let place_ptr = match self.eval_place_as_ptr(place)? {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
@@ -637,17 +646,11 @@ impl<'a> BodyLoweringCtx<'a> {
                     EvalResult::Never => return Ok(EvalResult::Never),
                     EvalResult::Value(val) => val,
                 };
-                let element_layout = array
-                    .ty
-                    .array_element_type(&self.module.typesystem)
-                    .unwrap()
-                    .layout(&self.module.typesystem);
-                let ptr_offset = self.cursor().arithmetic(
-                    ArithmeticOp::Mul,
-                    false,
-                    index,
-                    Value::new_i64(element_layout.size as i64),
-                );
+                let element_ty = array.ty.as_array().unwrap().0;
+                let element_size = element_ty.layout(self.module.ctx).size;
+                let ptr_offset =
+                    self.cursor()
+                        .arithmetic(ArithmeticOp::Mul, false, index, Value::new_i64(element_size as i64));
                 EvalResult::Value(self.cursor().offset_ptr(array_ptr, Value::Definition(ptr_offset)))
             }
         })

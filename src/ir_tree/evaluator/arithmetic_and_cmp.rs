@@ -1,6 +1,10 @@
 use super::*;
 
-pub fn eval_arithmetic(op: ArithmeticOp, lhs: Constant, rhs: Constant) -> Result<Constant, Error> {
+pub fn eval_arithmetic<'ctx>(
+    op: ArithmeticOp,
+    lhs: Constant<'ctx>,
+    rhs: Constant<'ctx>,
+) -> Result<Constant<'ctx>, Error> {
     macro_rules! make_const_arithmetic {
         ($($name:ident, $ty:ty;)*) => {
             $(
@@ -85,16 +89,16 @@ pub fn eval_cmp(op: CmpOp, lhs: Constant, rhs: Constant) -> Result<bool, Error> 
     })
 }
 
-pub fn eval_cast(from: Constant, target_ty: Type) -> Result<Constant, Error> {
+pub fn eval_cast<'ctx>(from: Constant<'ctx>, target_ty: Type<'ctx>) -> Result<Constant<'ctx>, Error> {
     macro_rules! make_const_int_cast {
         ($($name:ident, $ty:ty;)*) => {
             $(
                 fn $name(from: $ty, target_ty: Type) -> Constant {
-                    match target_ty {
-                        Type::Never | Type::Unit | Type::Struct(_) | Type::Array { .. } | Type::Ptr { .. } | Type::Bool => {
+                    match target_ty.info() {
+                        TypeInfo::Never | TypeInfo::Unit | TypeInfo::Struct { .. } | TypeInfo::Array { .. } | TypeInfo::Ptr { .. } | TypeInfo::Bool | TypeInfo::TypeParameter { .. } => {
                             unreachable!()
                         }
-                        Type::Int(int_type) => match int_type {
+                        TypeInfo::Int(int_type) => match int_type {
                             IntType::I8 => Constant::I8(from as _),
                             IntType::U8 => Constant::U8(from as _),
                             IntType::I32 => Constant::I32(from as _),

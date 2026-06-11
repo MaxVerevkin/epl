@@ -8,4 +8,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bumpalo = "3.20.3"
 llvm-sys = "221.0.0"

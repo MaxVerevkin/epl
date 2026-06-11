@@ -1,30 +1,30 @@
 fn main() -> i32
     BLOCK TYPE=!
-    |   DECLARE var_1 "board" : StructId(1)
+    |   DECLARE var_1 "board" : Board
     |   FUNCTION_CALL("clear_board") TYPE=unit
-    |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   GET_POINTER TYPE=*Board
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
     |   FUNCTION_CALL("seed_board") TYPE=unit
-    |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   GET_POINTER TYPE=*Board
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
     |   LOOP(loop_1) TYPE=!
     |   |   BLOCK TYPE=unit
     |   |   |   FUNCTION_CALL("print_board") TYPE=unit
-    |   |   |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   |   |   GET_POINTER TYPE=*Board
+    |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
     |   |   |   FUNCTION_CALL("update_board") TYPE=unit
-    |   |   |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   |   |   GET_POINTER TYPE=*Board
+    |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
     |   |   |   FUNCTION_CALL("usleep") TYPE=i32
     |   |   |   |   CONST 250000 TYPE=u32
     |   |   |   CONST UNIT TYPE=unit
 
-fn clear_board(board: *StructId(1)) -> unit
+fn clear_board(board: *Board) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_2 "board" : *StructId(1)
+    |   DECLARE var_2 "board" : *Board
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_2) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_2) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   BLOCK TYPE=unit
     |   |   DECLARE var_3 "<immutable-row>" : u64
     |   |   DECLARE var_4 "<tmp-row-target>" : u64
@@ -76,8 +76,8 @@ fn clear_board(board: *StructId(1)) -> unit
     |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=u64
     |   |   |   |   |   |   |   |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
@@ -88,50 +88,50 @@ fn clear_board(board: *StructId(1)) -> unit
     |   |   |   |   BREAK(loop_2) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
 
-fn seed_board(board: *StructId(1)) -> unit
+fn seed_board(board: *Board) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_9 "board" : *StructId(1)
+    |   DECLARE var_9 "board" : *Board
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   BLOCK TYPE=unit
     |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(1)
+    |   |   |   LOAD TYPE=*Board
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 8 TYPE=u64
     |   |   |   CONST 10 TYPE=u64
     |   |   |   CONST true TYPE=bool
     |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(1)
+    |   |   |   LOAD TYPE=*Board
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 9 TYPE=u64
     |   |   |   CONST 11 TYPE=u64
     |   |   |   CONST true TYPE=bool
     |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(1)
+    |   |   |   LOAD TYPE=*Board
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 10 TYPE=u64
     |   |   |   CONST 9 TYPE=u64
     |   |   |   CONST true TYPE=bool
     |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(1)
+    |   |   |   LOAD TYPE=*Board
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 10 TYPE=u64
     |   |   |   CONST 10 TYPE=u64
     |   |   |   CONST true TYPE=bool
     |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(1)
+    |   |   |   LOAD TYPE=*Board
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 10 TYPE=u64
     |   |   |   CONST 11 TYPE=u64
     |   |   |   CONST true TYPE=bool
 
-fn print_board(board: *StructId(1)) -> unit
+fn print_board(board: *Board) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_10 "board" : *StructId(1)
+    |   DECLARE var_10 "board" : *Board
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_10) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_10) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   BLOCK TYPE=unit
     |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   CONST_STRING("\n") TYPE=*i8
@@ -189,8 +189,8 @@ fn print_board(board: *StructId(1)) -> unit
     |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=*i8
     |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
-    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_13) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
@@ -204,14 +204,14 @@ fn print_board(board: *StructId(1)) -> unit
     |   |   |   |   |   BREAK(loop_4) TYPE=!
     |   |   |   |   |   |   CONST UNIT TYPE=unit
 
-fn update_board(board: *StructId(1)) -> unit
+fn update_board(board: *Board) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_17 "board" : *StructId(1)
+    |   DECLARE var_17 "board" : *Board
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_17) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   BLOCK TYPE=unit
-    |   |   DECLARE var_18 "next" : StructId(1)
+    |   |   DECLARE var_18 "next" : Board
     |   |   BLOCK TYPE=unit
     |   |   |   DECLARE var_19 "<immutable-row>" : u64
     |   |   |   DECLARE var_20 "<tmp-row-target>" : u64
@@ -269,8 +269,8 @@ fn update_board(board: *StructId(1)) -> unit
     |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_25) [PLACE] TYPE=bool
     |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
-    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
@@ -278,8 +278,8 @@ fn update_board(board: *StructId(1)) -> unit
     |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_alive_neighbors") TYPE=u64
-    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
@@ -304,8 +304,8 @@ fn update_board(board: *StructId(1)) -> unit
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 3 TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("set_cell") TYPE=unit
-    |   |   |   |   |   |   |   |   |   |   |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=StructId(1)
+    |   |   |   |   |   |   |   |   |   |   |   |   GET_POINTER TYPE=*Board
+    |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=Board
     |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_21) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
@@ -317,20 +317,20 @@ fn update_board(board: *StructId(1)) -> unit
     |   |   |   |   |   BREAK(loop_6) TYPE=!
     |   |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   STORE TYPE=unit
-    |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*StructId(1)
-    |   |   |   LOAD TYPE=StructId(1)
-    |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=StructId(1)
+    |   |   |   DEREFERENCE [PLACE] TYPE=Board
+    |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*Board
+    |   |   |   LOAD TYPE=Board
+    |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=Board
 
-fn get_alive_neighbors(board: *StructId(1), row: u64, col: u64) -> u64
+fn get_alive_neighbors(board: *Board, row: u64, col: u64) -> u64
     BLOCK TYPE=u64
-    |   DECLARE var_28 "board" : *StructId(1)
+    |   DECLARE var_28 "board" : *Board
     |   DECLARE var_29 "row" : u64
     |   DECLARE var_30 "col" : u64
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_28) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_28) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   STORE TYPE=unit
     |   |   VARIABLE(var_29) [PLACE] TYPE=u64
     |   |   ARGUMENT("row") TYPE=u64
@@ -442,8 +442,8 @@ fn get_alive_neighbors(board: *StructId(1), row: u64, col: u64) -> u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_30) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
-    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_28) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_28) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_38) [PLACE] TYPE=u64
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=u64
@@ -460,14 +460,14 @@ fn get_alive_neighbors(board: *StructId(1), row: u64, col: u64) -> u64
     |   |   LOAD TYPE=u64
     |   |   |   VARIABLE(var_31) [PLACE] TYPE=u64
 
-fn get_cell(board: *StructId(1), row: u64, col: u64) -> bool
+fn get_cell(board: *Board, row: u64, col: u64) -> bool
     BLOCK TYPE=bool
-    |   DECLARE var_40 "board" : *StructId(1)
+    |   DECLARE var_40 "board" : *Board
     |   DECLARE var_41 "row" : u64
     |   DECLARE var_42 "col" : u64
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_40) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_40) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   STORE TYPE=unit
     |   |   VARIABLE(var_41) [PLACE] TYPE=u64
     |   |   ARGUMENT("row") TYPE=u64
@@ -477,24 +477,24 @@ fn get_cell(board: *StructId(1), row: u64, col: u64) -> bool
     |   ARRAY_ELEMENT TYPE=bool
     |   |   ARRAY_ELEMENT TYPE=[bool; 20]
     |   |   |   LOAD TYPE=[[bool; 20]; 20]
-    |   |   |   |   FIELD("rows") [PLACE] TYPE=[[bool; 20]; 20]
-    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   VARIABLE(var_40) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   FIELD(rows) [PLACE] TYPE=[[bool; 20]; 20]
+    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=Board
+    |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   VARIABLE(var_40) [PLACE] TYPE=*Board
     |   |   |   LOAD TYPE=u64
     |   |   |   |   VARIABLE(var_41) [PLACE] TYPE=u64
     |   |   LOAD TYPE=u64
     |   |   |   VARIABLE(var_42) [PLACE] TYPE=u64
 
-fn set_cell(board: *StructId(1), row: u64, col: u64, alive: bool) -> unit
+fn set_cell(board: *Board, row: u64, col: u64, alive: bool) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_43 "board" : *StructId(1)
+    |   DECLARE var_43 "board" : *Board
     |   DECLARE var_44 "row" : u64
     |   DECLARE var_45 "col" : u64
     |   DECLARE var_46 "alive" : bool
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_43) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("board") TYPE=*StructId(1)
+    |   |   VARIABLE(var_43) [PLACE] TYPE=*Board
+    |   |   ARGUMENT("board") TYPE=*Board
     |   STORE TYPE=unit
     |   |   VARIABLE(var_44) [PLACE] TYPE=u64
     |   |   ARGUMENT("row") TYPE=u64
@@ -507,10 +507,10 @@ fn set_cell(board: *StructId(1), row: u64, col: u64, alive: bool) -> unit
     |   STORE TYPE=unit
     |   |   ARRAY_ELEMENT [PLACE] TYPE=bool
     |   |   |   ARRAY_ELEMENT [PLACE] TYPE=[bool; 20]
-    |   |   |   |   FIELD("rows") [PLACE] TYPE=[[bool; 20]; 20]
-    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   VARIABLE(var_43) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   FIELD(rows) [PLACE] TYPE=[[bool; 20]; 20]
+    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=Board
+    |   |   |   |   |   |   LOAD TYPE=*Board
+    |   |   |   |   |   |   |   VARIABLE(var_43) [PLACE] TYPE=*Board
     |   |   |   |   LOAD TYPE=u64
     |   |   |   |   |   VARIABLE(var_44) [PLACE] TYPE=u64
     |   |   |   LOAD TYPE=u64

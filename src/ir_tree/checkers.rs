@@ -3,21 +3,21 @@ use std::collections::HashSet;
 use super::*;
 use crate::ir_tree::visit::ExprVisitor;
 
-pub fn run_checkers(function_id: FunctionId, module: &Module) -> Result<(), Error> {
+pub fn run_checkers<'ctx>(function_id: FunctionId, module: &Module<'ctx>) -> Result<(), Error> {
     let function = &module.functions[&function_id];
-    check_main_abi(function)?;
+    check_main_abi(module.ctx, function)?;
     check_comptime_exprs(function, module)?;
     check_pure_function(function, module)?;
     Ok(())
 }
 
 /// Verify that the signature of `main` is `fn main() -> i32`
-fn check_main_abi(function: &Function) -> Result<(), Error> {
+fn check_main_abi<'ctx>(ctx: Context<'ctx>, function: &Function<'ctx>) -> Result<(), Error> {
     if function.name.value != "main" {
         return Ok(());
     }
 
-    if function.is_variadic || !function.args.is_empty() || function.return_ty != Type::Int(IntType::I32) {
+    if function.is_variadic || !function.args.is_empty() || function.return_ty != ctx.types().i32 {
         return Err(
             Error::new("incorrect 'main' function signature: must be 'fn main() -> i32'").with_span(function.name.span),
         );
@@ -27,19 +27,19 @@ fn check_main_abi(function: &Function) -> Result<(), Error> {
 }
 
 /// Verify that `comptime` exprs are valid
-fn check_comptime_exprs(function: &Function, module: &Module) -> Result<(), Error> {
+fn check_comptime_exprs<'ctx>(function: &Function<'ctx>, module: &Module<'ctx>) -> Result<(), Error> {
     let Some(body) = &function.body else { return Ok(()) };
 
-    struct Visitor<'a> {
+    struct Visitor<'a, 'ctx> {
         result: Result<(), Error>,
-        module: &'a Module,
+        module: &'a Module<'ctx>,
     }
 
-    impl ExprVisitor<'_> for Visitor<'_> {
-        fn visit_expr(&mut self, expr: &Expr) {
+    impl<'a, 'ctx> ExprVisitor<'a, 'ctx> for Visitor<'a, 'ctx> {
+        fn visit_expr(&mut self, expr: &'a Expr<'ctx>) {
             if self.result.is_ok() {
                 if let ExprKind::Comptime(comptime_expr) = &expr.kind {
-                    self.result = purity_check(Context::ComptimeExpr, comptime_expr, self.module);
+                    self.result = purity_check(PurityContext::ComptimeExpr, comptime_expr, self.module);
                 } else {
                     expr.visit_children(self);
                 }
@@ -53,33 +53,33 @@ fn check_comptime_exprs(function: &Function, module: &Module) -> Result<(), Erro
 }
 
 /// Verify that `@pure` functions are valid
-fn check_pure_function(function: &Function, module: &Module) -> Result<(), Error> {
+fn check_pure_function<'ctx>(function: &Function<'ctx>, module: &Module<'ctx>) -> Result<(), Error> {
     if !function.is_pure {
         return Ok(());
     }
     match &function.body {
-        Some(body) => purity_check(Context::PureFunctionBody, body, module),
+        Some(body) => purity_check(PurityContext::PureFunctionBody, body, module),
         None => Err(Error::new("pure functions must have a body").with_span(function.name.span)),
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Context {
+enum PurityContext {
     PureFunctionBody,
     ComptimeExpr,
 }
 
-fn purity_check(context: Context, expr: &Expr, module: &Module) -> Result<(), Error> {
-    struct Visitor<'a> {
+fn purity_check<'ctx>(context: PurityContext, expr: &Expr<'ctx>, module: &Module<'ctx>) -> Result<(), Error> {
+    struct Visitor<'a, 'ctx> {
         result: Result<(), Error>,
-        module: &'a Module,
-        context: Context,
+        module: &'a Module<'ctx>,
+        context: PurityContext,
         in_scope_variables: HashSet<VariableId>,
         in_scope_loops: HashSet<LoopId>,
     }
 
-    impl ExprVisitor<'_> for Visitor<'_> {
-        fn visit_expr(&mut self, expr: &Expr) {
+    impl<'a, 'ctx> ExprVisitor<'a, 'ctx> for Visitor<'a, 'ctx> {
+        fn visit_expr(&mut self, expr: &'a Expr<'ctx>) {
             if self.result.is_err() {
                 return;
             }
@@ -102,8 +102,8 @@ fn purity_check(context: Context, expr: &Expr, module: &Module) -> Result<(), Er
                         .with_span(expr.span.unwrap()));
                 }
                 ExprKind::Argument(_) => match self.context {
-                    Context::PureFunctionBody => (),
-                    Context::ComptimeExpr => {
+                    PurityContext::PureFunctionBody => (),
+                    PurityContext::ComptimeExpr => {
                         self.result =
                             Err(Error::new("cannot access arguments from a comptime block")
                                 .with_span(expr.span.unwrap()));
@@ -121,10 +121,10 @@ fn purity_check(context: Context, expr: &Expr, module: &Module) -> Result<(), Er
                     }
                 },
                 ExprKind::Comptime(comptime_expr) => match self.context {
-                    Context::PureFunctionBody => (), // checked by `check_comptime_exprs`
-                    Context::ComptimeExpr => {
+                    PurityContext::PureFunctionBody => (), // checked by `check_comptime_exprs`
+                    PurityContext::ComptimeExpr => {
                         // Comptimes are self-sufficient and do not depend on context
-                        self.result = purity_check(Context::ComptimeExpr, comptime_expr, self.module);
+                        self.result = purity_check(PurityContext::ComptimeExpr, comptime_expr, self.module);
                     }
                 },
                 ExprKind::Cast(from_expr) => {
@@ -134,15 +134,15 @@ fn purity_check(context: Context, expr: &Expr, module: &Module) -> Result<(), Er
                     }
                 }
                 ExprKind::Return(_) => match self.context {
-                    Context::PureFunctionBody => (),
-                    Context::ComptimeExpr => {
+                    PurityContext::PureFunctionBody => (),
+                    PurityContext::ComptimeExpr => {
                         self.result =
                             Err(Error::new("cannot return from a comptime expr").with_span(expr.span.unwrap()));
                     }
                 },
                 ExprKind::Break(loop_id, _) | ExprKind::Continue(loop_id) => match self.context {
-                    Context::PureFunctionBody => (),
-                    Context::ComptimeExpr => {
+                    PurityContext::PureFunctionBody => (),
+                    PurityContext::ComptimeExpr => {
                         if !self.in_scope_loops.contains(loop_id) {
                             self.result =
                                 Err(Error::new("loop out of context of this comptime expr")
@@ -173,15 +173,15 @@ fn purity_check(context: Context, expr: &Expr, module: &Module) -> Result<(), Er
             }
         }
 
-        fn visit_place(&mut self, place: &Place) {
+        fn visit_place(&mut self, place: &'a Place<'ctx>) {
             if self.result.is_err() {
                 return;
             }
 
             match &place.kind {
                 PlaceKind::Variable(var_id) => match self.context {
-                    Context::PureFunctionBody => (),
-                    Context::ComptimeExpr => {
+                    PurityContext::PureFunctionBody => (),
+                    PurityContext::ComptimeExpr => {
                         if !self.in_scope_variables.contains(var_id) {
                             self.result = Err(Error::new("variable out of context of this comptime expr")
                                 .with_span(place.span.unwrap()));

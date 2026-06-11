@@ -5,20 +5,20 @@ use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
 use crate::lex;
 
 /// The abstract syntax tree representation of a source code file
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Ast {
     pub items: Vec<Item>,
 }
 
 /// A top level item
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Item {
     pub annotations: Vec<Annotation>,
     pub kind: ItemKind,
 }
 
 /// An annotation
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Annotation {
     pub at_symbol_span: lex::Span,
     pub ident: Ident,
@@ -32,7 +32,6 @@ impl Annotation {
 }
 
 /// A top level item kind
-#[derive(Clone)]
 pub enum ItemKind {
     Function(Function),
     Struct(Struct),
@@ -40,7 +39,7 @@ pub enum ItemKind {
 }
 
 /// A function definition or declaration
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Function {
     pub name: Ident,
     pub args: Vec<FunctionArg>,
@@ -50,36 +49,38 @@ pub struct Function {
 }
 
 /// An argument in function definition or declaration
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FunctionArg {
     pub name: Ident,
     pub ty: Type,
 }
 
 /// A struct definition
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Struct {
     pub name: Ident,
+    pub type_parameters: Vec<TypeParameter>,
     pub fields: Vec<StructField>,
 }
 
 /// A field of a struct definition
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StructField {
     pub name: Ident,
     pub ty: Type,
 }
 
 /// An enum definition
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[expect(unused)]
 pub struct Enum {
     pub name: Ident,
+    pub type_parameters: Vec<TypeParameter>,
     pub entries: Vec<EnumEntry>,
 }
 
 /// Aa entry of an enum definition
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[expect(unused)]
 pub struct EnumEntry {
     pub name: Ident,
@@ -87,27 +88,30 @@ pub struct EnumEntry {
 }
 
 /// An identifier with its span
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ident {
     pub span: lex::Span,
     pub value: String,
 }
 
 /// A type with its span
-#[derive(Clone)]
 pub enum Type {
     Never(lex::Span),
-    Ident(Ident),
-    Ptr {
-        star_span: lex::Span,
-        pointee: Box<Type>,
-    },
-    Array {
-        element_type: Box<Type>,
-        length: Box<Expr>,
-        left_bracket_span: lex::Span,
-        right_bracket_span: lex::Span,
-    },
+    Ident { ident: Ident, type_arguments: Option<TypeArguments> },
+    Ptr { star_span: lex::Span, pointee: Box<Type> },
+    Array { element_type: Box<Type>, length: Box<Expr>, span: lex::Span },
+}
+
+/// A generic type parameter
+#[derive(Debug)]
+pub struct TypeParameter {
+    pub name: Ident,
+}
+
+#[derive(Debug)]
+pub struct TypeArguments {
+    pub span: lex::Span,
+    pub arguments: Vec<Type>,
 }
 
 impl Type {
@@ -115,20 +119,18 @@ impl Type {
     pub fn span(&self) -> lex::Span {
         match self {
             Type::Never(span) => *span,
-            Type::Ident(ident) => ident.span,
+            Type::Ident { ident, type_arguments } => match type_arguments {
+                Some(type_arguments) => type_arguments.span.join(ident.span),
+                None => ident.span,
+            },
             Type::Ptr { star_span, pointee } => star_span.join(pointee.span()),
-            Type::Array {
-                element_type: _,
-                length: _,
-                left_bracket_span,
-                right_bracket_span,
-            } => left_bracket_span.join(*right_bracket_span),
+            Type::Array { span, .. } => *span,
         }
     }
 }
 
 /// A block expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockExpr {
     pub statements: Vec<Statement>,
     pub final_expr: Option<Box<Expr>>,
@@ -137,7 +139,7 @@ pub struct BlockExpr {
 }
 
 /// An `if` expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IfExpr {
     pub cond: Box<Expr>,
     pub if_true: Box<BlockExpr>,
@@ -146,14 +148,14 @@ pub struct IfExpr {
 }
 
 /// A `loop` expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LoopExpr {
     pub body: BlockExpr,
     pub loop_keyword_span: lex::Span,
 }
 
 /// A `while` expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WhileExpr {
     pub cond: Box<Expr>,
     pub body: BlockExpr,
@@ -161,7 +163,7 @@ pub struct WhileExpr {
 }
 
 /// A `for` expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ForExpr {
     pub i: Ident,
     pub iterator: Box<Expr>,
@@ -170,7 +172,7 @@ pub struct ForExpr {
 }
 
 /// An array initializer expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ArrayInitializerExpr {
     pub elements: Vec<Expr>,
     pub opening_bracket_span: lex::Span,
@@ -178,37 +180,36 @@ pub struct ArrayInitializerExpr {
 }
 
 /// A struct initializer expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StructInitializerExpr {
-    pub struct_name: Option<Ident>,
+    pub struct_ty: Option<Type>,
     pub fields: Vec<StructInitializerField>,
     pub opening_brace_span: lex::Span,
     pub closing_brace_span: lex::Span,
 }
 
 /// A struct initializer field
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StructInitializerField {
     pub name: Ident,
     pub value: Expr,
 }
 
 /// A statement
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Statement {
     Let(LetStatement),
     Expr(Expr),
 }
 
 /// A statement
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum LetStatement {
     WithValue { name: Ident, ty: Option<Type>, value: Box<Expr> },
     WithoutValue { name: Ident, ty: Type },
 }
 
 /// An expression
-#[derive(Clone)]
 pub enum Expr {
     Block(BlockExpr),
     If(IfExpr),
@@ -251,9 +252,9 @@ impl Expr {
             Self::For(e) => e.for_keyword_span.join(e.body.span()),
             Self::ArrayInitializer(e) => e.opening_bracket_span.join(e.closing_bracket_span),
             Self::StructInitializer(e) => e
-                .struct_name
+                .struct_ty
                 .as_ref()
-                .map_or(e.opening_brace_span, |n| n.span)
+                .map_or(e.opening_brace_span, |n| n.span())
                 .join(e.closing_brace_span),
             Self::Return(return_expr) => match &return_expr.value {
                 Some(val) => return_expr.return_keyword_span.join(val.span()),
@@ -296,34 +297,33 @@ impl BlockExpr {
 }
 
 /// A return expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ReturnExpr {
     pub return_keyword_span: lex::Span,
     pub value: Option<Box<Expr>>,
 }
 
 /// A break expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BreakExpr {
     pub break_keyword_span: lex::Span,
     pub value: Option<Box<Expr>>,
 }
 
 /// A continue expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ContinueExpr {
     pub continue_keyword_span: lex::Span,
 }
 
 /// A literal expression with its span
-#[derive(Clone)]
 pub struct LiteralExpr {
     pub span: lex::Span,
     pub value: LiteralExprValue,
 }
 
 /// A literal expression value
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum LiteralExprValue {
     Undefined,
     Null,
@@ -333,7 +333,7 @@ pub enum LiteralExprValue {
 }
 
 /// A function-call expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FunctionCallExpr {
     pub name: Ident,
     pub args: Vec<Expr>,
@@ -341,14 +341,14 @@ pub struct FunctionCallExpr {
 }
 
 /// An assignment expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AssignmentExpr {
     pub place: Box<Expr>,
     pub value: Box<Expr>,
 }
 
 /// A compound assignment expression, e.g. `+=`, `-=`, etc.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CompoundAssignmentExpr {
     pub place: Box<Expr>,
     pub value: Box<Expr>,
@@ -357,7 +357,7 @@ pub struct CompoundAssignmentExpr {
 }
 
 /// A binary expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: Box<Expr>,
@@ -366,7 +366,7 @@ pub struct BinaryExpr {
 }
 
 /// A unary expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct UnaryExpr {
     pub op: UnaryOp,
     pub rhs: Box<Expr>,
@@ -374,7 +374,7 @@ pub struct UnaryExpr {
 }
 
 /// A field-access expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FieldAccessExpr {
     pub lhs: Box<Expr>,
     pub field: Ident,
@@ -382,14 +382,14 @@ pub struct FieldAccessExpr {
 }
 
 /// A dereference (.*) expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DereferenceExpr {
     pub ptr: Box<Expr>,
     pub op_span: lex::Span,
 }
 
 /// An index ([...]) expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IndexExpr {
     pub lhs: Box<Expr>,
     pub index: Box<Expr>,
@@ -399,7 +399,7 @@ pub struct IndexExpr {
 }
 
 /// A `as` cast expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AsCastExpr {
     pub expr: Box<Expr>,
     pub ty: Type,
@@ -407,14 +407,14 @@ pub struct AsCastExpr {
 }
 
 /// A `comptime` expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ComptimeExpr {
     pub expr: Box<Expr>,
     pub comptime_span: lex::Span,
 }
 
 /// A `..` expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RangeExpr {
     pub from: Box<Expr>,
     pub to: Box<Expr>,
@@ -435,14 +435,14 @@ pub struct Parser<'a> {
 }
 
 /// An error during parsing with its span
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Error {
     pub span: Option<lex::Span>,
     pub kind: ErrorKind,
 }
 
 /// A type of error during parsing
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ErrorKind {
     Lex(lex::ErrorKind),
     UnexpectedToken { expected: String, got: Option<lex::Token> },
@@ -550,10 +550,49 @@ impl Parser<'_> {
         }
     }
 
+    /// Parse type arguments, if they are present
+    fn next_opt_type_arguments(&mut self) -> Result<Option<TypeArguments>, Error> {
+        Ok(if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::CmpL)) {
+            let (left_angle_bracket_span, _) = self.consume_token()?.unwrap();
+            let arguments = self.parse_delimited(lex::Punct::Comma, lex::Punct::CmpG, |parser| parser.next_type())?;
+            let right_angle_bracket_span = self.expect_punct(lex::Punct::CmpG)?;
+            Some(TypeArguments {
+                span: left_angle_bracket_span.join(right_angle_bracket_span),
+                arguments,
+            })
+        } else {
+            None
+        })
+    }
+
+    /// Parse type parameters, if they are present
+    fn next_opt_type_parameters(&mut self) -> Result<Vec<TypeParameter>, Error> {
+        Ok(if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::CmpL)) {
+            self.consume_token()?.unwrap();
+            let parameters = self.parse_delimited(lex::Punct::Comma, lex::Punct::CmpG, |parser| {
+                parser.next_type_parameter()
+            })?;
+            self.expect_punct(lex::Punct::CmpG)?;
+            parameters
+        } else {
+            Vec::new()
+        })
+    }
+
+    /// Parse type parameter
+    pub fn next_type_parameter(&mut self) -> Result<TypeParameter, Error> {
+        let name = self.next_ident()?;
+        Ok(TypeParameter { name })
+    }
+
     /// Parse type
     fn next_type(&mut self) -> Result<Type, Error> {
         match self.consume_token()? {
-            Some((span, lex::Token::Ident(value))) => Ok(Type::Ident(Ident { span, value })),
+            Some((span, lex::Token::Ident(value))) => {
+                let ident = Ident { span, value };
+                let type_arguments = self.next_opt_type_arguments()?;
+                Ok(Type::Ident { ident, type_arguments })
+            }
             Some((span, lex::Token::Punct(lex::Punct::Exclam))) => Ok(Type::Never(span)),
             Some((star_span, lex::Token::Punct(lex::Punct::Star))) => {
                 let pointee = self.next_type()?;
@@ -570,8 +609,7 @@ impl Parser<'_> {
                 Ok(Type::Array {
                     element_type: Box::new(element_type),
                     length: Box::new(length),
-                    left_bracket_span,
-                    right_bracket_span,
+                    span: left_bracket_span.join(right_bracket_span),
                 })
             }
             got => Err(Error {
@@ -695,6 +733,7 @@ impl Parser<'_> {
     fn next_struct(&mut self, annotations: Vec<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Struct)?;
         let name = self.next_ident()?;
+        let type_parameters = self.next_opt_type_parameters()?;
         self.expect_punct(lex::Punct::LeftBrace)?;
         let fields = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBrace, |parser| {
             let name = parser.next_ident()?;
@@ -705,7 +744,11 @@ impl Parser<'_> {
         self.expect_punct(lex::Punct::RightBrace)?;
         Ok(Item {
             annotations,
-            kind: ItemKind::Struct(Struct { name, fields }),
+            kind: ItemKind::Struct(Struct {
+                name,
+                fields,
+                type_parameters,
+            }),
         })
     }
 
@@ -713,6 +756,7 @@ impl Parser<'_> {
     fn next_enum(&mut self, annotations: Vec<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Enum)?;
         let name = self.next_ident()?;
+        let type_parameters = self.next_opt_type_parameters()?;
         self.expect_punct(lex::Punct::LeftBrace)?;
         let entries = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBrace, |parser| {
             let entry_name = parser.next_ident()?;
@@ -730,7 +774,11 @@ impl Parser<'_> {
         self.expect_punct(lex::Punct::RightBrace)?;
         Ok(Item {
             annotations,
-            kind: ItemKind::Enum(Enum { name, entries }),
+            kind: ItemKind::Enum(Enum {
+                name,
+                entries,
+                type_parameters,
+            }),
         })
     }
 
@@ -1207,8 +1255,8 @@ impl Parser<'_> {
 
     /// Parse struct initializer
     fn next_struct_initializer_expr(&mut self) -> Result<StructInitializerExpr, Error> {
-        let (struct_name, opening_brace_span) = match self.peek_token()? {
-            Some(lex::Token::Ident(_)) => (Some(self.next_ident()?), self.expect_punct(lex::Punct::DotLeftBrace)?),
+        let (struct_ty, opening_brace_span) = match self.peek_token()? {
+            Some(lex::Token::Ident(_)) => (Some(self.next_type()?), self.expect_punct(lex::Punct::DotLeftBrace)?),
             Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => (None, self.expect_punct(lex::Punct::DotLeftBrace)?),
             _ => return self.consume_unexpected_token("struct name or .{"),
         };
@@ -1220,7 +1268,7 @@ impl Parser<'_> {
         })?;
         let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
         Ok(StructInitializerExpr {
-            struct_name,
+            struct_ty,
             fields,
             opening_brace_span,
             closing_brace_span,
@@ -1341,7 +1389,7 @@ impl fmt::Debug for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Never(_) => f.write_str("!"),
-            Self::Ident(ident) => ident.fmt(f),
+            Self::Ident { ident, type_arguments } => write!(f, "{ident:?}<{type_arguments:?}>"),
             Self::Ptr { pointee, .. } => write!(f, "ptr({pointee:?})"),
             Self::Array {
                 element_type, length, ..

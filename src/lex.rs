@@ -14,7 +14,7 @@ impl<'a> Lexer<'a> {
 }
 
 /// A span represents a slice of the input source code
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
     pub start: usize,
     pub end: usize,

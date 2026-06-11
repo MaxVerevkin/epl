@@ -7,19 +7,19 @@ use crate::ast;
 use crate::common::{ArithmeticOp, CmpOp};
 
 /// Construct an IR of a function from its AST
-pub fn lower_function_body(
-    decl: &Function,
+pub fn lower_function_body<'ctx>(
+    ctx: Context<'ctx>,
+    decl: &Function<'ctx>,
     body: &ast::BlockExpr,
     functions_namespace: &HashMap<String, FunctionId>,
-    functions: &BTreeMap<FunctionId, Function>,
-    typesystem: &mut TypeSystem,
-    type_namespace: &HashMap<String, Type>,
-) -> Result<Expr, Error> {
+    functions: &BTreeMap<FunctionId, Function<'ctx>>,
+    types_scope: &TypesScope<'ctx>,
+) -> Result<Expr<'ctx>, Error> {
     if decl.is_variadic {
         return Err(Error::new("defining variadic functions is not supported").with_span(decl.name.span));
     }
 
-    let mut builder = FunctionLoweringCtx::new(decl, functions_namespace, functions, typesystem, type_namespace);
+    let mut builder = FunctionLoweringCtx::new(ctx, decl, functions_namespace, functions, types_scope);
 
     let mut variables = Vec::new();
     let mut exprs = Vec::new();
@@ -33,6 +33,7 @@ pub fn lower_function_body(
             debug_name: arg_name.clone(),
         });
         exprs.push(Expr::set_var(
+            ctx,
             arg_var_id,
             Expr {
                 ty: *arg_ty,
@@ -52,31 +53,31 @@ pub fn lower_function_body(
 }
 
 /// A function's AST -> IR_TREE lowering context
-struct FunctionLoweringCtx<'a> {
-    decl: &'a Function,
+struct FunctionLoweringCtx<'a, 'ctx> {
+    ctx: Context<'ctx>,
+    decl: &'a Function<'ctx>,
     functions_namespace: &'a HashMap<String, FunctionId>,
-    functions: &'a BTreeMap<FunctionId, Function>,
-    typesystem: &'a mut TypeSystem,
-    type_namespace: &'a HashMap<String, Type>,
-    scope: Scope,
+    functions: &'a BTreeMap<FunctionId, Function<'ctx>>,
+    types_scope: &'a TypesScope<'ctx>,
+    scope: Scope<'ctx>,
 }
 
 /// A lexical scope
 #[derive(Default)]
-struct Scope {
-    variables: HashMap<String, (VariableId, Type)>,
-    loop_context: Option<LoopContext>,
+struct Scope<'ctx> {
+    variables: HashMap<String, (VariableId, Type<'ctx>)>,
+    loop_context: Option<LoopContext<'ctx>>,
     parent: Option<Box<Self>>,
 }
 
 #[derive(Clone, Copy)]
-struct LoopContext {
+struct LoopContext<'ctx> {
     loop_id: LoopId,
-    break_used_with_type: Option<Type>,
-    expect_type: Option<Type>,
+    break_used_with_type: Option<Type<'ctx>>,
+    expect_type: Option<Type<'ctx>>,
 }
 
-impl Scope {
+impl<'ctx> Scope<'ctx> {
     /// Create a nested scope
     fn push(&mut self) {
         let parent = std::mem::take(self);
@@ -89,7 +90,7 @@ impl Scope {
     }
 
     /// Lookup a variable by its name, recursively traversing the list of scopes
-    fn lookup_variable(&self, name: &str) -> Option<(VariableId, Type)> {
+    fn lookup_variable(&self, name: &str) -> Option<(VariableId, Type<'ctx>)> {
         if let Some(definition_id) = self.variables.get(name) {
             return Some(*definition_id);
         }
@@ -100,7 +101,7 @@ impl Scope {
     }
 
     /// Recursively lookup a loop context
-    fn loop_context(&mut self) -> Option<&mut LoopContext> {
+    fn loop_context(&mut self) -> Option<&mut LoopContext<'ctx>> {
         if let Some(ctx) = &mut self.loop_context {
             return Some(ctx);
         }
@@ -111,44 +112,42 @@ impl Scope {
     }
 }
 
-struct LowerLoopBodyResult {
+struct LowerLoopBodyResult<'ctx> {
     loop_id: LoopId,
-    body: Expr,
-    break_used_with_type: Option<Type>,
+    body: Expr<'ctx>,
+    break_used_with_type: Option<Type<'ctx>>,
 }
 
-impl<'a> FunctionLoweringCtx<'a> {
+impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
     /// Create a new function lowering context
     fn new(
-        decl: &'a Function,
+        ctx: Context<'ctx>,
+        decl: &'a Function<'ctx>,
         functions_namespace: &'a HashMap<String, FunctionId>,
-        functions: &'a BTreeMap<FunctionId, Function>,
-        typesystem: &'a mut TypeSystem,
-        type_namespace: &'a HashMap<String, Type>,
+        functions: &'a BTreeMap<FunctionId, Function<'ctx>>,
+        types_scope: &'a TypesScope<'ctx>,
     ) -> Self {
         Self {
+            ctx,
             decl,
             functions_namespace,
             functions,
-            typesystem,
-            type_namespace,
+            types_scope,
             scope: Scope::default(),
         }
     }
 
     /// lower an expression
-    fn lower_expr(&mut self, expr: &ast::Expr, expect_type: Option<Type>) -> Result<Expr, Error> {
-        fn coalesce_types(a: Type, b: Type) -> Type {
-            if a == Type::Never { b } else { a }
-        }
-
+    fn lower_expr(&mut self, expr: &ast::Expr, expect_type: Option<Type<'ctx>>) -> Result<Expr<'ctx>, Error> {
         let span = Some(expr.span());
 
         match expr {
             ast::Expr::Block(block_expr) => self.lower_block_expr(block_expr, expect_type),
             ast::Expr::If(if_expr) => {
-                let expect_type = match (expect_type, if_expr.if_false.is_some()) {
-                    (None | Some(Type::Unit), false) => Some(Type::Unit),
+                let expected_non_unit = expect_type.filter(|ty| !ty.is_unit());
+
+                let expect_type = match (expected_non_unit, if_expr.if_false.is_some()) {
+                    (None, false) => Some(self.ctx.types().unit),
 
                     (_, false) => {
                         return Err(Error::new(format!(
@@ -160,14 +159,14 @@ impl<'a> FunctionLoweringCtx<'a> {
                     (expect_type, true) => expect_type,
                 };
 
-                let cond = self.lower_expr(&if_expr.cond, Some(Type::Bool))?;
+                let cond = self.lower_expr(&if_expr.cond, Some(self.ctx.types().bool))?;
 
                 let if_true = self.lower_block_expr(&if_expr.if_true, expect_type)?;
 
-                let expect_type = if if_true.ty != Type::Never {
-                    Some(if_true.ty)
-                } else {
+                let expect_type = if if_true.ty.is_never() {
                     expect_type
+                } else {
+                    Some(if_true.ty)
                 };
 
                 let if_false = if_expr
@@ -175,7 +174,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .as_ref()
                     .map(|expr| self.lower_expr(expr, expect_type))
                     .transpose()?
-                    .unwrap_or(Expr::UNIT);
+                    .unwrap_or_else(|| Expr::unit(self.ctx));
 
                 Ok(Expr {
                     ty: coalesce_types(if_true.ty, if_false.ty),
@@ -190,7 +189,9 @@ impl<'a> FunctionLoweringCtx<'a> {
             ast::Expr::Loop(loop_expr) => {
                 let lowered_body = self.lower_loop_body(&loop_expr.body, expect_type)?;
                 Ok(Expr {
-                    ty: lowered_body.break_used_with_type.unwrap_or(Type::Never),
+                    ty: lowered_body
+                        .break_used_with_type
+                        .unwrap_or_else(|| self.ctx.types().never),
                     span,
                     kind: ExprKind::Loop(lowered_body.loop_id, Box::new(lowered_body.body)),
                 })
@@ -206,27 +207,31 @@ impl<'a> FunctionLoweringCtx<'a> {
                 //     if <cond> { $body } else { break }
                 // }
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Unit
+                    && !expect_type.is_unit()
                 {
-                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(
+                        expect_type,
+                        self.ctx.types().unit,
+                        expr.span(),
+                    ));
                 }
-                let cond = self.lower_expr(&while_expr.cond, Some(Type::Bool))?;
-                let lowered_body = self.lower_loop_body(&while_expr.body, Some(Type::Unit))?;
+                let cond = self.lower_expr(&while_expr.cond, Some(self.ctx.types().bool))?;
+                let lowered_body = self.lower_loop_body(&while_expr.body, Some(self.ctx.types().unit))?;
                 Ok(Expr {
-                    ty: Type::Unit,
+                    ty: self.ctx.types().unit,
                     span,
                     kind: ExprKind::Loop(
                         lowered_body.loop_id,
                         Box::new(Expr {
-                            ty: Type::Unit,
+                            ty: self.ctx.types().unit,
                             span,
                             kind: ExprKind::If {
                                 cond: Box::new(cond),
                                 if_true: Box::new(lowered_body.body),
                                 if_false: Box::new(Expr {
-                                    ty: Type::Never,
+                                    ty: self.ctx.types().never,
                                     span: None,
-                                    kind: ExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
+                                    kind: ExprKind::Break(lowered_body.loop_id, Box::new(Expr::unit(self.ctx))),
                                 }),
                             },
                         }),
@@ -255,9 +260,13 @@ impl<'a> FunctionLoweringCtx<'a> {
                 // }
 
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Unit
+                    && !expect_type.is_unit()
                 {
-                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(
+                        expect_type,
+                        self.ctx.types().unit,
+                        expr.span(),
+                    ));
                 }
 
                 let ast::Expr::Range(range_expr) = &*e.iterator else {
@@ -282,11 +291,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                 self.scope
                     .variables
                     .insert(e.i.value.clone(), (shadowed_var_id, var_type));
-                let lowered_body = self.lower_loop_body(&e.body, Some(Type::Unit))?;
+                let lowered_body = self.lower_loop_body(&e.body, Some(self.ctx.types().unit))?;
                 self.scope.pop();
 
                 Ok(Expr {
-                    ty: Type::Unit,
+                    ty: self.ctx.types().unit,
                     span,
                     kind: ExprKind::Block(BlockExpr {
                         variables: vec![
@@ -307,19 +316,19 @@ impl<'a> FunctionLoweringCtx<'a> {
                             },
                         ],
                         exprs: vec![
-                            Expr::set_var(var_id, from_expr),
-                            Expr::set_var(target_id, to_expr),
+                            Expr::set_var(self.ctx, var_id, from_expr),
+                            Expr::set_var(self.ctx, target_id, to_expr),
                             Expr {
-                                ty: Type::Unit,
+                                ty: self.ctx.types().unit,
                                 span: None,
                                 kind: ExprKind::Loop(
                                     lowered_body.loop_id,
                                     Box::new(Expr {
-                                        ty: Type::Unit,
+                                        ty: self.ctx.types().unit,
                                         span: None,
                                         kind: ExprKind::If {
                                             cond: Box::new(Expr {
-                                                ty: Type::Bool,
+                                                ty: self.ctx.types().bool,
                                                 span: None,
                                                 kind: ExprKind::Cmp(
                                                     CmpOp::Less,
@@ -328,19 +337,24 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                 ),
                                             }),
                                             if_true: Box::new(Expr {
-                                                ty: Type::Unit,
+                                                ty: self.ctx.types().unit,
                                                 span: None,
                                                 kind: ExprKind::Block(BlockExpr {
                                                     variables: Vec::new(),
                                                     exprs: vec![
-                                                        Expr::set_var(shadowed_var_id, Expr::get_var(var_id, var_type)),
+                                                        Expr::set_var(
+                                                            self.ctx,
+                                                            shadowed_var_id,
+                                                            Expr::get_var(var_id, var_type),
+                                                        ),
                                                         Expr {
-                                                            ty: Type::Unit,
+                                                            ty: self.ctx.types().unit,
                                                             span: None,
                                                             kind: ExprKind::InPlaceArithmetic(
                                                                 ArithmeticOp::Add,
                                                                 Place::var(var_id, var_type),
                                                                 Box::new(Expr::new_const(
+                                                                    self.ctx,
                                                                     Constant::int(1, var_type_int).unwrap(),
                                                                 )),
                                                             ),
@@ -350,9 +364,12 @@ impl<'a> FunctionLoweringCtx<'a> {
                                                 }),
                                             }),
                                             if_false: Box::new(Expr {
-                                                ty: Type::Never,
+                                                ty: self.ctx.types().never,
                                                 span: None,
-                                                kind: ExprKind::Break(lowered_body.loop_id, Box::new(Expr::UNIT)),
+                                                kind: ExprKind::Break(
+                                                    lowered_body.loop_id,
+                                                    Box::new(Expr::unit(self.ctx)),
+                                                ),
                                             }),
                                         },
                                     }),
@@ -365,24 +382,23 @@ impl<'a> FunctionLoweringCtx<'a> {
             ast::Expr::ArrayInitializer(e) => {
                 let length = e.elements.len() as u64;
                 let expect_element_type = match expect_type {
-                    Some(Type::Array {
-                        element,
-                        length: expected_length,
-                    }) => {
-                        if length != expected_length {
+                    Some(expect_type) => match expect_type.as_array() {
+                        Some((element_ty, expected_length)) => {
+                            if length != expected_length {
+                                return Err(Error::new(format!(
+                                    "expected array of length {expected_length}, got {length}"
+                                ))
+                                .with_span(expr.span()));
+                            }
+                            Some(element_ty)
+                        }
+                        None => {
                             return Err(Error::new(format!(
-                                "expected array of length {expected_length}, got {length}"
+                                "expected expr of type {expect_type:?}, got array initializer"
                             ))
                             .with_span(expr.span()));
                         }
-                        Some(self.typesystem.get_type(element))
-                    }
-                    Some(other) => {
-                        return Err(
-                            Error::new(format!("expected expr of type {other:?}, got array initializer"))
-                                .with_span(expr.span()),
-                        );
-                    }
+                    },
                     None => None,
                 };
                 let lowered_elements = e
@@ -394,90 +410,79 @@ impl<'a> FunctionLoweringCtx<'a> {
                     lowered_elements
                         .iter()
                         .map(|expr| expr.ty)
-                        .find(|ty| *ty != Type::Never)
-                        .unwrap_or(Type::Never)
+                        .find(|ty| !ty.is_never())
+                        .unwrap_or_else(|| self.ctx.types().never)
                 });
-                let element_ty_id = self.typesystem.get_type_id(element_ty);
-                let array_ty = Type::Array {
-                    element: element_ty_id,
-                    length,
-                };
                 for expr in &lowered_elements {
-                    if expr.ty != Type::Never && expr.ty != element_ty {
+                    if !expr.ty.is_never() && expr.ty != element_ty {
                         return Err(Error::expr_type_mismatch(element_ty, expr.ty, expr.span.unwrap()));
                     }
                 }
                 Ok(Expr {
-                    ty: array_ty,
+                    ty: Type::new(self.ctx, TypeInfo::Array { element_ty, length }),
                     span,
                     kind: ExprKind::ArrayInitializer(lowered_elements),
                 })
             }
             ast::Expr::StructInitializer(e) => {
-                let (ty, sid) = match &e.struct_name {
-                    Some(name) => {
-                        let ty =
-                            self.type_namespace.get(&name.value).copied().ok_or_else(|| {
-                                Error::new(format!("unknown type {:?}", name.value)).with_span(name.span)
-                            })?;
-                        let sid = match ty {
-                            Type::Struct(sid) => sid,
-                            other => {
-                                return Err(
-                                    Error::new(format!("{} is not a struct type, but {other:?}", name.value))
-                                        .with_span(name.span),
-                                );
-                            }
+                let (ty, struct_, type_arguments) = match &e.struct_ty {
+                    Some(ast_ty) => {
+                        let ty = type_from_ast(self.ctx, self.types_scope, ast_ty)?;
+                        let TypeInfo::Struct {
+                            struct_,
+                            type_arguments,
+                        } = ty.info()
+                        else {
+                            return Err(Error::new(format!("{ty:?} is not a struct type")).with_span(ast_ty.span()));
                         };
                         if let Some(expect_type) = expect_type
                             && expect_type != ty
                         {
                             return Err(Error::expr_type_mismatch(expect_type, ty, expr.span()));
                         }
-                        (ty, sid)
+                        (ty, *struct_, type_arguments)
                     }
                     None => match expect_type {
-                        Some(ty @ Type::Struct(sid)) => (ty, sid),
+                        Some(expect_type) => match expect_type.info() {
+                            TypeInfo::Struct {
+                                struct_,
+                                type_arguments,
+                            } => (expect_type, *struct_, type_arguments),
+                            _ => {
+                                return Err(Error::new(format!(
+                                    "expected expr of type {expect_type:?}, got struct initializer"
+                                ))
+                                .with_span(expr.span()));
+                            }
+                        },
                         None => return Err(Error::new("type annotations needed").with_span(expr.span())),
-                        Some(other) => {
-                            return Err(
-                                Error::new(format!("expected expr of type {other:?}, got struct initializer"))
-                                    .with_span(expr.span()),
-                            );
-                        }
                     },
                 };
-                if let Some(missing_field) = self
-                    .typesystem
-                    .get_struct(sid)
+                if let Some(missing_field) = struct_
+                    .info()
                     .fields
                     .iter()
-                    .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.name.value))
+                    .find(|f| !e.fields.iter().any(|ef| ef.name.value == f.0.value))
                 {
-                    return Err(
-                        Error::new(format!("missing field: {}", missing_field.name.value)).with_span(expr.span())
-                    );
+                    return Err(Error::new(format!("missing field: {}", missing_field.0.value)).with_span(expr.span()));
                 }
-                let mut lowered_fields: Vec<(String, Expr)> = Vec::new();
+                let mut lowered_fields: Vec<(StructFieldId, Expr)> = Vec::new();
                 for field in &e.fields {
-                    if lowered_fields.iter().any(|x| x.0 == field.name.value) {
-                        return Err(Error::new("duplicate field entry").with_span(field.name.span));
-                    }
-                    let struct_def = self.typesystem.get_struct(sid);
-                    let f_ty = struct_def
+                    let (_, field_id) = struct_
+                        .info()
                         .fields
                         .iter()
-                        .find(|f| f.name.value == field.name.value)
-                        .map(|f| f.ty)
+                        .find(|(name, _)| name.value == field.name.value)
                         .ok_or_else(|| {
-                            Error::new(format!(
-                                "struct {} has no field {}",
-                                struct_def.name.value, field.name.value
-                            ))
-                            .with_span(field.name.span)
+                            Error::new(format!("struct {struct_:?} has no field {}", field.name.value))
+                                .with_span(field.name.span)
                         })?;
-                    let expr = self.lower_expr(&field.value, Some(f_ty))?;
-                    lowered_fields.push((field.name.value.clone(), expr));
+                    if lowered_fields.iter().any(|x| x.0 == *field_id) {
+                        return Err(Error::new("duplicate field entry").with_span(field.name.span));
+                    }
+                    let field_ty = self.ctx.type_of_struct_field(*field_id, type_arguments);
+                    let expr = self.lower_expr(&field.value, Some(field_ty))?;
+                    lowered_fields.push((*field_id, expr));
                 }
                 Ok(Expr {
                     ty,
@@ -486,7 +491,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 })
             }
             ast::Expr::Return(return_expr) => {
-                if return_expr.value.is_none() && self.decl.return_ty != Type::Unit {
+                if return_expr.value.is_none() && !self.decl.return_ty.is_unit() {
                     return Err(
                         Error::new(format!("a return value of type {:?} is expected", self.decl.return_ty))
                             .with_span(return_expr.return_keyword_span),
@@ -497,9 +502,9 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .as_ref()
                     .map(|expr| self.lower_expr(expr, Some(self.decl.return_ty)))
                     .transpose()?
-                    .unwrap_or(Expr::UNIT);
+                    .unwrap_or_else(|| Expr::unit(self.ctx));
                 Ok(Expr {
-                    ty: Type::Never,
+                    ty: self.ctx.types().never,
                     span,
                     kind: ExprKind::Return(Box::new(lowered_value)),
                 })
@@ -511,7 +516,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 })?;
                 if break_expr.value.is_none()
                     && let Some(expect_type) = loop_ctx.expect_type
-                    && expect_type != Type::Unit
+                    && !expect_type.is_unit()
                 {
                     return Err(Error::new(format!("a break value of type {expect_type:?} is expected"))
                         .with_span(break_expr.break_keyword_span));
@@ -523,14 +528,14 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .as_ref()
                     .map(|expr| self.lower_expr(expr, expect_type))
                     .transpose()?
-                    .unwrap_or(Expr::UNIT);
-                if lowered_value.ty != Type::Never {
+                    .unwrap_or_else(|| Expr::unit(self.ctx));
+                if !lowered_value.ty.is_never() {
                     let loop_ctx = self.scope.loop_context().unwrap();
                     loop_ctx.break_used_with_type = Some(lowered_value.ty);
                     loop_ctx.expect_type = Some(lowered_value.ty);
                 }
                 Ok(Expr {
-                    ty: Type::Never,
+                    ty: self.ctx.types().never,
                     span,
                     kind: ExprKind::Break(loop_id, Box::new(lowered_value)),
                 })
@@ -541,7 +546,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         .with_span(continue_expr.continue_keyword_span)
                 })?;
                 Ok(Expr {
-                    ty: Type::Never,
+                    ty: self.ctx.types().never,
                     span,
                     kind: ExprKind::Continue(loop_ctx.loop_id),
                 })
@@ -563,14 +568,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                             }
                         },
                     };
+                    let ty = Type::new(self.ctx, TypeInfo::Int(int_ty));
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Int(int_ty)
+                        && expect_type != ty
                     {
-                        return Err(Error::expr_type_mismatch(
-                            expect_type,
-                            Type::Int(int_ty),
-                            literal_expr.span,
-                        ));
+                        return Err(Error::expr_type_mismatch(expect_type, ty, literal_expr.span));
                     }
                     let Some(const_value) = Constant::int(*number, int_ty) else {
                         return Err(
@@ -578,32 +580,34 @@ impl<'a> FunctionLoweringCtx<'a> {
                         );
                     };
                     Ok(Expr {
-                        ty: Type::Int(int_ty),
+                        ty,
                         span,
                         kind: ExprKind::Const(const_value),
                     })
                 }
                 ast::LiteralExprValue::String(string) => {
+                    let ty = self.ctx.types().i8_ptr;
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::I8_PTR
+                        && expect_type != ty
                     {
-                        Err(Error::expr_type_mismatch(expect_type, Type::I8_PTR, literal_expr.span))
+                        Err(Error::expr_type_mismatch(expect_type, ty, literal_expr.span))
                     } else {
                         Ok(Expr {
-                            ty: Type::I8_PTR,
+                            ty,
                             span,
                             kind: ExprKind::ConstString(string.clone()),
                         })
                     }
                 }
                 ast::LiteralExprValue::Bool(bool) => {
+                    let ty = self.ctx.types().bool;
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Bool
+                        && expect_type != ty
                     {
-                        Err(Error::expr_type_mismatch(expect_type, Type::Bool, literal_expr.span))
+                        Err(Error::expr_type_mismatch(expect_type, ty, literal_expr.span))
                     } else {
                         Ok(Expr {
-                            ty: Type::Bool,
+                            ty,
                             span,
                             kind: ExprKind::Const(Constant::Bool(*bool)),
                         })
@@ -621,19 +625,22 @@ impl<'a> FunctionLoweringCtx<'a> {
                 ast::LiteralExprValue::Null => {
                     let pointee = match expect_type {
                         None => None,
-                        Some(Type::Ptr { pointee }) => pointee,
-                        Some(expect_type) => {
-                            return Err(Error::expr_type_mismatch(
-                                expect_type,
-                                Type::Ptr { pointee: None },
-                                literal_expr.span,
-                            ));
-                        }
+                        Some(expect_type) => match expect_type.info() {
+                            TypeInfo::Ptr { pointee } => *pointee,
+                            _ => {
+                                return Err(Error::expr_type_mismatch(
+                                    expect_type,
+                                    self.ctx.types().opaque_ptr,
+                                    literal_expr.span,
+                                ));
+                            }
+                        },
                     };
+                    let ty = Type::new(self.ctx, TypeInfo::Ptr { pointee });
                     Ok(Expr {
-                        ty: Type::Ptr { pointee },
+                        ty,
                         span,
-                        kind: ExprKind::Const(Constant::Null(pointee)),
+                        kind: ExprKind::Const(Constant::Null(ty)),
                     })
                 }
             },
@@ -670,7 +677,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                 }
                 if let Some(expect_type) = expect_type
                     && expect_type != callee.return_ty
-                    && callee.return_ty != Type::Never
+                    && !callee.return_ty.is_never()
                 {
                     return Err(Error::expr_type_mismatch(
                         expect_type,
@@ -686,23 +693,31 @@ impl<'a> FunctionLoweringCtx<'a> {
             }
             ast::Expr::Assignment(e) => {
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Unit
+                    && !expect_type.is_unit()
                 {
-                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(
+                        expect_type,
+                        self.ctx.types().unit,
+                        expr.span(),
+                    ));
                 }
                 let lowered_place = self.lower_expr(&e.place, None)?.expect_place()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
                 Ok(Expr {
-                    ty: Type::Unit,
+                    ty: self.ctx.types().unit,
                     span,
                     kind: ExprKind::Store(lowered_place, Box::new(lowered_value)),
                 })
             }
             ast::Expr::CompoundAssignment(e) => {
                 if let Some(expect_type) = expect_type
-                    && expect_type != Type::Unit
+                    && !expect_type.is_unit()
                 {
-                    return Err(Error::expr_type_mismatch(expect_type, Type::Unit, expr.span()));
+                    return Err(Error::expr_type_mismatch(
+                        expect_type,
+                        self.ctx.types().unit,
+                        expr.span(),
+                    ));
                 }
                 let lowered_place = self.lower_expr(&e.place, None)?.expect_place()?;
                 let lowered_value = self.lower_expr(&e.value, Some(lowered_place.ty))?;
@@ -714,7 +729,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                     .with_span(e.op_span));
                 }
                 Ok(Expr {
-                    ty: Type::Unit,
+                    ty: self.ctx.types().unit,
                     span,
                     kind: ExprKind::InPlaceArithmetic(e.op, lowered_place, Box::new(lowered_value)),
                 })
@@ -722,23 +737,27 @@ impl<'a> FunctionLoweringCtx<'a> {
             ast::Expr::Binary(binary_expr) => match binary_expr.op {
                 BinaryOp::Cmp(cmp_op) => {
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Bool
+                        && !expect_type.is_bool()
                     {
-                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(
+                            expect_type,
+                            self.ctx.types().bool,
+                            expr.span(),
+                        ));
                     }
                     let lowered_lhs = self.lower_expr(&binary_expr.lhs, None)?;
                     let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(lowered_lhs.ty))?;
                     let operands_ty = coalesce_types(lowered_lhs.ty, lowered_rhs.ty);
-                    match (cmp_op, operands_ty) {
-                        (_, Type::Int(_) | Type::Ptr { .. }) => (),
-                        (CmpOp::Equal | CmpOp::NotEqual, Type::Bool) => (),
+                    match cmp_op {
+                        _ if operands_ty.is_int() || operands_ty.is_ptr() => (),
+                        CmpOp::Equal | CmpOp::NotEqual if operands_ty.is_bool() => (),
                         _ => {
                             return Err(Error::new(format!("cannot compare {operands_ty:?} with {cmp_op:?}"))
                                 .with_span(binary_expr.op_span));
                         }
                     }
                     Ok(Expr {
-                        ty: Type::Bool,
+                        ty: self.ctx.types().bool,
                         span,
                         kind: ExprKind::Cmp(cmp_op, Box::new(lowered_lhs), Box::new(lowered_rhs)),
                     })
@@ -769,82 +788,102 @@ impl<'a> FunctionLoweringCtx<'a> {
                 }
                 BinaryOp::LogicalOr => {
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Bool
+                        && !expect_type.is_bool()
                     {
-                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(
+                            expect_type,
+                            self.ctx.types().bool,
+                            expr.span(),
+                        ));
                     }
-                    let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(Type::Bool))?;
-                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(Type::Bool))?;
+                    let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(self.ctx.types().bool))?;
+                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(self.ctx.types().bool))?;
                     Ok(Expr {
-                        ty: Type::Bool,
+                        ty: self.ctx.types().bool,
                         span,
                         kind: ExprKind::If {
                             cond: Box::new(lowered_lhs),
-                            if_true: Box::new(Expr::const_bool(true)),
+                            if_true: Box::new(Expr::const_bool(self.ctx, true)),
                             if_false: Box::new(lowered_rhs),
                         },
                     })
                 }
                 BinaryOp::LogicalAnd => {
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Bool
+                        && !expect_type.is_bool()
                     {
-                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(
+                            expect_type,
+                            self.ctx.types().bool,
+                            expr.span(),
+                        ));
                     }
-                    let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(Type::Bool))?;
-                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(Type::Bool))?;
+                    let lowered_lhs = self.lower_expr(&binary_expr.lhs, Some(self.ctx.types().bool))?;
+                    let lowered_rhs = self.lower_expr(&binary_expr.rhs, Some(self.ctx.types().bool))?;
                     Ok(Expr {
-                        ty: Type::Bool,
+                        ty: self.ctx.types().bool,
                         span,
                         kind: ExprKind::If {
                             cond: Box::new(lowered_lhs),
                             if_true: Box::new(lowered_rhs),
-                            if_false: Box::new(Expr::const_bool(false)),
+                            if_false: Box::new(Expr::const_bool(self.ctx, false)),
                         },
                     })
                 }
             },
             ast::Expr::Unary(unary_expr) => match unary_expr.op {
                 ast::UnaryOp::Negate => {
-                    let lowered_rhs = self.lower_expr(&unary_expr.rhs, None)?;
-                    let int_ty = match lowered_rhs.ty {
-                        Type::Int(i) if i.is_signed() => i,
-                        other => {
-                            return Err(Error::new(format!("only signed integer can be negated, not {other:?}"))
-                                .with_span(unary_expr.op_span));
+                    let lowered_rhs = self.lower_expr(&unary_expr.rhs, None)?; // todo: pass expected type
+                    let int_ty = match lowered_rhs.ty.as_int() {
+                        Some(i) if i.is_signed() => i,
+                        _ => {
+                            return Err(Error::new(format!(
+                                "only signed integer can be negated, not {:?}",
+                                lowered_rhs.ty
+                            ))
+                            .with_span(unary_expr.op_span));
                         }
                     };
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Int(int_ty)
+                        && expect_type != lowered_rhs.ty
                     {
-                        return Err(Error::expr_type_mismatch(expect_type, Type::Int(int_ty), expr.span()));
+                        return Err(Error::expr_type_mismatch(expect_type, lowered_rhs.ty, expr.span()));
                     }
                     Ok(Expr {
-                        ty: Type::Int(int_ty),
+                        ty: lowered_rhs.ty,
                         span,
                         kind: ExprKind::Arithmetic(
                             ArithmeticOp::Sub,
-                            Box::new(Expr::new_const(Constant::int(0, int_ty).unwrap())),
+                            Box::new(Expr::new_const(self.ctx, Constant::int(0, int_ty).unwrap())),
                             Box::new(lowered_rhs),
                         ),
                     })
                 }
                 ast::UnaryOp::Not => {
                     if let Some(expect_type) = expect_type
-                        && expect_type != Type::Bool
+                        && !expect_type.is_bool()
                     {
-                        return Err(Error::expr_type_mismatch(expect_type, Type::Bool, expr.span()));
+                        return Err(Error::expr_type_mismatch(
+                            expect_type,
+                            self.ctx.types().bool,
+                            expr.span(),
+                        ));
                     }
-                    let lowered_rhs = self.lower_expr(&unary_expr.rhs, Some(Type::Bool))?;
+                    let lowered_rhs = self.lower_expr(&unary_expr.rhs, Some(self.ctx.types().bool))?;
                     Ok(Expr {
-                        ty: Type::Bool,
+                        ty: self.ctx.types().bool,
                         span,
                         kind: ExprKind::Not(Box::new(lowered_rhs)),
                     })
                 }
                 ast::UnaryOp::AddressOf => {
                     let lowered_rhs = self.lower_expr(&unary_expr.rhs, None)?.expect_place()?;
-                    let ty = lowered_rhs.ty.make_ptr(self.typesystem);
+                    let ty = Type::new(
+                        self.ctx,
+                        TypeInfo::Ptr {
+                            pointee: Some(lowered_rhs.ty),
+                        },
+                    );
                     if let Some(expect_type) = expect_type
                         && expect_type != ty
                     {
@@ -858,22 +897,24 @@ impl<'a> FunctionLoweringCtx<'a> {
                 }
             },
             ast::Expr::AsCast(as_cast_expr) => {
-                let ty = self.typesystem.type_from_ast(self.type_namespace, &as_cast_expr.ty)?;
+                let ty = type_from_ast(self.ctx, self.types_scope, &as_cast_expr.ty)?;
                 if let Some(expect_type) = expect_type
                     && expect_type != ty
                 {
                     return Err(Error::expr_type_mismatch(expect_type, ty, expr.span()));
                 }
                 let lowered_expr = self.lower_expr(&as_cast_expr.expr, None)?; // TODO: pass ty as a hint (but not a requirement!)
-                match (lowered_expr.ty, ty) {
-                    (Type::Int(_), Type::Int(_)) | (Type::Ptr { .. }, Type::Ptr { .. }) => Ok(Expr {
+                if (lowered_expr.ty.is_int() && ty.is_int()) || (lowered_expr.ty.is_ptr() && ty.is_ptr()) {
+                    Ok(Expr {
                         ty,
                         span,
                         kind: ExprKind::Cast(Box::new(lowered_expr)),
-                    }),
-                    (from, to) => {
-                        Err(Error::new(format!("cannot cast from {from:?} to {to:?}")).with_span(as_cast_expr.as_span))
-                    }
+                    })
+                } else {
+                    Err(
+                        Error::new(format!("cannot cast from {:?} to {:?}", lowered_expr.ty, ty))
+                            .with_span(as_cast_expr.as_span),
+                    )
                 }
             }
             ast::Expr::Comptime(cexpr) => {
@@ -910,53 +951,60 @@ impl<'a> FunctionLoweringCtx<'a> {
             }
             ast::Expr::FieldAccess(e) => {
                 let lowered_lhs = self.lower_expr(&e.lhs, None)?;
-                let (struct_id, need_deref) = match lowered_lhs.ty {
-                    Type::Struct(struct_id) => (struct_id, false),
-                    Type::Ptr { pointee: Some(pointee) } if self.typesystem.get_type(pointee).as_struct().is_some() => {
-                        (self.typesystem.get_type(pointee).as_struct().unwrap(), true)
+                let (struct_ty, struct_, type_arguments, need_deref) = match lowered_lhs.ty.info() {
+                    TypeInfo::Struct {
+                        struct_,
+                        type_arguments,
+                    } => (lowered_lhs.ty, *struct_, type_arguments.as_slice(), false),
+                    TypeInfo::Ptr { pointee: Some(pointee) } if pointee.as_struct().is_some() => {
+                        let (struct_, type_arguments) = pointee.as_struct().unwrap();
+                        (*pointee, struct_, type_arguments, true)
                     }
                     _ => return Err(Error::new("only structs have fields").with_span(e.dot_span)),
                 };
-                let struct_ty = self.typesystem.get_struct(struct_id);
-                let field = struct_ty
+                let (_, field_id) = struct_
+                    .info()
                     .fields
                     .iter()
-                    .find(|f| f.name.value == e.field.value)
+                    .find(|(name, _)| name.value == e.field.value)
                     .ok_or_else(|| {
-                        Error::new(format!(
-                            "struct {:?} has no field {:?}",
-                            struct_ty.name.value, e.field.value
-                        ))
+                        Error::new(format!("struct {struct_:?} has no field {:?}", e.field.value))
+                            .with_span(e.field.span)
                     })?;
+                let field_ty = self.ctx.type_of_struct_field(*field_id, type_arguments);
+                if let Some(expect_type) = expect_type
+                    && expect_type != field_ty
+                {
+                    return Err(Error::expr_type_mismatch(expect_type, field_ty, expr.span()));
+                }
                 Ok(if need_deref {
                     let struct_place = Place {
-                        ty: Type::Struct(struct_id),
+                        ty: struct_ty,
                         span,
                         kind: PlaceKind::Dereference(Box::new(lowered_lhs)),
                     };
                     Expr {
-                        ty: field.ty,
+                        ty: field_ty,
                         span,
                         kind: ExprKind::Load(Place {
-                            ty: field.ty,
+                            ty: field_ty,
                             span,
-                            kind: PlaceKind::Field(Box::new(struct_place), field.name.value.clone()),
+                            kind: PlaceKind::Field(Box::new(struct_place), *field_id),
                         }),
                     }
                 } else {
                     Expr {
-                        ty: field.ty,
+                        ty: field_ty,
                         span,
-                        kind: ExprKind::Field(Box::new(lowered_lhs), field.name.value.clone()),
+                        kind: ExprKind::Field(Box::new(lowered_lhs), *field_id),
                     }
                 })
             }
             ast::Expr::Dereference(e) => {
-                let expect_ptr_ty = expect_type.map(|ty| ty.make_ptr(self.typesystem));
+                let expect_ptr_ty = expect_type.map(|ty| Type::new(self.ctx, TypeInfo::Ptr { pointee: Some(ty) }));
                 let lowered_ptr = self.lower_expr(&e.ptr, expect_ptr_ty)?;
-                let ty = match lowered_ptr.ty {
-                    Type::Ptr { pointee } => pointee
-                        .map(|id| self.typesystem.get_type(id))
+                let ty = match lowered_ptr.ty.info() {
+                    TypeInfo::Ptr { pointee } => pointee
                         .ok_or_else(|| Error::new("cannot dereference an opaque pointer").with_span(expr.span()))?,
                     other => {
                         return Err(
@@ -977,13 +1025,15 @@ impl<'a> FunctionLoweringCtx<'a> {
             }
             ast::Expr::Index(e) => {
                 let lowered_lhs = self.lower_expr(&e.lhs, None)?;
-                let element_ty = match lowered_lhs.ty {
-                    Type::Array { element, length: _ } => self.typesystem.get_type(element),
-                    other => {
-                        return Err(Error::new(format!("expected an array, got {:?}", other)).with_span(e.lhs.span()));
-                    }
-                };
-                let lowered_index = self.lower_expr(&e.index, Some(Type::Int(IntType::U64)))?;
+                let (element_ty, _length) = lowered_lhs.ty.as_array().ok_or_else(|| {
+                    Error::new(format!("expected an array, got {:?}", lowered_lhs.ty)).with_span(e.lhs.span())
+                })?;
+                if let Some(expect_type) = expect_type
+                    && expect_type != element_ty
+                {
+                    return Err(Error::expr_type_mismatch(expect_type, element_ty, expr.span()));
+                }
+                let lowered_index = self.lower_expr(&e.index, Some(self.ctx.types().u64))?;
                 Ok(Expr {
                     ty: element_ty,
                     span,
@@ -994,10 +1044,14 @@ impl<'a> FunctionLoweringCtx<'a> {
     }
 
     /// Lower a block expression
-    fn lower_block_expr(&mut self, expr: &ast::BlockExpr, expect_type: Option<Type>) -> Result<Expr, Error> {
+    fn lower_block_expr(
+        &mut self,
+        expr: &ast::BlockExpr,
+        expect_type: Option<Type<'ctx>>,
+    ) -> Result<Expr<'ctx>, Error> {
         if expr.final_expr.is_none()
             && let Some(expect_type) = expect_type
-            && expect_type != Type::Unit
+            && !expect_type.is_unit()
         {
             return Err(
                 Error::new(format!("expected expr of type {expect_type:?}, found end-of-block"))
@@ -1017,7 +1071,7 @@ impl<'a> FunctionLoweringCtx<'a> {
                         let var_id = VariableId::new();
                         let var_ty = ty
                             .as_ref()
-                            .map(|ty| self.typesystem.type_from_ast(self.type_namespace, ty))
+                            .map(|ty| type_from_ast(self.ctx, self.types_scope, ty))
                             .transpose()?;
                         let value_eval = self.lower_expr(value, var_ty)?;
                         variables.push(VariableDeclaration {
@@ -1026,11 +1080,11 @@ impl<'a> FunctionLoweringCtx<'a> {
                             debug_name: name.value.clone(),
                         });
                         self.scope.variables.insert(name.value.clone(), (var_id, value_eval.ty));
-                        exprs.push(Expr::set_var(var_id, value_eval));
+                        exprs.push(Expr::set_var(self.ctx, var_id, value_eval));
                     }
                     ast::LetStatement::WithoutValue { name, ty } => {
                         let id = VariableId::new();
-                        let ty = self.typesystem.type_from_ast(self.type_namespace, ty)?;
+                        let ty = type_from_ast(self.ctx, self.types_scope, ty)?;
                         variables.push(VariableDeclaration {
                             id,
                             ty,
@@ -1051,7 +1105,7 @@ impl<'a> FunctionLoweringCtx<'a> {
             }
             None => {
                 if !exprs.is_empty() {
-                    exprs.push(Expr::UNIT);
+                    exprs.push(Expr::unit(self.ctx));
                 }
             }
         }
@@ -1059,7 +1113,7 @@ impl<'a> FunctionLoweringCtx<'a> {
         self.scope.pop();
 
         Ok(Expr {
-            ty: exprs.last().map_or(Type::Unit, |expr| expr.ty),
+            ty: exprs.last().map_or_else(|| self.ctx.types().unit, |expr| expr.ty),
             span: Some(expr.span()),
             kind: ExprKind::Block(BlockExpr { variables, exprs }),
         })
@@ -1068,8 +1122,8 @@ impl<'a> FunctionLoweringCtx<'a> {
     fn lower_loop_body(
         &mut self,
         body: &ast::BlockExpr,
-        expect_type: Option<Type>,
-    ) -> Result<LowerLoopBodyResult, Error> {
+        expect_type: Option<Type<'ctx>>,
+    ) -> Result<LowerLoopBodyResult<'ctx>, Error> {
         let loop_id = LoopId::new();
         self.scope.push();
         self.scope.loop_context = Some(LoopContext {
@@ -1077,7 +1131,7 @@ impl<'a> FunctionLoweringCtx<'a> {
             break_used_with_type: None,
             expect_type,
         });
-        let body = self.lower_block_expr(body, Some(Type::Unit))?;
+        let body = self.lower_block_expr(body, Some(self.ctx.types().unit))?;
         let loop_ctx = self.scope.loop_context.unwrap();
         self.scope.pop();
         Ok(LowerLoopBodyResult {
@@ -1086,4 +1140,8 @@ impl<'a> FunctionLoweringCtx<'a> {
             break_used_with_type: loop_ctx.break_used_with_type,
         })
     }
+}
+
+fn coalesce_types<'ctx>(a: Type<'ctx>, b: Type<'ctx>) -> Type<'ctx> {
+    if a.is_never() { b } else { a }
 }

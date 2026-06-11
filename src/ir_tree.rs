@@ -8,10 +8,10 @@ mod visit;
 
 use std::collections::{BTreeMap, HashMap};
 
-pub use types::{IntType, Type, TypeId, TypeSystem};
+pub use types::*;
 
 use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
-use crate::ir_tree::types::StructId;
+use crate::context::Context;
 use crate::ir_tree::visit::{ExprVisitor, ExprVisitorMut};
 use crate::{ast, lex, make_entity_id};
 
@@ -35,7 +35,7 @@ impl Error {
     pub fn expr_type_mismatch(expected: Type, found: Type, span: lex::Span) -> Self {
         Self {
             span: Some(span),
-            message: format!("expected expr of type {expected:?}, found {found:?}"),
+            message: format!("expected expr of type {}, found {}", expected.render(), found.render()),
         }
     }
 
@@ -56,48 +56,71 @@ impl Error {
 make_entity_id!(FunctionId, "fn_{}");
 make_entity_id!(VariableId, "var_{}");
 make_entity_id!(LoopId, "loop_{}");
+make_entity_id!(StructFieldId, "struct_field_{}");
 
-#[derive(Debug)]
-pub struct Module {
-    pub functions: BTreeMap<FunctionId, Function>,
-    pub typesystem: TypeSystem,
+pub struct Module<'ctx> {
+    pub ctx: Context<'ctx>,
+    pub functions: BTreeMap<FunctionId, Function<'ctx>>,
 }
 
-impl Module {
+impl<'ctx> Module<'ctx> {
     /// Construct an IR_TREE from AST
-    pub fn from_ast(ast: &ast::Ast) -> Result<Self, Error> {
+    pub fn from_ast(ctx: Context<'ctx>, ast: &ast::Ast) -> Result<Self, Error> {
         let mut module = Self {
+            ctx,
             functions: BTreeMap::new(),
-            typesystem: TypeSystem::new(8), // TODO: use target arch ptr size!
         };
 
         let mut functions_namespace = HashMap::new();
 
-        let mut type_namespace = HashMap::new();
-        type_namespace.insert(String::from("unit"), Type::Unit);
-        type_namespace.insert(String::from("bool"), Type::Bool);
-        type_namespace.insert(String::from("i8"), Type::Int(IntType::I8));
-        type_namespace.insert(String::from("u8"), Type::Int(IntType::U8));
-        type_namespace.insert(String::from("i32"), Type::Int(IntType::I32));
-        type_namespace.insert(String::from("u32"), Type::Int(IntType::U32));
-        type_namespace.insert(String::from("i64"), Type::Int(IntType::I64));
-        type_namespace.insert(String::from("u64"), Type::Int(IntType::U64));
-        type_namespace.insert(String::from("ptr"), Type::OPAQUE_PTR);
+        let mut types_scope = TypesScope::default();
+        for (name, ty) in [
+            ("unit", ctx.types().unit),
+            ("bool", ctx.types().bool),
+            ("i8", ctx.types().i8),
+            ("u8", ctx.types().u8),
+            ("i32", ctx.types().i32),
+            ("u32", ctx.types().u32),
+            ("i64", ctx.types().i64),
+            ("u64", ctx.types().u64),
+            ("ptr", ctx.types().opaque_ptr),
+        ] {
+            types_scope
+                .by_name
+                .insert(name.to_owned(), TypeConstructor::NonGeneric(ty));
+        }
 
-        // Pass 1 - collect type names
-        let mut struct_ids = Vec::new();
+        // Pass 1 - collect ADT skeletons
+        let mut structs = HashMap::new();
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(_) => (),
                 ast::ItemKind::Struct(s_def) => {
-                    let id = module.typesystem.alloc_struct_id();
-                    struct_ids.push(id);
-                    if type_namespace
-                        .insert(s_def.name.value.clone(), Type::Struct(id))
-                        .is_some()
-                    {
+                    if types_scope.lookup(&s_def.name.value).is_some() {
                         return Err(Error::new("type with this name already exists").with_span(s_def.name.span));
                     }
+                    if let Some(annotation) = item.annotations.first() {
+                        return Err(Error::unknown_annotation(annotation));
+                    }
+                    let fields = s_def
+                        .fields
+                        .iter()
+                        .map(|f| (f.name.clone(), StructFieldId::new()))
+                        .collect();
+                    let struct_ = ctx.new_struct_unchecked(s_def.name.clone(), s_def.type_parameters.len(), fields);
+                    structs.insert(s_def.name.value.as_str(), struct_);
+                    let type_constructor = if s_def.type_parameters.is_empty() {
+                        TypeConstructor::NonGeneric(Type::new(
+                            ctx,
+                            TypeInfo::Struct {
+                                struct_,
+                                type_arguments: Vec::new(),
+                            },
+                        ))
+                    } else {
+                        TypeConstructor::Struct(struct_)
+                    };
+                    types_scope.by_name.insert(s_def.name.value.clone(), type_constructor);
                 }
                 ast::ItemKind::Enum(_e_def) => {
                     unimplemented!("enum support is not here yet");
@@ -105,21 +128,38 @@ impl Module {
             }
         }
 
-        // Pass 2 - Lower type definitions
+        // Pass 2 - Lower ADS's fields types
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(_) => (),
                 ast::ItemKind::Struct(s_def) => {
-                    let id = type_namespace[&s_def.name.value].as_struct().unwrap();
-
-                    let def = lower_ast::decl::lower_struct(
-                        &mut module.typesystem,
-                        &type_namespace,
-                        s_def,
-                        &item.annotations,
-                    )?;
-
-                    module.typesystem.define_struct(id, def);
+                    types_scope.push();
+                    let struct_ = structs[&*s_def.name.value];
+                    for (type_parameter_i, type_parameter) in s_def.type_parameters.iter().enumerate() {
+                        if types_scope
+                            .by_name
+                            .insert(
+                                type_parameter.name.value.clone(),
+                                TypeConstructor::NonGeneric(Type::new(
+                                    ctx,
+                                    TypeInfo::TypeParameter {
+                                        name: type_parameter.name.value.clone(),
+                                        owner: struct_,
+                                        index: type_parameter_i,
+                                    },
+                                )),
+                            )
+                            .is_some()
+                        {
+                            return Err(Error::new("type parameter with this name already exists")
+                                .with_span(type_parameter.name.span));
+                        }
+                    }
+                    for ((_, field_id), field_ast) in struct_.info().fields.iter().zip(&s_def.fields) {
+                        let field_ty = type_from_ast(ctx, &types_scope, &field_ast.ty)?;
+                        ctx.register_struct_field_type(*field_id, field_ty, struct_);
+                    }
+                    types_scope.pop();
                 }
                 ast::ItemKind::Enum(_e_def) => {
                     unimplemented!("enum support is not here yet");
@@ -127,21 +167,21 @@ impl Module {
             }
         }
 
-        // Pass 3 - Resolve layouts
-        for &id in &struct_ids {
-            module.typesystem.resolve_layout(Type::Struct(id), &mut Vec::new())?;
+        // Pass 3 - reject recursive structs w/o indirection
+        for &struct_ in structs.values() {
+            struct_.reject_recursive_without_indirection(ctx)?;
         }
+
+        // // Pass 3 - Resolve layouts
+        // for &id in &struct_ids {
+        //     module.typesystem.resolve_layout(Type::Struct(id), &mut Vec::new())?;
+        // }
 
         // Pass 4 - collect function declarations
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(function) => {
-                    let decl = lower_ast::decl::lower_function(
-                        &mut module.typesystem,
-                        &type_namespace,
-                        function,
-                        &item.annotations,
-                    )?;
+                    let decl = lower_ast::decl::lower_function(ctx, function, &item.annotations, &types_scope)?;
                     if functions_namespace
                         .insert(function.name.value.clone(), decl.id)
                         .is_some()
@@ -162,12 +202,12 @@ impl Module {
                     if let Some(body) = &function.body {
                         let decl = &module.functions[&function_id];
                         let body = lower_ast::lower_function_body(
+                            ctx,
                             decl,
                             body,
                             &functions_namespace,
                             &module.functions,
-                            &mut module.typesystem,
-                            &type_namespace,
+                            &types_scope,
                         )?;
                         module.functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
@@ -182,17 +222,17 @@ impl Module {
 
         for function in module.functions.values_mut() {
             if let Some(body) = &mut function.body {
-                opt::BasicOptVisitor.visit_expr(body);
+                opt::BasicOptVisitor(ctx).visit_expr(body);
             }
         }
 
         for function_id in module.functions.keys().copied().collect::<Vec<_>>() {
             // TODO: this is ridiculously inefficient O(n^2), for something that could potentially be O(n).
 
-            fn get_first_comptime_expr(function: &Function) -> Option<&Expr> {
-                struct Visitor<'a>(Option<&'a Expr>);
-                impl<'a> ExprVisitor<'a> for Visitor<'a> {
-                    fn visit_expr(&mut self, expr: &'a Expr) {
+            fn get_first_comptime_expr<'a, 'ctx>(function: &'a Function<'ctx>) -> Option<&'a Expr<'ctx>> {
+                struct Visitor<'a, 'ctx>(Option<&'a Expr<'ctx>>);
+                impl<'a, 'ctx> ExprVisitor<'a, 'ctx> for Visitor<'a, 'ctx> {
+                    fn visit_expr(&mut self, expr: &'a Expr<'ctx>) {
                         match &expr.kind {
                             ExprKind::Comptime(expr) => {
                                 if self.0.is_none() {
@@ -208,26 +248,26 @@ impl Module {
                 v.0
             }
 
-            fn set_first_comptime_expr(function: &mut Function, value: Constant) {
-                struct Visitor(Option<Constant>);
-                impl ExprVisitorMut for Visitor {
-                    fn visit_expr(&mut self, expr: &mut Expr) {
+            fn set_first_comptime_expr<'ctx>(ctx: Context<'ctx>, function: &mut Function<'ctx>, value: Constant<'ctx>) {
+                struct Visitor<'ctx>(Context<'ctx>, Option<Constant<'ctx>>);
+                impl<'a, 'ctx> ExprVisitorMut<'a, 'ctx> for Visitor<'ctx> {
+                    fn visit_expr(&mut self, expr: &'a mut Expr<'ctx>) {
                         if matches!(expr.kind, ExprKind::Comptime(_)) {
-                            if let Some(value) = self.0.take() {
-                                *expr = Expr::new_const(value);
+                            if let Some(value) = self.1.take() {
+                                *expr = Expr::new_const(self.0, value);
                             }
                         } else {
                             expr.visit_children_mut(self);
                         }
                     }
                 }
-                let mut v = Visitor(Some(value));
+                let mut v = Visitor(ctx, Some(value));
                 v.visit_expr(function.body.as_mut().unwrap());
             }
 
             while let Some(expr) = get_first_comptime_expr(&module.functions[&function_id]) {
                 let evaluated = evaluator::eval_comptime_expr(expr, &module)?;
-                set_first_comptime_expr(module.functions.get_mut(&function_id).unwrap(), evaluated);
+                set_first_comptime_expr(ctx, module.functions.get_mut(&function_id).unwrap(), evaluated);
             }
         }
 
@@ -244,80 +284,90 @@ impl Module {
 }
 
 #[derive(Debug)]
-pub struct Function {
+pub struct Function<'ctx> {
     pub id: FunctionId,
     pub name: ast::Ident,
-    pub args: Vec<(String, Type)>,
-    pub return_ty: Type,
+    pub args: Vec<(String, Type<'ctx>)>,
+    pub return_ty: Type<'ctx>,
     pub is_variadic: bool,
     pub is_pure: bool,
-    pub body: Option<Expr>,
+    pub body: Option<Expr<'ctx>>,
 }
 
 #[derive(Debug)]
-pub struct Expr {
-    pub ty: Type,
+pub struct Expr<'ctx> {
+    pub ty: Type<'ctx>,
     pub span: Option<lex::Span>,
-    pub kind: ExprKind,
+    pub kind: ExprKind<'ctx>,
 }
 
 #[derive(Debug)]
-pub struct Place {
-    pub ty: Type,
+pub struct Place<'ctx> {
+    pub ty: Type<'ctx>,
     pub span: Option<lex::Span>,
-    pub kind: PlaceKind,
+    pub kind: PlaceKind<'ctx>,
 }
 
-impl Place {
-    pub const DUMMY: Self = Self {
-        ty: Type::Never,
-        span: None,
-        kind: PlaceKind::Variable(VariableId::DUMMY),
-    };
+impl<'ctx> Place<'ctx> {
+    pub fn dummy(ctx: Context<'ctx>) -> Self {
+        Self {
+            ty: ctx.types().unit,
+            span: None,
+            kind: PlaceKind::Variable(VariableId::DUMMY),
+        }
+    }
+
+    fn var(var: VariableId, ty: Type<'ctx>) -> Self {
+        Self {
+            ty,
+            span: None,
+            kind: PlaceKind::Variable(var),
+        }
+    }
 }
 
 #[derive(Debug)]
-pub enum ExprKind {
-    Const(Constant),
+pub enum ExprKind<'ctx> {
+    Const(Constant<'ctx>),
     ConstString(String),
 
-    Load(Place),
-    Field(Box<Expr>, String),
-    ArrayElement(Box<Expr>, Box<Expr>),
+    Load(Place<'ctx>),
+    Field(Box<Expr<'ctx>>, StructFieldId),
+    ArrayElement(Box<Expr<'ctx>>, Box<Expr<'ctx>>),
 
-    Store(Place, Box<Expr>),
-    GetPointer(Place),
+    Store(Place<'ctx>, Box<Expr<'ctx>>),
+    GetPointer(Place<'ctx>),
 
     Argument(usize),
-    Block(BlockExpr),
-    Return(Box<Expr>),
-    Break(LoopId, Box<Expr>),
+    Block(BlockExpr<'ctx>),
+    Return(Box<Expr<'ctx>>),
+    Break(LoopId, Box<Expr<'ctx>>),
     Continue(LoopId),
-    Arithmetic(ArithmeticOp, Box<Expr>, Box<Expr>),
-    InPlaceArithmetic(ArithmeticOp, Place, Box<Expr>),
-    Cmp(CmpOp, Box<Expr>, Box<Expr>),
-    If { cond: Box<Expr>, if_true: Box<Expr>, if_false: Box<Expr> },
-    Loop(LoopId, Box<Expr>),
-    ArrayInitializer(Vec<Expr>),
-    StructInitializer(Vec<(String, Expr)>),
-    FunctionCall(FunctionId, Vec<Expr>),
-    Cast(Box<Expr>),
-    Not(Box<Expr>),
-    Comptime(Box<Expr>),
+    Arithmetic(ArithmeticOp, Box<Expr<'ctx>>, Box<Expr<'ctx>>),
+    InPlaceArithmetic(ArithmeticOp, Place<'ctx>, Box<Expr<'ctx>>),
+    Cmp(CmpOp, Box<Expr<'ctx>>, Box<Expr<'ctx>>),
+    If { cond: Box<Expr<'ctx>>, if_true: Box<Expr<'ctx>>, if_false: Box<Expr<'ctx>> },
+    Loop(LoopId, Box<Expr<'ctx>>),
+    ArrayInitializer(Vec<Expr<'ctx>>),
+    StructInitializer(Vec<(StructFieldId, Expr<'ctx>)>),
+    FunctionCall(FunctionId, Vec<Expr<'ctx>>),
+    Cast(Box<Expr<'ctx>>),
+    Not(Box<Expr<'ctx>>),
+    Comptime(Box<Expr<'ctx>>),
 }
 
 #[derive(Debug)]
-pub enum PlaceKind {
-    Dereference(Box<Expr>),
+pub enum PlaceKind<'ctx> {
+    Dereference(Box<Expr<'ctx>>),
     Variable(VariableId),
-    Field(Box<Place>, String),
-    ArrayElement(Box<Place>, Box<Expr>),
+    Field(Box<Place<'ctx>>, StructFieldId),
+    ArrayElement(Box<Place<'ctx>>, Box<Expr<'ctx>>),
 }
 
 #[derive(Debug, Clone)]
-pub enum Constant {
-    Undefined(Type),
-    Null(Option<TypeId>),
+pub enum Constant<'ctx> {
+    Undefined(Type<'ctx>),
+    Null(Type<'ctx>),
     Unit,
     Bool(bool),
     I8(i8),
@@ -326,28 +376,22 @@ pub enum Constant {
     U32(u32),
     I64(i64),
     U64(u64),
-    Array(TypeId, Vec<Self>),
-    Struct(StructId, Vec<Self>),
+    Array(Type<'ctx>, Vec<Self>),
+    Struct(Type<'ctx>, Vec<Self>),
 }
 
-impl Constant {
-    pub fn ty(&self) -> Type {
+impl<'ctx> Constant<'ctx> {
+    pub fn ty(&self, ctx: Context<'ctx>) -> Type<'ctx> {
         match self {
-            Self::Undefined(ty) => *ty,
-            Self::Null(ty) => Type::Ptr { pointee: *ty },
-            Self::Unit => Type::Unit,
-            Self::Bool(_) => Type::Bool,
-            Self::I8(_) => Type::Int(IntType::I8),
-            Self::U8(_) => Type::Int(IntType::U8),
-            Self::I32(_) => Type::Int(IntType::I32),
-            Self::U32(_) => Type::Int(IntType::U32),
-            Self::I64(_) => Type::Int(IntType::I64),
-            Self::U64(_) => Type::Int(IntType::U64),
-            Self::Array(element_ty, elements) => Type::Array {
-                element: *element_ty,
-                length: elements.len() as u64,
-            },
-            Self::Struct(struct_id, _) => Type::Struct(*struct_id),
+            Self::Undefined(ty) | Self::Null(ty) | Self::Array(ty, _) | Self::Struct(ty, _) => *ty,
+            Self::Unit => ctx.types().unit,
+            Self::Bool(_) => ctx.types().bool,
+            Self::I8(_) => ctx.types().i8,
+            Self::U8(_) => ctx.types().u8,
+            Self::I32(_) => ctx.types().i32,
+            Self::U32(_) => ctx.types().u32,
+            Self::I64(_) => ctx.types().i64,
+            Self::U64(_) => ctx.types().u64,
         }
     }
 
@@ -365,26 +409,28 @@ impl Constant {
 }
 
 #[derive(Debug)]
-pub struct BlockExpr {
-    pub variables: Vec<VariableDeclaration>,
-    pub exprs: Vec<Expr>,
+pub struct BlockExpr<'ctx> {
+    pub variables: Vec<VariableDeclaration<'ctx>>,
+    pub exprs: Vec<Expr<'ctx>>,
 }
 
 #[derive(Debug)]
-pub struct VariableDeclaration {
+pub struct VariableDeclaration<'ctx> {
     pub id: VariableId,
-    pub ty: Type,
+    pub ty: Type<'ctx>,
     pub debug_name: String,
 }
 
-impl Expr {
-    const UNIT: Self = Self {
-        ty: Type::Unit,
-        span: None,
-        kind: ExprKind::Const(Constant::Unit),
-    };
+impl<'ctx> Expr<'ctx> {
+    pub fn unit(ctx: Context<'ctx>) -> Self {
+        Self {
+            ty: ctx.types().unit,
+            span: None,
+            kind: ExprKind::Const(Constant::Unit),
+        }
+    }
 
-    pub fn into_place(self) -> Option<Place> {
+    pub fn into_place(self) -> Option<Place<'ctx>> {
         match self.kind {
             ExprKind::Load(place) => Some(place),
             ExprKind::Field(place, field) => Some(Place {
@@ -420,13 +466,13 @@ impl Expr {
         }
     }
 
-    pub fn expect_place(self) -> Result<Place, Error> {
+    pub fn expect_place(self) -> Result<Place<'ctx>, Error> {
         let span = self.span.unwrap();
         self.into_place()
             .ok_or_else(|| Error::new("expected a place expression").with_span(span))
     }
 
-    fn get_var(var: VariableId, ty: Type) -> Self {
+    fn get_var(var: VariableId, ty: Type<'ctx>) -> Self {
         Self {
             ty,
             span: None,
@@ -434,9 +480,9 @@ impl Expr {
         }
     }
 
-    fn set_var(var: VariableId, expr: Expr) -> Self {
+    fn set_var(ctx: Context<'ctx>, var: VariableId, expr: Expr<'ctx>) -> Self {
         Self {
-            ty: Type::Unit,
+            ty: ctx.types().unit,
             span: None,
             kind: ExprKind::Store(
                 Place {
@@ -449,29 +495,19 @@ impl Expr {
         }
     }
 
-    fn new_const(constant: Constant) -> Self {
+    fn new_const(ctx: Context<'ctx>, constant: Constant<'ctx>) -> Self {
         Self {
-            ty: constant.ty(),
+            ty: constant.ty(ctx),
             span: None,
             kind: ExprKind::Const(constant),
         }
     }
 
-    fn const_bool(bool: bool) -> Self {
+    fn const_bool(ctx: Context<'ctx>, bool: bool) -> Self {
         Self {
-            ty: Type::Bool,
+            ty: ctx.types().bool,
             span: None,
             kind: ExprKind::Const(Constant::Bool(bool)),
-        }
-    }
-}
-
-impl Place {
-    fn var(var: VariableId, ty: Type) -> Self {
-        Self {
-            ty,
-            span: None,
-            kind: PlaceKind::Variable(var),
         }
     }
 }

@@ -1,116 +1,235 @@
-use std::num::NonZeroUsize;
-
 use super::*;
 use crate::ast;
 use crate::common::Layout;
+use crate::interning::{Interned, Interner};
 
-/// The set of data types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Type {
-    Never,
-    Unit,
-    Bool,
-    Int(IntType),
-    Struct(StructId),
-    Ptr { pointee: Option<TypeId> },
-    Array { element: TypeId, length: u64 },
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Type<'ctx>(pub Interned<'ctx, TypeInfo<'ctx>>);
 
-impl Type {
-    /// An opaque pointer type
-    pub const OPAQUE_PTR: Self = Self::Ptr { pointee: None };
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Struct<'ctx>(pub Interned<'ctx, StructInfo>);
 
-    /// A pointer to `i8` type
-    pub const I8_PTR: Self = Self::Ptr {
-        pointee: Some(TypeId::I8),
-    };
+impl<'ctx> Type<'ctx> {
+    pub fn new(interner: impl AsRef<Interner<'ctx, TypeInfo<'ctx>>>, info: TypeInfo<'ctx>) -> Self {
+        Self(interner.as_ref().intern(info))
+    }
 
-    /// Wrap this type in a pointer
-    pub fn make_ptr(self, typesystem: &mut TypeSystem) -> Self {
-        Self::Ptr {
-            pointee: Some(typesystem.get_type_id(self)),
+    pub fn info(self) -> &'ctx TypeInfo<'ctx> {
+        self.0.get()
+    }
+
+    pub fn layout(self, ctx: Context<'ctx>) -> Layout {
+        if let Some(layout) = ctx.get_type_layout_cached(self) {
+            return layout;
+        }
+        let layout = match self.info() {
+            TypeInfo::Never | TypeInfo::Unit => Layout { size: 0, align: 1 },
+            TypeInfo::Bool => Layout { size: 1, align: 1 },
+            TypeInfo::Int(i) => Layout {
+                size: i.bytes(),
+                align: i.bytes(),
+            },
+            TypeInfo::Struct {
+                struct_,
+                type_arguments,
+            } => {
+                // TODO: cache this
+                let mut size = 0u64;
+                let mut align = 1u64;
+                for (_, field_id) in &struct_.info().fields {
+                    let field_ty = ctx.type_of_struct_field(*field_id, type_arguments);
+                    let field_layout = field_ty.layout(ctx);
+                    size = size.next_multiple_of(field_layout.align);
+                    align = align.max(field_layout.align);
+                    size += field_layout.size;
+                }
+                size = size.next_multiple_of(align);
+                Layout { size, align }
+            }
+            TypeInfo::Ptr { pointee: _ } => Layout {
+                size: ctx.ptr_size(),
+                align: ctx.ptr_size(),
+            },
+            TypeInfo::Array { element_ty, length } => {
+                let element_layout = element_ty.layout(ctx);
+                Layout {
+                    size: element_layout.size * *length,
+                    align: element_layout.align,
+                }
+            }
+            TypeInfo::TypeParameter { .. } => panic!("cannot compute layout of a type parameter"),
+        };
+        ctx.cache_type_layout(self, layout);
+        layout
+    }
+
+    pub fn as_struct(self) -> Option<(Struct<'ctx>, &'ctx [Self])> {
+        match self.info() {
+            TypeInfo::Struct {
+                struct_,
+                type_arguments,
+            } => Some((*struct_, type_arguments)),
+            _ => None,
         }
     }
 
-    /// Returns `true` if this data type is an integer
-    pub fn is_int(self) -> bool {
-        matches!(self, Self::Int(_))
+    /// Returns `true` if this type is `never`
+    pub fn is_never(self) -> bool {
+        *self.info() == TypeInfo::Never
     }
 
-    /// Returns `true` if this data type is an pointer
+    /// Returns `true` if this type is `unit`
+    pub fn is_unit(self) -> bool {
+        *self.info() == TypeInfo::Unit
+    }
+
+    /// Returns `true` if this type is an integer
+    pub fn is_int(self) -> bool {
+        self.as_int().is_some()
+    }
+
+    /// Returns `true` if this type is an integer that is signed
+    pub fn is_signed_int(self) -> bool {
+        matches!(self.info(), TypeInfo::Int(i) if i.is_signed())
+    }
+
+    /// Returns `true` if this data type is a pointer
     pub fn is_ptr(self) -> bool {
-        matches!(self, Self::Ptr { .. })
+        matches!(self.info(), TypeInfo::Ptr { .. })
+    }
+
+    /// Returns `true` if this data type is a boolean
+    pub fn is_bool(self) -> bool {
+        *self.info() == TypeInfo::Bool
     }
 
     /// Returns the `IntType` of this type if it is an integer
     pub fn as_int(self) -> Option<IntType> {
-        match self {
-            Self::Int(i) => Some(i),
+        match self.info() {
+            TypeInfo::Int(i) => Some(*i),
             _ => None,
         }
     }
 
-    /// Returns the `StructId` of this type if it is a struct
-    pub fn as_struct(self) -> Option<StructId> {
-        match self {
-            Self::Struct(s) => Some(s),
+    /// Returns the array element type and array length, if this is an array type
+    pub fn as_array(self) -> Option<(Type<'ctx>, u64)> {
+        match self.info() {
+            TypeInfo::Array {
+                element_ty: element,
+                length,
+            } => Some((*element, *length)),
             _ => None,
         }
     }
 
-    /// Returns `true` if this data type is an integer that is signed
-    pub fn is_signed_int(self) -> bool {
-        matches!(self, Self::Int(i) if i.is_signed())
-    }
-
-    /// Returns the type ID of the array's element, or None if not an array
-    pub fn array_element_type_id(self) -> Option<TypeId> {
-        match self {
-            Self::Array { element, length: _ } => Some(element),
-            _ => None,
-        }
-    }
-
-    /// Returns the type of the array's element, or None if not an array
-    pub fn array_element_type(self, typesystem: &TypeSystem) -> Option<Self> {
-        self.array_element_type_id().map(|id| typesystem.get_type(id))
-    }
-
-    /// Returns the byte offset of the struct's field
-    pub fn get_field_offset(self, name: &str, typesystem: &TypeSystem) -> Option<u64> {
-        match self {
-            Self::Struct(struct_id) => typesystem
-                .get_struct(struct_id)
-                .fields
-                .iter()
-                .find(|f| f.name.value == name)
-                .map(|f| f.offset.unwrap()),
-            _ => None,
-        }
-    }
-
-    /// Get physical layout of this type
-    pub fn layout(self, typesystem: &TypeSystem) -> Layout {
-        match self {
-            Self::Never | Self::Unit => Layout { size: 0, align: 1 },
-            Self::Bool => Layout { size: 1, align: 1 },
-            Self::Int(i) => Layout {
-                size: i.bytes(),
-                align: i.bytes(),
-            },
-            Self::Ptr { pointee: _ } => Layout {
-                size: typesystem.ptr_size,
-                align: typesystem.ptr_size,
-            },
-            Self::Struct(sid) => typesystem.get_struct(sid).layout.unwrap(),
-            Self::Array { element, length } => {
-                let mut layout = typesystem.get_type(element).layout(typesystem);
-                layout.size = layout.size.next_multiple_of(layout.align);
-                layout.size *= length;
-                layout
+    pub fn instantiate(self, ctx: Context<'ctx>, struct_owner: Struct<'ctx>, type_arguments: &[Self]) -> Self {
+        match self.info() {
+            TypeInfo::Never | TypeInfo::Unit | TypeInfo::Bool | TypeInfo::Int(_) => self,
+            TypeInfo::Struct {
+                struct_,
+                type_arguments: args,
+            } => Type::new(
+                ctx,
+                TypeInfo::Struct {
+                    struct_: *struct_,
+                    type_arguments: args
+                        .iter()
+                        .map(|ty| ty.instantiate(ctx, struct_owner, type_arguments))
+                        .collect(),
+                },
+            ),
+            TypeInfo::Ptr { pointee } => Type::new(
+                ctx,
+                TypeInfo::Ptr {
+                    pointee: pointee.map(|ty| ty.instantiate(ctx, struct_owner, type_arguments)),
+                },
+            ),
+            TypeInfo::Array { element_ty, length } => Type::new(
+                ctx,
+                TypeInfo::Array {
+                    element_ty: element_ty.instantiate(ctx, struct_owner, type_arguments),
+                    length: *length,
+                },
+            ),
+            TypeInfo::TypeParameter { name: _, owner, index } => {
+                if *owner == struct_owner {
+                    type_arguments[*index]
+                } else {
+                    self
+                }
             }
         }
     }
+
+    pub fn render(self) -> String {
+        let mut retval = String::new();
+        self.render_into(&mut retval);
+        retval
+    }
+
+    pub fn render_into(self, output: &mut String) {
+        use std::fmt::Write;
+        match self.info() {
+            TypeInfo::Never => output.push('!'),
+            TypeInfo::Unit => output.push_str("unit"),
+            TypeInfo::Bool => output.push_str("bool"),
+            TypeInfo::Int(int_type) => output.push_str(match int_type {
+                IntType::I8 => "i8",
+                IntType::U8 => "u8",
+                IntType::I32 => "i32",
+                IntType::U32 => "u32",
+                IntType::I64 => "i64",
+                IntType::U64 => "u64",
+            }),
+            TypeInfo::Struct {
+                struct_,
+                type_arguments,
+            } => {
+                output.push_str(&struct_.info().name.value);
+                if !type_arguments.is_empty() {
+                    output.push('<');
+                    for (i, type_arg) in type_arguments.iter().enumerate() {
+                        type_arg.render_into(output);
+                        if i + 1 != type_arguments.len() {
+                            output.push_str(", ");
+                        }
+                    }
+                    output.push('>');
+                }
+            }
+            TypeInfo::Ptr { pointee: None } => output.push_str("ptr"),
+            TypeInfo::Ptr { pointee: Some(pointee) } => {
+                output.push('*');
+                pointee.render_into(output);
+            }
+            TypeInfo::Array { element_ty, length } => {
+                output.push('[');
+                element_ty.render_into(output);
+                write!(output, "; {length}]").unwrap();
+            }
+            TypeInfo::TypeParameter { name, owner, index: _ } => {
+                write!(output, "`{name} of {}`", owner.info().name.value).unwrap()
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TypeConstructor<'ctx> {
+    NonGeneric(Type<'ctx>),
+    Struct(Struct<'ctx>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeInfo<'ctx> {
+    Never,
+    Unit,
+    Bool,
+    Int(IntType),
+    Struct { struct_: Struct<'ctx>, type_arguments: Vec<Type<'ctx>> },
+    Ptr { pointee: Option<Type<'ctx>> },
+    Array { element_ty: Type<'ctx>, length: u64 },
+    TypeParameter { name: String, owner: Struct<'ctx>, index: usize },
 }
 
 /// Integer data type
@@ -143,199 +262,211 @@ impl IntType {
     }
 }
 
-/// The ID of a structure type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StructId(NonZeroUsize);
+impl<'ctx> Struct<'ctx> {
+    pub fn info(self) -> &'ctx StructInfo {
+        self.0.get()
+    }
+
+    pub fn get_field_name(self, field_id: StructFieldId) -> &'ctx ast::Ident {
+        &self.info().fields.iter().find(|f| f.1 == field_id).unwrap().0
+    }
+
+    pub fn reject_recursive_without_indirection(self, ctx: Context<'ctx>) -> Result<(), Error> {
+        #[derive(Debug)]
+        struct PathEntry<'ctx> {
+            struct_: Struct<'ctx>,
+            predecessor: Option<StructFieldId>,
+        }
+
+        fn visit<'ctx>(
+            ctx: Context<'ctx>,
+            path: &mut Vec<PathEntry<'ctx>>,
+            this: Struct<'ctx>,
+            predecessor: Option<StructFieldId>,
+        ) -> Result<(), usize> {
+            path.push(PathEntry {
+                struct_: this,
+                predecessor,
+            });
+
+            let i = path.iter().position(|x| x.struct_ == this).unwrap();
+            if i + 1 != path.len() {
+                return Err(i);
+            }
+
+            for (_, field_id) in &this.info().fields {
+                visit_ty(
+                    ctx,
+                    path,
+                    ctx.type_of_struct_field_uninstantiated(*field_id),
+                    Some(*field_id),
+                )?;
+            }
+
+            path.pop();
+
+            Ok(())
+        }
+
+        fn visit_ty<'ctx>(
+            ctx: Context<'ctx>,
+            path: &mut Vec<PathEntry<'ctx>>,
+            this: Type<'ctx>,
+            predecessor: Option<StructFieldId>,
+        ) -> Result<(), usize> {
+            match this.info() {
+                TypeInfo::Never
+                | TypeInfo::Unit
+                | TypeInfo::Bool
+                | TypeInfo::Int(_)
+                | TypeInfo::Ptr { .. }
+                | TypeInfo::TypeParameter { .. } => (),
+                TypeInfo::Struct {
+                    struct_,
+                    type_arguments,
+                } => {
+                    visit(ctx, path, *struct_, predecessor)?;
+                    for ty in type_arguments {
+                        visit_ty(ctx, path, *ty, predecessor)?;
+                    }
+                }
+                TypeInfo::Array { element_ty, length: _ } => {
+                    visit_ty(ctx, path, *element_ty, predecessor)?;
+                }
+            }
+            Ok(())
+        }
+
+        let mut path = Vec::new();
+        match visit(ctx, &mut path, self, None) {
+            Ok(()) => Ok(()),
+            Err(i) => {
+                let path = &path[i..];
+                let struct_ = path[0].struct_;
+                let span = struct_.get_field_name(path[1].predecessor.unwrap()).span;
+                let mut msg = format!(
+                    "recursive struct definition without indirection (cycle detected): {}",
+                    struct_.info().name.value,
+                );
+                for [before, entry] in path.array_windows() {
+                    use std::fmt::Write;
+                    let field_name = before.struct_.get_field_name(entry.predecessor.unwrap());
+                    write!(msg, ".{} -> {}", field_name.value, entry.struct_.info().name.value).unwrap();
+                }
+                Err(Error::new(msg).with_span(span))
+            }
+        }
+    }
+}
 
 /// A description of a structure
-#[derive(Debug)]
-pub struct Struct {
+#[derive(Debug, Hash, PartialEq, Eq)]
+pub struct StructInfo {
     pub name: ast::Ident,
-    pub fields: Vec<StructField>,
-    pub layout: Option<Layout>, // None during IR_TREE construction
+    pub type_parameters: usize,
+    pub fields: Vec<(ast::Ident, StructFieldId)>,
 }
 
-/// A field of a struct definition
-#[derive(Debug)]
-pub struct StructField {
-    pub name: ast::Ident,
-    pub ty: Type,
-    pub offset: Option<u64>, // None during IR_TREE construction
-}
-
-/// The ID of a type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TypeId(usize);
-
-impl TypeId {
-    /// A well-known id of `i8`
-    pub const I8: Self = Self(0);
-}
-
-/// Store the state of the type system
-#[derive(Debug)]
-pub struct TypeSystem {
-    ptr_size: u64,
-    structs: Vec<Option<Struct>>,
-    types_with_ids: Vec<Type>,
-    type_lut: HashMap<Type, TypeId>,
-}
-
-impl TypeSystem {
-    /// Create a new type system context. Generally there should be only one context created.
-    pub fn new(ptr_size: u64) -> Self {
-        Self {
-            ptr_size,
-            structs: vec![None], // Dummy zero'th struct
-            types_with_ids: vec![Type::Int(IntType::I8)],
-            type_lut: [(Type::Int(IntType::I8), TypeId::I8)].into_iter().collect(),
-        }
-    }
-
-    /// Allocate the next struct ID. The struct must be then defined via `define_struct` for the ID to be usable.
-    pub fn alloc_struct_id(&mut self) -> StructId {
-        let id = StructId(NonZeroUsize::new(self.structs.len()).unwrap());
-        self.structs.push(None);
-        id
-    }
-
-    /// Define the structure
-    ///
-    /// # Panics
-    ///
-    /// Panics if called more than once for the same ID.
-    pub fn define_struct(&mut self, id: StructId, def: Struct) {
-        if self.structs[id.0.get()].is_some() {
-            panic!("define_struct() called twice with the same ID");
-        }
-
-        self.structs[id.0.get()] = Some(def);
-    }
-
-    /// Resolve the layout of a struct, recursively resolving layouts as needed.
-    pub fn resolve_layout(&mut self, ty: Type, path_stack: &mut Vec<Type>) -> Result<(), Error> {
-        path_stack.push(ty);
-
-        if let Some(i) = path_stack.iter().position(|x| *x == ty)
-            && i + 1 != path_stack.len()
-        {
-            use std::fmt::Write;
-            let mut msg = String::from("could not resolve type layout, dependency cycle detected: ");
-            for (entry_i, entry) in path_stack[i..].iter().enumerate() {
-                if entry_i != 0 {
-                    msg.push_str(" -> ");
+/// Parse type from its AST representation
+pub fn type_from_ast<'ctx>(
+    ctx: Context<'ctx>,
+    types_scope: &TypesScope<'ctx>,
+    ast: &ast::Type,
+) -> Result<Type<'ctx>, Error> {
+    Ok(match ast {
+        ast::Type::Never(_) => ctx.types().never,
+        ast::Type::Ident { ident, type_arguments } => {
+            let ty_constructor = types_scope
+                .lookup(&ident.value)
+                .ok_or_else(|| Error::new(format!("unknown type {:?}", ident.value)).with_span(ident.span))?;
+            match ty_constructor {
+                TypeConstructor::NonGeneric(ty) => {
+                    if let Some(type_arguments) = type_arguments
+                        && !type_arguments.arguments.is_empty()
+                    {
+                        return Err(
+                            Error::new(format!("type {:?} is not generic", ident.value)).with_span(type_arguments.span)
+                        );
+                    }
+                    ty
                 }
-                write!(msg, "{entry:?}").unwrap();
+                TypeConstructor::Struct(struct_) => {
+                    let type_arguments = type_arguments.as_ref().ok_or_else(|| {
+                        Error::new(format!("type {:?} is generic, expected type arguments", ident.value))
+                            .with_span(ident.span)
+                    })?;
+                    if type_arguments.arguments.len() != struct_.info().type_parameters {
+                        return Err(Error::new(format!(
+                            "type {:?} has {} type parameters, but got {}",
+                            ident.value,
+                            struct_.info().type_parameters,
+                            type_arguments.arguments.len(),
+                        ))
+                        .with_span(type_arguments.span));
+                    }
+                    let type_arguments = type_arguments
+                        .arguments
+                        .iter()
+                        .map(|arg| type_from_ast(ctx, types_scope, arg))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Type::new(
+                        ctx,
+                        TypeInfo::Struct {
+                            struct_,
+                            type_arguments,
+                        },
+                    )
+                }
             }
-            let span = match path_stack.first().unwrap() {
-                Type::Struct(struct_id) => self.get_struct(*struct_id).name.span,
-                Type::Never | Type::Unit | Type::Bool | Type::Int(_) | Type::Ptr { .. } | Type::Array { .. } => {
-                    unreachable!()
-                }
+        }
+        ast::Type::Ptr { star_span: _, pointee } => {
+            let pointee = type_from_ast(ctx, types_scope, pointee)?;
+            Type::new(ctx, TypeInfo::Ptr { pointee: Some(pointee) })
+        }
+        ast::Type::Array {
+            element_type,
+            length,
+            span: _,
+        } => {
+            let element_ty = type_from_ast(ctx, types_scope, element_type)?;
+            let length = match &**length {
+                ast::Expr::Literal(ast::LiteralExpr {
+                    span: _,
+                    value: ast::LiteralExprValue::Number(num, _),
+                }) => *num as u64,
+                _ => return Err(Error::new("array length must be a number literal").with_span(length.span())),
             };
-            return Err(Error::new(msg).with_span(span));
+            Type::new(ctx, TypeInfo::Array { element_ty, length })
         }
+    })
+}
 
-        match ty {
-            Type::Struct(struct_id) => {
-                let field_layouts = self
-                    .get_struct(struct_id)
-                    .fields
-                    .iter()
-                    .map(|f| f.ty)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .map(|ty| {
-                        self.resolve_layout(ty, path_stack)?;
-                        Ok(ty.layout(self))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+#[derive(Default)]
+pub struct TypesScope<'ctx> {
+    pub by_name: HashMap<String, TypeConstructor<'ctx>>,
+    parent: Option<Box<Self>>,
+}
 
-                let s = self.structs[struct_id.0.get()].as_mut().unwrap();
-                let mut size = 0u64;
-                let mut align = 1;
-                for (field, layout) in s.fields.iter_mut().zip(field_layouts) {
-                    size = size.next_multiple_of(layout.align);
-                    align = align.max(layout.align);
-                    field.offset = Some(size);
-                    size += layout.size;
-                }
-                s.layout = Some(Layout { size, align });
-            }
-            Type::Array { element, length: _ } => {
-                self.resolve_layout(self.get_type(element), path_stack)?;
-            }
-            Type::Never | Type::Unit | Type::Bool | Type::Int(_) | Type::Ptr { .. } => (),
-        }
-
-        path_stack.pop();
-
-        Ok(())
+impl<'ctx> TypesScope<'ctx> {
+    /// Create a nested scope
+    pub fn push(&mut self) {
+        let parent = std::mem::take(self);
+        self.parent = Some(Box::new(parent));
     }
 
-    /// Returns the target pointer size
-    pub fn ptr_size(&self) -> u64 {
-        self.ptr_size
+    /// Pop the latest nested scope
+    pub fn pop(&mut self) {
+        *self = *self.parent.take().unwrap();
     }
 
-    /// Get or create a type ID for the given type
-    pub fn get_type_id(&mut self, ty: Type) -> TypeId {
-        if let Some(id) = self.type_lut.get(&ty).copied() {
-            id
-        } else {
-            let id = TypeId(self.types_with_ids.len());
-            self.types_with_ids.push(ty);
-            self.type_lut.insert(ty, id);
-            id
+    /// Lookup a type by its name, recursively traversing the list of scopes
+    pub fn lookup(&self, name: &str) -> Option<TypeConstructor<'ctx>> {
+        if let Some(ty) = self.by_name.get(name) {
+            return Some(*ty);
         }
-    }
-
-    /// Parse type from its AST representation
-    pub fn type_from_ast(&mut self, type_namespace: &HashMap<String, Type>, ast: &ast::Type) -> Result<Type, Error> {
-        match ast {
-            ast::Type::Never(_) => Ok(Type::Never),
-            ast::Type::Ident(ident) => type_namespace
-                .get(&ident.value)
-                .copied()
-                .ok_or_else(|| Error::new(format!("unknown type {:?}", ident.value)).with_span(ident.span)),
-            ast::Type::Ptr { star_span: _, pointee } => Ok(self.type_from_ast(type_namespace, pointee)?.make_ptr(self)),
-            ast::Type::Array {
-                element_type,
-                length,
-                left_bracket_span: _,
-                right_bracket_span: _,
-            } => {
-                let element_type = self.type_from_ast(type_namespace, element_type)?;
-                let element_type_id = self.get_type_id(element_type);
-                let length = match &**length {
-                    ast::Expr::Literal(ast::LiteralExpr {
-                        span: _,
-                        value: ast::LiteralExprValue::Number(num, _),
-                    }) => *num as u64,
-                    _ => return Err(Error::new("array length must be a number literal").with_span(length.span())),
-                };
-                Ok(Type::Array {
-                    element: element_type_id,
-                    length,
-                })
-            }
+        if let Some(parent) = &self.parent {
+            return parent.lookup(name);
         }
-    }
-
-    /// Get a reference to the struct declaration
-    ///
-    /// # Panics
-    ///
-    /// Panics if called with an ID that was not yet defined via `define_struct`.
-    pub fn get_struct(&self, sid: StructId) -> &Struct {
-        match &self.structs[sid.0.get()] {
-            Some(def) => def,
-            None => panic!("get_struct called with ID that was not defined"),
-        }
-    }
-
-    /// Get the actual type by ID
-    pub fn get_type(&self, id: TypeId) -> Type {
-        self.types_with_ids[id.0]
+        None
     }
 }

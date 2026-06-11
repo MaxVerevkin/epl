@@ -4,20 +4,20 @@ mod arithmetic_and_cmp;
 mod const_abi;
 
 #[derive(Debug)]
-enum EvalError {
-    Return(Constant),
-    Break(LoopId, Constant),
+enum EvalError<'ctx> {
+    Return(Constant<'ctx>),
+    Break(LoopId, Constant<'ctx>),
     Continue(LoopId),
     Error(Error),
 }
 
-impl From<Error> for EvalError {
+impl From<Error> for EvalError<'_> {
     fn from(value: Error) -> Self {
         Self::Error(value)
     }
 }
 
-pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Error> {
+pub fn eval_comptime_expr<'ctx>(expr: &Expr<'ctx>, module: &Module<'ctx>) -> Result<Constant<'ctx>, Error> {
     let mut ctx = EvalCtx {
         module,
         in_function_call: None,
@@ -32,7 +32,11 @@ pub fn eval_comptime_expr(expr: &Expr, module: &Module) -> Result<Constant, Erro
     }
 }
 
-fn eval_pure_function(function_id: FunctionId, arguments: &[Constant], module: &Module) -> Result<Constant, Error> {
+fn eval_pure_function<'ctx>(
+    function_id: FunctionId,
+    arguments: &[Constant<'ctx>],
+    module: &Module<'ctx>,
+) -> Result<Constant<'ctx>, Error> {
     let function = &module.functions[&function_id];
     let body = function.body.as_ref().unwrap();
     let mut ctx = EvalCtx {
@@ -48,7 +52,7 @@ fn eval_pure_function(function_id: FunctionId, arguments: &[Constant], module: &
     }
 }
 
-impl Constant {
+impl Constant<'_> {
     pub fn into_bool(self) -> Option<bool> {
         match self {
             Self::Bool(b) => Some(b),
@@ -68,15 +72,15 @@ struct VariableMemory {
     bytes: Vec<u8>,
 }
 
-struct EvalCtx<'a> {
-    module: &'a Module,
-    in_function_call: Option<InFunctionCall<'a>>,
+struct EvalCtx<'a, 'ctx> {
+    module: &'a Module<'ctx>,
+    in_function_call: Option<InFunctionCall<'a, 'ctx>>,
     scope: Scope,
 }
 
 #[derive(Clone, Copy)]
-struct InFunctionCall<'a> {
-    arguments: &'a [Constant],
+struct InFunctionCall<'a, 'ctx> {
+    arguments: &'a [Constant<'ctx>],
 }
 
 #[derive(Default, Debug)]
@@ -93,21 +97,21 @@ impl Scope {
     }
 }
 
-impl EvalCtx<'_> {
-    fn load(&mut self, place: ConstantPlace, ty: Type) -> Constant {
+impl<'ctx> EvalCtx<'_, 'ctx> {
+    fn load(&mut self, place: ConstantPlace, ty: Type<'ctx>) -> Constant<'ctx> {
         let mem = self.scope.get_variable(place.variable).unwrap();
-        let layout = ty.layout(&self.module.typesystem);
+        let layout = ty.layout(self.module.ctx);
         let bytes = &mem.bytes[place.bytes_offset..][..layout.size as usize];
-        const_abi::constant_from_bytes(bytes, ty, &self.module.typesystem)
+        const_abi::constant_from_bytes(self.module.ctx, bytes, ty)
     }
 
-    fn store(&mut self, place: ConstantPlace, value: &Constant) {
+    fn store(&mut self, place: ConstantPlace, value: &Constant<'ctx>) {
         let mem = self.scope.get_variable(place.variable).unwrap();
-        let bytes = const_abi::constant_to_bytes(value, &self.module.typesystem);
+        let bytes = const_abi::constant_to_bytes(self.module.ctx, value);
         mem.bytes[place.bytes_offset..][..bytes.len()].copy_from_slice(&bytes);
     }
 
-    fn eval_expr(&mut self, expr: &Expr) -> Result<Constant, EvalError> {
+    fn eval_expr(&mut self, expr: &Expr<'ctx>) -> Result<Constant<'ctx>, EvalError<'ctx>> {
         Ok(match &expr.kind {
             ExprKind::Const(value) => value.clone(),
             ExprKind::ConstString(_) => panic!("constant strings are not pure operations"),
@@ -115,20 +119,14 @@ impl EvalCtx<'_> {
                 let place_value = self.eval_place(place)?;
                 self.load(place_value, expr.ty)
             }
-            ExprKind::Field(struct_expr, field_name) => {
-                let (struct_id, mut fields) = match self.eval_expr(struct_expr)? {
-                    Constant::Struct(struct_id, fields) => (struct_id, fields),
+            ExprKind::Field(struct_expr, field_id) => {
+                let (struct_ty, mut fields) = match self.eval_expr(struct_expr)? {
+                    Constant::Struct(ty, fields) => (ty, fields),
                     _ => unreachable!(),
                 };
-                let field_index = self
-                    .module
-                    .typesystem
-                    .get_struct(struct_id)
-                    .fields
-                    .iter()
-                    .position(|f| f.name.value == *field_name)
-                    .unwrap();
-                fields.remove(field_index)
+                let (struct_, _type_arguments) = struct_ty.as_struct().unwrap();
+                let field_index = struct_.info().fields.iter().position(|f| f.1 == *field_id).unwrap();
+                fields.swap_remove(field_index)
             }
             ExprKind::ArrayElement(expr, index) => {
                 let mut elements = match self.eval_expr(expr)? {
@@ -161,7 +159,7 @@ impl EvalCtx<'_> {
                                 (
                                     decl.id,
                                     VariableMemory {
-                                        bytes: vec![0; decl.ty.layout(&self.module.typesystem).size as usize],
+                                        bytes: vec![0; decl.ty.layout(self.module.ctx).size as usize],
                                     },
                                 )
                             })
@@ -231,19 +229,19 @@ impl EvalCtx<'_> {
                     .iter()
                     .map(|expr| self.eval_expr(expr))
                     .collect::<Result<Vec<_>, _>>()?;
-                Constant::Array(expr.ty.array_element_type_id().unwrap(), elements)
+                Constant::Array(expr.ty, elements)
             }
             ExprKind::StructInitializer(fields_exprs) => {
                 let mut fields_constants = HashMap::new();
-                for (field_name, field_expr) in fields_exprs {
-                    fields_constants.insert(&**field_name, self.eval_expr(field_expr)?);
+                for (field_id, field_expr) in fields_exprs {
+                    fields_constants.insert(*field_id, self.eval_expr(field_expr)?);
                 }
                 let mut fields_in_order = Vec::new();
-                let struct_id = expr.ty.as_struct().unwrap();
-                for field_def in &self.module.typesystem.get_struct(struct_id).fields {
-                    fields_in_order.push(fields_constants.remove(&*field_def.name.value).unwrap());
+                let (struct_, _type_arguments) = expr.ty.as_struct().unwrap();
+                for (_, field_id) in &struct_.info().fields {
+                    fields_in_order.push(fields_constants.remove(field_id).unwrap());
                 }
-                Constant::Struct(struct_id, fields_in_order)
+                Constant::Struct(expr.ty, fields_in_order)
             }
             ExprKind::FunctionCall(function_id, arguments) => {
                 assert!(
@@ -262,38 +260,26 @@ impl EvalCtx<'_> {
         })
     }
 
-    fn eval_place(&mut self, place_expr: &Place) -> Result<ConstantPlace, EvalError> {
+    fn eval_place(&mut self, place_expr: &Place<'ctx>) -> Result<ConstantPlace, EvalError<'ctx>> {
         Ok(match &place_expr.kind {
             PlaceKind::Dereference(_) => panic!("dereference is not a pure operation"),
             PlaceKind::Variable(variable_id) => ConstantPlace {
                 variable: *variable_id,
                 bytes_offset: 0,
             },
-            PlaceKind::Field(struct_place, field) => {
+            PlaceKind::Field(struct_place, field_id) => {
                 let struct_place_value = self.eval_place(struct_place)?;
-                let field_offset = self
-                    .module
-                    .typesystem
-                    .get_struct(struct_place.ty.as_struct().unwrap())
-                    .fields
-                    .iter()
-                    .find(|f| f.name.value == *field)
-                    .unwrap()
-                    .offset;
+                let (_, type_arguments) = struct_place.ty.as_struct().unwrap();
+                let field_offset = self.module.ctx.offset_of_struct_field(*field_id, type_arguments);
                 ConstantPlace {
                     variable: struct_place_value.variable,
-                    bytes_offset: struct_place_value.bytes_offset + field_offset.unwrap() as usize,
+                    bytes_offset: struct_place_value.bytes_offset + field_offset as usize,
                 }
             }
             PlaceKind::ArrayElement(array_place, index_expr) => {
                 let array_place_value = self.eval_place(array_place)?;
                 let index_value = self.eval_expr(index_expr)?;
-                let element_size = array_place
-                    .ty
-                    .array_element_type(&self.module.typesystem)
-                    .unwrap()
-                    .layout(&self.module.typesystem)
-                    .size;
+                let element_size = array_place.ty.as_array().unwrap().0.layout(self.module.ctx).size;
                 let offset = match index_value {
                     Constant::U64(index) => index * element_size,
                     _ => panic!("index value must be of type u64"),

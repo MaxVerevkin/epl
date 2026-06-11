@@ -1,64 +1,64 @@
-fn vec2_add(lhs: StructId(1), rhs: StructId(1)) -> StructId(1)
-    BLOCK TYPE=StructId(1)
-    |   DECLARE var_1 "lhs" : StructId(1)
-    |   DECLARE var_2 "rhs" : StructId(1)
+fn vec2_add(lhs: Vec2, rhs: Vec2) -> Vec2
+    BLOCK TYPE=Vec2
+    |   DECLARE var_1 "lhs" : Vec2
+    |   DECLARE var_2 "rhs" : Vec2
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
-    |   |   ARGUMENT("lhs") TYPE=StructId(1)
+    |   |   VARIABLE(var_1) [PLACE] TYPE=Vec2
+    |   |   ARGUMENT("lhs") TYPE=Vec2
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_2) [PLACE] TYPE=StructId(1)
-    |   |   ARGUMENT("rhs") TYPE=StructId(1)
-    |   BLOCK TYPE=StructId(1)
+    |   |   VARIABLE(var_2) [PLACE] TYPE=Vec2
+    |   |   ARGUMENT("rhs") TYPE=Vec2
+    |   BLOCK TYPE=Vec2
     |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   FIELD("x") [PLACE] TYPE=i32
-    |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
-    |   |   |   FIELD_ACCESS(x) TYPE=i32
-    |   |   |   |   LOAD TYPE=StructId(1)
-    |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=StructId(1)
+    |   |   |   FIELD(x) [PLACE] TYPE=i32
+    |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=Vec2
+    |   |   |   FIELD(x) TYPE=i32
+    |   |   |   |   LOAD TYPE=Vec2
+    |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=Vec2
     |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   FIELD("y") [PLACE] TYPE=i32
-    |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
-    |   |   |   FIELD_ACCESS(y) TYPE=i32
-    |   |   |   |   LOAD TYPE=StructId(1)
-    |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=StructId(1)
-    |   |   LOAD TYPE=StructId(1)
-    |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   |   FIELD(y) [PLACE] TYPE=i32
+    |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=Vec2
+    |   |   |   FIELD(y) TYPE=i32
+    |   |   |   |   LOAD TYPE=Vec2
+    |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=Vec2
+    |   |   LOAD TYPE=Vec2
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=Vec2
 
-fn vec2_print(vec: StructId(1)) -> unit
+fn vec2_print(vec: Vec2) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_3 "vec" : StructId(1)
+    |   DECLARE var_3 "vec" : Vec2
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_3) [PLACE] TYPE=StructId(1)
-    |   |   ARGUMENT("vec") TYPE=StructId(1)
+    |   |   VARIABLE(var_3) [PLACE] TYPE=Vec2
+    |   |   ARGUMENT("vec") TYPE=Vec2
     |   FUNCTION_CALL("printf") TYPE=unit
     |   |   CONST_STRING("Vec2 .{ x: %i, y: %i }\n") TYPE=*i8
-    |   |   FIELD_ACCESS(x) TYPE=i32
-    |   |   |   LOAD TYPE=StructId(1)
-    |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=StructId(1)
-    |   |   FIELD_ACCESS(y) TYPE=i32
-    |   |   |   LOAD TYPE=StructId(1)
-    |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=StructId(1)
+    |   |   FIELD(x) TYPE=i32
+    |   |   |   LOAD TYPE=Vec2
+    |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=Vec2
+    |   |   FIELD(y) TYPE=i32
+    |   |   |   LOAD TYPE=Vec2
+    |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=Vec2
 
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_4 "vec" : StructId(1)
+    |   DECLARE var_4 "vec" : Vec2
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_4) [PLACE] TYPE=StructId(1)
-    |   |   STRUCT_INITIALIZER TYPE=StructId(1)
+    |   |   VARIABLE(var_4) [PLACE] TYPE=Vec2
+    |   |   STRUCT_INITIALIZER TYPE=Vec2
     |   |   |   CONST 10 TYPE=i32
     |   |   |   CONST 20 TYPE=i32
     |   FUNCTION_CALL("vec2_print") TYPE=unit
-    |   |   LOAD TYPE=StructId(1)
-    |   |   |   VARIABLE(var_4) [PLACE] TYPE=StructId(1)
+    |   |   LOAD TYPE=Vec2
+    |   |   |   VARIABLE(var_4) [PLACE] TYPE=Vec2
     |   FUNCTION_CALL("vec2_print") TYPE=unit
-    |   |   FUNCTION_CALL("vec2_add") TYPE=StructId(1)
-    |   |   |   LOAD TYPE=StructId(1)
-    |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=StructId(1)
-    |   |   |   STRUCT_INITIALIZER TYPE=StructId(1)
+    |   |   FUNCTION_CALL("vec2_add") TYPE=Vec2
+    |   |   |   LOAD TYPE=Vec2
+    |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=Vec2
+    |   |   |   STRUCT_INITIALIZER TYPE=Vec2
     |   |   |   |   CONST 5 TYPE=i32
     |   |   |   |   CONST 5 TYPE=i32
     |   FUNCTION_CALL("vec2_print") TYPE=unit
-    |   |   CONST {21, 12} TYPE=StructId(1)
+    |   |   CONST {21, 12} TYPE=Vec2
     |   CONST 0 TYPE=i32
 
 fn printf(fmt: *i8, ...) -> unit

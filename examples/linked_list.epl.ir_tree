@@ -1,9 +1,9 @@
 fn main() -> i32
     BLOCK TYPE=i32
-    |   DECLARE var_1 "list" : StructId(1)
+    |   DECLARE var_1 "list" : List
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
-    |   |   FUNCTION_CALL("list_new") TYPE=StructId(1)
+    |   |   VARIABLE(var_1) [PLACE] TYPE=List
+    |   |   FUNCTION_CALL("list_new") TYPE=List
     |   BLOCK TYPE=unit
     |   |   DECLARE var_2 "<immutable-i>" : i32
     |   |   DECLARE var_3 "<tmp-i-target>" : i32
@@ -31,115 +31,115 @@ fn main() -> i32
     |   |   |   |   |   |   CONST 1 TYPE=i32
     |   |   |   |   |   BLOCK TYPE=unit
     |   |   |   |   |   |   FUNCTION_CALL("list_print") TYPE=unit
-    |   |   |   |   |   |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   |   |   |   |   |   GET_POINTER TYPE=*List
+    |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=List
     |   |   |   |   |   |   FUNCTION_CALL("list_insert") TYPE=unit
-    |   |   |   |   |   |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   |   |   |   |   |   GET_POINTER TYPE=*List
+    |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=List
     |   |   |   |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=i32
     |   |   |   |   BREAK(loop_1) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   FUNCTION_CALL("list_print") TYPE=unit
-    |   |   GET_POINTER TYPE=*StructId(1)
-    |   |   |   VARIABLE(var_1) [PLACE] TYPE=StructId(1)
+    |   |   GET_POINTER TYPE=*List
+    |   |   |   VARIABLE(var_1) [PLACE] TYPE=List
     |   CONST 0 TYPE=i32
 
-fn list_new() -> StructId(1)
-    STRUCT_INITIALIZER TYPE=StructId(1)
-    |   CONST NULL TYPE=*StructId(2)
+fn list_new() -> List
+    STRUCT_INITIALIZER TYPE=List
+    |   CONST NULL TYPE=*Node
 
-fn list_print(list: *StructId(1)) -> unit
+fn list_print(list: *List) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_5 "list" : *StructId(1)
+    |   DECLARE var_5 "list" : *List
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_5) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("list") TYPE=*StructId(1)
+    |   |   VARIABLE(var_5) [PLACE] TYPE=*List
+    |   |   ARGUMENT("list") TYPE=*List
     |   BLOCK TYPE=unit
-    |   |   DECLARE var_6 "ptr" : *StructId(2)
+    |   |   DECLARE var_6 "ptr" : *Node
     |   |   STORE TYPE=unit
-    |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=*StructId(1)
+    |   |   |   VARIABLE(var_6) [PLACE] TYPE=*Node
+    |   |   |   LOAD TYPE=*Node
+    |   |   |   |   FIELD(head) [PLACE] TYPE=*Node
+    |   |   |   |   |   DEREFERENCE [PLACE] TYPE=List
+    |   |   |   |   |   |   LOAD TYPE=*List
+    |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=*List
     |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   CONST_STRING("[") TYPE=*i8
     |   |   LOOP(loop_2) TYPE=unit
     |   |   |   IF TYPE=unit
     |   |   |   |   CMP(NotEqual) TYPE=bool
-    |   |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   CONST NULL TYPE=*StructId(2)
+    |   |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*Node
+    |   |   |   |   |   CONST NULL TYPE=*Node
     |   |   |   |   BLOCK TYPE=unit
     |   |   |   |   |   IF TYPE=unit
     |   |   |   |   |   |   CMP(NotEqual) TYPE=bool
-    |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*Node
+    |   |   |   |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   |   |   |   FIELD(head) [PLACE] TYPE=*Node
+    |   |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=List
+    |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*List
+    |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=*List
     |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   |   CONST_STRING(", ") TYPE=*i8
     |   |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   CONST_STRING("%i") TYPE=*i8
     |   |   |   |   |   |   LOAD TYPE=i32
-    |   |   |   |   |   |   |   FIELD("value") [PLACE] TYPE=i32
-    |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(2)
-    |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
+    |   |   |   |   |   |   |   FIELD(value) [PLACE] TYPE=i32
+    |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=Node
+    |   |   |   |   |   |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*Node
     |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   |   |   FIELD("next") [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(2)
-    |   |   |   |   |   |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*StructId(2)
+    |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*Node
+    |   |   |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   |   |   FIELD(next) [PLACE] TYPE=*Node
+    |   |   |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=Node
+    |   |   |   |   |   |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=*Node
     |   |   |   |   BREAK(loop_2) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   CONST_STRING("]\n") TYPE=*i8
 
-fn list_insert(list: *StructId(1), value: i32) -> unit
+fn list_insert(list: *List, value: i32) -> unit
     BLOCK TYPE=unit
-    |   DECLARE var_7 "list" : *StructId(1)
+    |   DECLARE var_7 "list" : *List
     |   DECLARE var_8 "value" : i32
     |   STORE TYPE=unit
-    |   |   VARIABLE(var_7) [PLACE] TYPE=*StructId(1)
-    |   |   ARGUMENT("list") TYPE=*StructId(1)
+    |   |   VARIABLE(var_7) [PLACE] TYPE=*List
+    |   |   ARGUMENT("list") TYPE=*List
     |   STORE TYPE=unit
     |   |   VARIABLE(var_8) [PLACE] TYPE=i32
     |   |   ARGUMENT("value") TYPE=i32
     |   BLOCK TYPE=unit
-    |   |   DECLARE var_9 "new_head" : *StructId(2)
+    |   |   DECLARE var_9 "new_head" : *Node
     |   |   STORE TYPE=unit
-    |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(2)
-    |   |   |   CAST TYPE=*StructId(2)
+    |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Node
+    |   |   |   CAST TYPE=*Node
     |   |   |   |   FUNCTION_CALL("malloc") TYPE=ptr
     |   |   |   |   |   CONST 16 TYPE=u64
     |   |   STORE TYPE=unit
-    |   |   |   DEREFERENCE [PLACE] TYPE=StructId(2)
-    |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(2)
-    |   |   |   STRUCT_INITIALIZER TYPE=StructId(2)
+    |   |   |   DEREFERENCE [PLACE] TYPE=Node
+    |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Node
+    |   |   |   STRUCT_INITIALIZER TYPE=Node
     |   |   |   |   LOAD TYPE=i32
     |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=i32
-    |   |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
-    |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*StructId(1)
+    |   |   |   |   LOAD TYPE=*Node
+    |   |   |   |   |   FIELD(head) [PLACE] TYPE=*Node
+    |   |   |   |   |   |   DEREFERENCE [PLACE] TYPE=List
+    |   |   |   |   |   |   |   LOAD TYPE=*List
+    |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*List
     |   |   STORE TYPE=unit
-    |   |   |   FIELD("head") [PLACE] TYPE=*StructId(2)
-    |   |   |   |   DEREFERENCE [PLACE] TYPE=StructId(1)
-    |   |   |   |   |   LOAD TYPE=*StructId(1)
-    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*StructId(1)
-    |   |   |   LOAD TYPE=*StructId(2)
-    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*StructId(2)
+    |   |   |   FIELD(head) [PLACE] TYPE=*Node
+    |   |   |   |   DEREFERENCE [PLACE] TYPE=List
+    |   |   |   |   |   LOAD TYPE=*List
+    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=*List
+    |   |   |   LOAD TYPE=*Node
+    |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Node
 
 fn malloc(size: u64) -> ptr
 

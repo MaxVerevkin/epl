@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 use std::num::NonZeroU64;
 
 use crate::common::{ArithmeticOp, CmpOp, Layout};
+use crate::context::Context;
 use crate::{ir_tree, lex, make_entity_id};
 
 /// An intermediate representation of a program
@@ -30,19 +31,19 @@ pub enum Type {
 }
 
 impl Type {
-    fn layout(&self, module: &ir_tree::Module) -> Layout {
+    fn layout<'ctx>(&self, ctx: Context<'ctx>) -> Layout {
         match self {
             Type::Unit => Layout { size: 0, align: 1 },
             Type::Bool | Type::I8 => Layout { size: 1, align: 1 },
             Type::I32 => Layout { size: 4, align: 4 },
             Type::I64 => Layout { size: 8, align: 8 },
             Type::Ptr => Layout {
-                size: module.typesystem.ptr_size(),
-                align: module.typesystem.ptr_size(),
+                size: ctx.ptr_size(),
+                align: ctx.ptr_size(),
             },
             Type::Struct(_, layout) => *layout,
             Type::Array(element, length) => {
-                let element_layout = element.layout(module);
+                let element_layout = element.layout(ctx);
                 Layout {
                     size: element_layout.size * length,
                     align: element_layout.align,

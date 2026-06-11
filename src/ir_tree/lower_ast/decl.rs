@@ -1,12 +1,12 @@
 use super::*;
 use crate::ir_tree::types::*;
 
-pub fn lower_function(
-    typesystem: &mut TypeSystem,
-    type_namespace: &HashMap<String, Type>,
+pub fn lower_function<'ctx>(
+    ctx: Context<'ctx>,
     ast: &ast::Function,
     annotations: &[ast::Annotation],
-) -> Result<Function, Error> {
+    types_scope: &TypesScope<'ctx>,
+) -> Result<Function<'ctx>, Error> {
     let mut is_pure = false;
     for annotation in annotations {
         match annotation.ident.value.as_str() {
@@ -20,10 +20,7 @@ pub fn lower_function(
         if args.iter().any(|x| x.0 == arg.name.value) {
             return Err(Error::new("argument with this name already exists").with_span(arg.name.span));
         }
-        args.push((
-            arg.name.value.clone(),
-            typesystem.type_from_ast(type_namespace, &arg.ty)?,
-        ));
+        args.push((arg.name.value.clone(), type_from_ast(ctx, types_scope, &arg.ty)?));
     }
 
     Ok(Function {
@@ -33,41 +30,11 @@ pub fn lower_function(
         return_ty: ast
             .return_ty
             .as_ref()
-            .map(|ty| typesystem.type_from_ast(type_namespace, ty))
+            .map(|ty| type_from_ast(ctx, types_scope, ty))
             .transpose()?
-            .unwrap_or(Type::Unit),
+            .unwrap_or_else(|| ctx.types().unit),
         is_variadic: ast.is_variadic,
         is_pure,
         body: None,
-    })
-}
-
-pub fn lower_struct(
-    typesystem: &mut TypeSystem,
-    type_namespace: &HashMap<String, Type>,
-    ast: &ast::Struct,
-    annotations: &[ast::Annotation],
-) -> Result<Struct, Error> {
-    if let Some(annotation) = annotations.iter().next() {
-        return Err(Error::unknown_annotation(annotation));
-    }
-
-    let mut fields: Vec<StructField> = Vec::new();
-    for field in &ast.fields {
-        if fields.iter().any(|x| x.name.value == field.name.value) {
-            return Err(Error::new("field with this name already exists").with_span(field.name.span));
-        }
-        let ty = typesystem.type_from_ast(type_namespace, &field.ty)?;
-        fields.push(StructField {
-            name: field.name.clone(),
-            ty,
-            offset: None,
-        });
-    }
-
-    Ok(Struct {
-        name: ast.name.clone(),
-        fields,
-        layout: None,
     })
 }

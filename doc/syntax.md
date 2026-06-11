@@ -46,7 +46,7 @@ fn_arg   ::= ident ':' type
 ## Struct Definitions
 
 ```ebnf
-struct_def    ::= 'struct' ident '{' struct_fields '}'
+struct_def    ::= 'struct' ident [ type_parameters ] '{' struct_fields '}'
 struct_fields ::= [ struct_field { ',' struct_field } [ ',' ] ]
 struct_field  ::= ident ':' type
 ```
@@ -54,7 +54,7 @@ struct_field  ::= ident ':' type
 ## Enum Definitions
 
 ```ebnf
-enum_def    ::= 'enum' ident '{' enum_entries '}'
+enum_def    ::= 'enum' ident [ type_parameters ] '{' enum_entries '}'
 enum_entries ::= [ enum_entry { ',' enum_entry } [ ',' ] ]
 enum_entry  ::= ident [ '(' type ')' ]
 ```
@@ -103,7 +103,9 @@ let_statement            ::= 'let' ident ':' type ';' | 'let' ident [ ':' type ]
 ## Types
 
 ```ebnf
-type ::= '!' | ident | '*' type | '[' type ';' expr ']'
+type            ::= '!' | ident [ type_arguments ] | '*' type | '[' type ';' expr ']'
+type_parameters ::= '<' [ ident { ',' ident } [ ',' ] ] '>'
+type_arguments  ::= '<' [ type { ',' type } [ ',' ] ] '>'
 ```
 
 ## Literals

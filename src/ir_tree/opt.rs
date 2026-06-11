@@ -2,10 +2,10 @@ use super::*;
 use crate::ir_tree::visit::ExprVisitorMut;
 
 /// Collapses redundantly nested expressions, eliminates dead code.
-pub struct BasicOptVisitor;
+pub struct BasicOptVisitor<'ctx>(pub Context<'ctx>);
 
-impl ExprVisitorMut for BasicOptVisitor {
-    fn visit_expr(&mut self, expr: &mut Expr) {
+impl<'a, 'ctx> ExprVisitorMut<'a, 'ctx> for BasicOptVisitor<'ctx> {
+    fn visit_expr(&mut self, expr: &'a mut Expr<'ctx>) {
         expr.visit_children_mut(self);
 
         // GET_POINTER
@@ -18,7 +18,7 @@ impl ExprVisitorMut for BasicOptVisitor {
         if let ExprKind::GetPointer(place) = &mut expr.kind
             && let PlaceKind::Dereference(ptr_expr) = &mut place.kind
         {
-            let ptr_expr = std::mem::replace(ptr_expr.as_mut(), Expr::UNIT);
+            let ptr_expr = std::mem::replace(ptr_expr.as_mut(), Expr::unit(self.0));
             *expr = ptr_expr;
         }
 
@@ -35,7 +35,7 @@ impl ExprVisitorMut for BasicOptVisitor {
         }
     }
 
-    fn visit_place(&mut self, place: &mut Place) {
+    fn visit_place(&mut self, place: &'a mut Place<'ctx>) {
         place.visit_children_mut(self);
 
         // DEREFERENCE
@@ -48,13 +48,13 @@ impl ExprVisitorMut for BasicOptVisitor {
         if let PlaceKind::Dereference(ptr_expr) = &mut place.kind
             && let ExprKind::GetPointer(place_expr) = &mut ptr_expr.kind
         {
-            let place_expr = std::mem::replace(place_expr, Place::DUMMY);
+            let place_expr = std::mem::replace(place_expr, Place::dummy(self.0));
             *place = place_expr;
         }
     }
 }
 
-impl Expr {
+impl Expr<'_> {
     fn is_pure(&self) -> bool {
         matches!(
             self.kind,
@@ -67,10 +67,10 @@ impl Expr {
     }
 }
 
-impl BlockExpr {
+impl BlockExpr<'_> {
     fn eliminate_dead_code(&mut self) {
         // remove all code after first expr with never type
-        if let Some(first_never_expr_i) = self.exprs.iter().position(|expr| expr.ty == Type::Never) {
+        if let Some(first_never_expr_i) = self.exprs.iter().position(|expr| expr.ty.is_never()) {
             self.exprs.truncate(first_never_expr_i + 1);
         }
 
@@ -86,7 +86,7 @@ impl BlockExpr {
         // remove trailing unit if expr before that is of unit type
         if !self.exprs.is_empty()
             && self.exprs[self.exprs.len() - 1].is_const_unit()
-            && (self.exprs.len() == 1 || self.exprs[self.exprs.len() - 2].ty == Type::Unit)
+            && (self.exprs.len() == 1 || self.exprs[self.exprs.len() - 2].ty.is_unit())
         {
             self.exprs.pop();
         }
