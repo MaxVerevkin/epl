@@ -25,10 +25,7 @@ impl<'ctx> Type<'ctx> {
         let layout = match self.info() {
             TypeInfo::Never | TypeInfo::Unit => Layout { size: 0, align: 1 },
             TypeInfo::Bool => Layout { size: 1, align: 1 },
-            TypeInfo::Int(i) => Layout {
-                size: i.bytes(),
-                align: i.bytes(),
-            },
+            TypeInfo::Int(i) => i.layout(ctx),
             TypeInfo::Struct {
                 struct_,
                 type_arguments,
@@ -46,10 +43,10 @@ impl<'ctx> Type<'ctx> {
                 size = size.next_multiple_of(align);
                 Layout { size, align }
             }
-            TypeInfo::Ptr { pointee: _ } => Layout {
-                size: ctx.ptr_size(),
-                align: ctx.ptr_size(),
-            },
+            TypeInfo::Ptr { pointee: _ } => {
+                let size = ctx.ptr_size().bytes();
+                Layout { size, align: size }
+            }
             TypeInfo::Array { element_ty, length } => {
                 let element_layout = element_ty.layout(ctx);
                 Layout {
@@ -180,6 +177,8 @@ impl<'ctx> Type<'ctx> {
                 IntType::U32 => "u32",
                 IntType::I64 => "i64",
                 IntType::U64 => "u64",
+                IntType::ISize => "isize",
+                IntType::USize => "usize",
             }),
             TypeInfo::Struct {
                 struct_,
@@ -241,24 +240,33 @@ pub enum IntType {
     U32,
     I64,
     U64,
+    ISize,
+    USize,
 }
 
 impl IntType {
     /// Returns the number of bytes used to store this int
-    pub fn bytes(self) -> u64 {
+    pub fn bytes(self, ctx: Context) -> u64 {
         match self {
             Self::I8 | Self::U8 => 1,
             Self::I32 | Self::U32 => 4,
             Self::I64 | Self::U64 => 8,
+            Self::ISize | Self::USize => ctx.ptr_size().bytes(),
         }
     }
 
     /// Returns `true` if this data type is a signed integer
     pub fn is_signed(self) -> bool {
         match self {
-            Self::I8 | Self::I32 | Self::I64 => true,
-            Self::U8 | Self::U32 | Self::U64 => false,
+            Self::I8 | Self::I32 | Self::I64 | Self::ISize => true,
+            Self::U8 | Self::U32 | Self::U64 | Self::USize => false,
         }
+    }
+
+    /// The layout of this integer type
+    pub fn layout(self, ctx: Context) -> Layout {
+        let size = self.bytes(ctx);
+        Layout { size, align: size }
     }
 }
 

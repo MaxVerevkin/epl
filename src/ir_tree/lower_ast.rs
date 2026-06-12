@@ -355,7 +355,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                                                                 Place::var(var_id, var_type),
                                                                 Box::new(Expr::new_const(
                                                                     self.ctx,
-                                                                    Constant::int(1, var_type_int).unwrap(),
+                                                                    Constant::int(self.ctx, 1, var_type_int).unwrap(),
                                                                 )),
                                                             ),
                                                         },
@@ -562,6 +562,8 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                             "u32" => IntType::U32,
                             "i64" => IntType::I64,
                             "u64" => IntType::U64,
+                            "isize" => IntType::ISize,
+                            "usize" => IntType::USize,
                             other => {
                                 return Err(Error::new(format!("unknown integer literal suffix: {other:?}"))
                                     .with_span(suffix.span));
@@ -574,7 +576,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     {
                         return Err(Error::expr_type_mismatch(expect_type, ty, literal_expr.span));
                     }
-                    let Some(const_value) = Constant::int(*number, int_ty) else {
+                    let Some(const_value) = Constant::int(self.ctx, *number, int_ty) else {
                         return Err(
                             Error::new(format!("number does not fit into {int_ty:?}")).with_span(literal_expr.span)
                         );
@@ -854,7 +856,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                         span,
                         kind: ExprKind::Arithmetic(
                             ArithmeticOp::Sub,
-                            Box::new(Expr::new_const(self.ctx, Constant::int(0, int_ty).unwrap())),
+                            Box::new(Expr::new_const(self.ctx, Constant::int(self.ctx, 0, int_ty).unwrap())),
                             Box::new(lowered_rhs),
                         ),
                     })
@@ -1033,7 +1035,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 {
                     return Err(Error::expr_type_mismatch(expect_type, element_ty, expr.span()));
                 }
-                let lowered_index = self.lower_expr(&e.index, Some(self.ctx.types().u64))?;
+                let lowered_index = self.lower_expr(&e.index, Some(self.ctx.types().usize))?;
                 Ok(Expr {
                     ty: element_ty,
                     span,

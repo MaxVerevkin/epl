@@ -34,3 +34,16 @@ pub struct Layout {
     pub size: u64,
     pub align: u64,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PtrSize {
+    _64,
+}
+
+impl PtrSize {
+    pub fn bytes(self) -> u64 {
+        match self {
+            Self::_64 => 8,
+        }
+    }
+}

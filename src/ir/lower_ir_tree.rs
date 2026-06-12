@@ -37,10 +37,11 @@ fn lower_type<'ctx>(module: &ir_tree::Module<'ctx>, ty: ir_tree::Type<'ctx>) -> 
         ir_tree::TypeInfo::Never | ir_tree::TypeInfo::Unit => Type::Unit,
         ir_tree::TypeInfo::Bool => Type::Bool,
         ir_tree::TypeInfo::Ptr { .. } => Type::Ptr,
-        ir_tree::TypeInfo::Int(int_type) => match int_type {
-            ir_tree::IntType::I8 | ir_tree::IntType::U8 => Type::I8,
-            ir_tree::IntType::I32 | ir_tree::IntType::U32 => Type::I32,
-            ir_tree::IntType::I64 | ir_tree::IntType::U64 => Type::I64,
+        ir_tree::TypeInfo::Int(int_type) => match int_type.bytes(module.ctx) {
+            1 => Type::I8,
+            4 => Type::I32,
+            8 => Type::I64,
+            other => panic!("unsupported integer size: {other} bytes"),
         },
         ir_tree::TypeInfo::Array { element_ty, length } => {
             let element = lower_type(module, *element_ty);
@@ -411,7 +412,7 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
                 } else if let Some(from_ty) = from_ty.as_int()
                     && let Some(to_ty) = to_ty.as_int()
                 {
-                    Value::Definition(if from_ty.bytes() > to_ty.bytes() {
+                    Value::Definition(if from_ty.bytes(self.module.ctx) > to_ty.bytes(self.module.ctx) {
                         self.cursor().truncate(value, ty)
                     } else if from_ty.is_signed() {
                         self.cursor().sext(value, ty)
@@ -488,7 +489,7 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
     }
 
     fn eval_const(&mut self, value: &ir_tree::Constant<'ctx>) -> Value {
-        match value {
+        match &*value.with_erased_isize_usize(self.module.ctx) {
             ir_tree::Constant::Undefined(ty) => Value::Undefined(lower_type(self.module, *ty)),
             ir_tree::Constant::Null(_) => Value::Null,
             ir_tree::Constant::Unit => Value::Zst,
@@ -517,6 +518,7 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
                 data: *int as i64,
                 ty: Type::I64,
             },
+            ir_tree::Constant::ISize(_) | ir_tree::Constant::USize(_) => unreachable!(),
             ir_tree::Constant::Array(..) | ir_tree::Constant::Struct(..) => {
                 let ty = lower_type(self.module, value.ty(self.module.ctx));
                 let layout = ty.layout(self.module.ctx);
@@ -538,7 +540,9 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
             | ir_tree::Constant::I32(_)
             | ir_tree::Constant::U32(_)
             | ir_tree::Constant::I64(_)
-            | ir_tree::Constant::U64(_) => {
+            | ir_tree::Constant::U64(_)
+            | ir_tree::Constant::ISize(_)
+            | ir_tree::Constant::USize(_) => {
                 let value = self.eval_const(value);
                 self.cursor().store(place_ptr, value)
             }

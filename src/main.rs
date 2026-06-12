@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+use crate::common::PtrSize;
 use crate::context::{Context, run_with_context};
 
 mod ast;
@@ -33,7 +34,7 @@ fn main() {
             println!("{:#?}", ast(&file, &src));
         }
         "ir_tree" => {
-            run_with_context(8, |ctx| println!("{}", ir_tree(ctx, &file, &src).dump()));
+            run_with_context(PtrSize::_64, |ctx| println!("{}", ir_tree(ctx, &file, &src).dump()));
         }
         "ir" => {
             println!("{:#?}", ir(&file, &src));
@@ -73,7 +74,7 @@ fn ir_tree<'ctx>(ctx: Context<'ctx>, file: &str, src: &str) -> ir_tree::Module<'
 }
 
 fn ir(file: &str, src: &str) -> ir::Ir {
-    run_with_context(8, |ctx| {
+    run_with_context(PtrSize::_64, |ctx| {
         ir::Ir::from_ir_tree(&ir_tree(ctx, file, src)).unwrap_or_else(|err| {
             diagnostics::print_error(file, src, err);
             std::process::exit(1);

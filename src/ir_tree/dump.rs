@@ -162,6 +162,8 @@ impl<'ctx> Writer<'_, 'ctx> {
             Constant::U32(num) => write!(self.output, "{num}").unwrap(),
             Constant::I64(num) => write!(self.output, "{num}").unwrap(),
             Constant::U64(num) => write!(self.output, "{num}").unwrap(),
+            Constant::ISize(num) => write!(self.output, "{num}").unwrap(),
+            Constant::USize(num) => write!(self.output, "{num}").unwrap(),
             Constant::Array(_, elements) => {
                 self.output.push('[');
                 for (i, element) in elements.iter().enumerate() {

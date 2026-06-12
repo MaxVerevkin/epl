@@ -192,12 +192,17 @@ impl<'ctx> EvalCtx<'_, 'ctx> {
             ExprKind::Arithmetic(op, lhs, rhs) => {
                 let lhs_value = self.eval_expr(lhs)?;
                 let rhs_value = self.eval_expr(rhs)?;
-                arithmetic_and_cmp::eval_arithmetic(*op, lhs_value, rhs_value)?
+                arithmetic_and_cmp::eval_arithmetic(self.module.ctx, *op, lhs_value, rhs_value)?
             }
             ExprKind::InPlaceArithmetic(op, place, expr) => {
                 let place_value = self.eval_place(place)?;
                 let expr_value = self.eval_expr(expr)?;
-                let result = arithmetic_and_cmp::eval_arithmetic(*op, self.load(place_value, expr.ty), expr_value)?;
+                let result = arithmetic_and_cmp::eval_arithmetic(
+                    self.module.ctx,
+                    *op,
+                    self.load(place_value, expr.ty),
+                    expr_value,
+                )?;
                 self.store(place_value, &result);
                 Constant::Unit
             }
@@ -254,7 +259,9 @@ impl<'ctx> EvalCtx<'_, 'ctx> {
                     .collect::<Result<Vec<_>, _>>()?;
                 eval_pure_function(*function_id, &arguments_values, self.module)?
             }
-            ExprKind::Cast(expr_to_cast) => arithmetic_and_cmp::eval_cast(self.eval_expr(expr_to_cast)?, expr.ty)?,
+            ExprKind::Cast(expr_to_cast) => {
+                arithmetic_and_cmp::eval_cast(self.module.ctx, self.eval_expr(expr_to_cast)?, expr.ty)?
+            }
             ExprKind::Not(expr) => Constant::Bool(!self.eval_expr(expr)?.into_bool().unwrap()),
             ExprKind::Comptime(expr) => self.eval_expr(expr)?,
         })
@@ -281,8 +288,8 @@ impl<'ctx> EvalCtx<'_, 'ctx> {
                 let index_value = self.eval_expr(index_expr)?;
                 let element_size = array_place.ty.as_array().unwrap().0.layout(self.module.ctx).size;
                 let offset = match index_value {
-                    Constant::U64(index) => index * element_size,
-                    _ => panic!("index value must be of type u64"),
+                    Constant::USize(index) => index as u64 * element_size,
+                    _ => panic!("index value must be of type usize"),
                 };
                 ConstantPlace {
                     variable: array_place_value.variable,

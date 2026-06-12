@@ -5,37 +5,37 @@ fn main() -> i32
     |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 20]
     |   |   CONST [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73] TYPE=[i32; 20]
     |   BLOCK TYPE=unit
-    |   |   DECLARE var_5 "<immutable-i>" : u64
-    |   |   DECLARE var_6 "<tmp-i-target>" : u64
-    |   |   DECLARE var_7 "i" : u64
+    |   |   DECLARE var_5 "<immutable-i>" : usize
+    |   |   DECLARE var_6 "<tmp-i-target>" : usize
+    |   |   DECLARE var_7 "i" : usize
     |   |   STORE TYPE=unit
-    |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
-    |   |   |   CONST 0 TYPE=u64
+    |   |   |   VARIABLE(var_5) [PLACE] TYPE=usize
+    |   |   |   CONST 0 TYPE=usize
     |   |   STORE TYPE=unit
-    |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
-    |   |   |   CONST 20 TYPE=u64
+    |   |   |   VARIABLE(var_6) [PLACE] TYPE=usize
+    |   |   |   CONST 20 TYPE=usize
     |   |   LOOP(loop_3) TYPE=unit
     |   |   |   IF TYPE=unit
     |   |   |   |   CMP(Less) TYPE=bool
-    |   |   |   |   |   LOAD TYPE=u64
-    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
-    |   |   |   |   |   LOAD TYPE=u64
-    |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=u64
+    |   |   |   |   |   LOAD TYPE=usize
+    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=usize
+    |   |   |   |   |   LOAD TYPE=usize
+    |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=usize
     |   |   |   |   BLOCK TYPE=unit
     |   |   |   |   |   STORE TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u64
-    |   |   |   |   |   |   LOAD TYPE=u64
-    |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
+    |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=usize
+    |   |   |   |   |   |   LOAD TYPE=usize
+    |   |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=usize
     |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
-    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=u64
-    |   |   |   |   |   |   CONST 1 TYPE=u64
+    |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=usize
+    |   |   |   |   |   |   CONST 1 TYPE=isize
     |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
     |   |   |   |   |   |   CONST_STRING("%i ") TYPE=*i8
     |   |   |   |   |   |   ARRAY_ELEMENT TYPE=i32
     |   |   |   |   |   |   |   LOAD TYPE=[i32; 20]
     |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=[i32; 20]
-    |   |   |   |   |   |   |   LOAD TYPE=u64
-    |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=u64
+    |   |   |   |   |   |   |   LOAD TYPE=usize
+    |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=usize
     |   |   |   |   BREAK(loop_3) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
     |   FUNCTION_CALL("printf") TYPE=unit

@@ -15,8 +15,8 @@ fn main() -> i32 {
 }
 
 fn clear_board(board: *Board) {
-	for row in 0u64..20 {
-		for col in 0u64..20 {
+	for row in 0usize..20 {
+		for col in 0usize..20 {
 			set_cell(board, row, col, false);
 		}
 	}
@@ -32,8 +32,8 @@ fn seed_board(board: *Board) {
 
 fn print_board(board: *Board) {
 	printf("\n");
-	for row in 0u64..20 {
-		for col in 0u64..20 {
+	for row in 0usize..20 {
+		for col in 0usize..20 {
 			printf(if get_cell(board, row, col) { "#" } else { "." });
 		}
 		printf("\n");
@@ -43,8 +43,8 @@ fn print_board(board: *Board) {
 fn update_board(board: *Board) {
 	let next: Board;
 
-	for row in 0u64..20 {
-		for col in 0u64..20 {
+	for row in 0usize..20 {
+		for col in 0usize..20 {
 			let alive = get_cell(board, row, col);
 			let neighbors = get_alive_neighbors(board, row, col);
 			let next_cell = if alive { neighbors == 2 || neighbors == 3 } else { neighbors == 3 };
@@ -55,8 +55,8 @@ fn update_board(board: *Board) {
 	board.* = next;
 }
 
-fn get_alive_neighbors(board: *Board, row: u64, col: u64) -> u64 {
-	let count = 0u64;
+fn get_alive_neighbors(board: *Board, row: usize, col: usize) -> usize {
+	let count = 0usize;
 
 	for r in (row + 20 - 1)..(row + 20 + 2) {
 		for c in (col + 20 - 1)..(col + 20 + 2) {
@@ -71,11 +71,11 @@ fn get_alive_neighbors(board: *Board, row: u64, col: u64) -> u64 {
 	count
 }
 
-fn get_cell(board: *Board, row: u64, col: u64) -> bool {
+fn get_cell(board: *Board, row: usize, col: usize) -> bool {
 	board.rows[row][col]
 }
 
-fn set_cell(board: *Board, row: u64, col: u64, alive: bool) {
+fn set_cell(board: *Board, row: usize, col: usize, alive: bool) {
 	board.rows[row][col] = alive;
 }
 

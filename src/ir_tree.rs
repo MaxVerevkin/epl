@@ -6,11 +6,12 @@ mod opt;
 mod types;
 mod visit;
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 
 pub use types::*;
 
-use crate::common::{ArithmeticOp, BinaryOp, CmpOp};
+use crate::common::{ArithmeticOp, BinaryOp, CmpOp, PtrSize};
 use crate::context::Context;
 use crate::ir_tree::visit::{ExprVisitor, ExprVisitorMut};
 use crate::{ast, lex, make_entity_id};
@@ -83,6 +84,8 @@ impl<'ctx> Module<'ctx> {
             ("u32", ctx.types().u32),
             ("i64", ctx.types().i64),
             ("u64", ctx.types().u64),
+            ("isize", ctx.types().isize),
+            ("usize", ctx.types().usize),
             ("ptr", ctx.types().opaque_ptr),
         ] {
             types_scope
@@ -376,6 +379,8 @@ pub enum Constant<'ctx> {
     U32(u32),
     I64(i64),
     U64(u64),
+    ISize(i128),
+    USize(i128),
     Array(Type<'ctx>, Vec<Self>),
     Struct(Type<'ctx>, Vec<Self>),
 }
@@ -392,11 +397,13 @@ impl<'ctx> Constant<'ctx> {
             Self::U32(_) => ctx.types().u32,
             Self::I64(_) => ctx.types().i64,
             Self::U64(_) => ctx.types().u64,
+            Self::ISize(_) => ctx.types().isize,
+            Self::USize(_) => ctx.types().usize,
         }
     }
 
     /// Returns `None` if the number cannot fit into provided `IntType`
-    pub fn int(number: i128, ty: IntType) -> Option<Self> {
+    pub fn int(ctx: Context, number: i128, ty: IntType) -> Option<Self> {
         Some(match ty {
             IntType::I8 => Self::I8(number.try_into().ok()?),
             IntType::U8 => Self::U8(number.try_into().ok()?),
@@ -404,7 +411,39 @@ impl<'ctx> Constant<'ctx> {
             IntType::U32 => Self::U32(number.try_into().ok()?),
             IntType::I64 => Self::I64(number.try_into().ok()?),
             IntType::U64 => Self::U64(number.try_into().ok()?),
+            IntType::ISize => {
+                match ctx.ptr_size() {
+                    PtrSize::_64 => {
+                        if i64::try_from(number).is_err() {
+                            return None;
+                        }
+                    }
+                }
+                Self::ISize(number)
+            }
+            IntType::USize => {
+                match ctx.ptr_size() {
+                    PtrSize::_64 => {
+                        if u64::try_from(number).is_err() {
+                            return None;
+                        }
+                    }
+                }
+                Self::ISize(number)
+            }
         })
+    }
+
+    pub fn with_erased_isize_usize(&self, ctx: Context<'ctx>) -> Cow<'_, Self> {
+        match self {
+            Self::ISize(num) => match ctx.ptr_size() {
+                PtrSize::_64 => Cow::Owned(Self::I64(*num as i64)),
+            },
+            Self::USize(num) => match ctx.ptr_size() {
+                PtrSize::_64 => Cow::Owned(Self::U64(*num as u64)),
+            },
+            _ => Cow::Borrowed(self),
+        }
     }
 }
 

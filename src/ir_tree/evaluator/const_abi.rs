@@ -1,7 +1,7 @@
 use super::*;
 
 fn constant_to_bytes_into<'ctx>(ctx: Context<'ctx>, constant: &Constant<'ctx>, output: &mut Vec<u8>) {
-    match constant {
+    match &*constant.with_erased_isize_usize(ctx) {
         Constant::Undefined(ty) => {
             for _ in 0..ty.layout(ctx).size {
                 output.push(0);
@@ -16,6 +16,7 @@ fn constant_to_bytes_into<'ctx>(ctx: Context<'ctx>, constant: &Constant<'ctx>, o
         Constant::U32(x) => output.extend_from_slice(&x.to_le_bytes()),
         Constant::I64(x) => output.extend_from_slice(&x.to_le_bytes()),
         Constant::U64(x) => output.extend_from_slice(&x.to_le_bytes()),
+        Constant::ISize(_) | Constant::USize(_) => unreachable!(),
         Constant::Array(_, elements) => {
             for element in elements {
                 constant_to_bytes_into(ctx, element, output);
@@ -66,6 +67,12 @@ pub fn constant_from_bytes<'ctx>(ctx: Context<'ctx>, bytes: &[u8], ty: Type<'ctx
             IntType::U32 => Constant::U32(u32::from_le_bytes(bytes.try_into().unwrap())),
             IntType::I64 => Constant::I64(i64::from_le_bytes(bytes.try_into().unwrap())),
             IntType::U64 => Constant::U64(u64::from_le_bytes(bytes.try_into().unwrap())),
+            IntType::ISize => match ctx.ptr_size() {
+                PtrSize::_64 => Constant::ISize(i64::from_le_bytes(bytes.try_into().unwrap()) as _),
+            },
+            IntType::USize => match ctx.ptr_size() {
+                PtrSize::_64 => Constant::USize(u64::from_le_bytes(bytes.try_into().unwrap()) as _),
+            },
         },
         TypeInfo::Struct {
             struct_,

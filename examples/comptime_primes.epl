@@ -7,13 +7,13 @@ fn main() -> i32 {
 			while !is_prime(next) {
 				next += 2;
 			}
-			lut[ready as u64] = next;
+			lut[ready as usize] = next;
 			ready += 1;
 			next += 2;
 		}
 		lut
 	};
-	for i in 0u64..20 {
+	for i in 0usize..20 {
 		printf("%i ", primes[i]);
 	}
 	printf("\n");

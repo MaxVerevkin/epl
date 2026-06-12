@@ -4,11 +4,11 @@ use std::sync::Mutex;
 use bumpalo::Bump;
 
 use crate::ast;
-use crate::common::Layout;
+use crate::common::{Layout, PtrSize};
 use crate::interning::{Interned, Interner};
 use crate::ir_tree::{IntType, Struct, StructFieldId, StructInfo, Type, TypeInfo};
 
-pub fn run_with_context<R, F>(ptr_size: u64, cb: F) -> R
+pub fn run_with_context<R, F>(ptr_size: PtrSize, cb: F) -> R
 where
     F: for<'ctx> FnOnce(Context<'ctx>) -> R,
 {
@@ -23,7 +23,7 @@ pub struct Context<'ctx> {
 }
 
 impl<'ctx> Context<'ctx> {
-    pub fn ptr_size(self) -> u64 {
+    pub fn ptr_size(self) -> PtrSize {
         self.inner.ptr_size
     }
 
@@ -126,12 +126,12 @@ struct ContextInner<'ctx> {
     type_info_interner: Interner<'ctx, TypeInfo<'ctx>>,
     type_of_struct_fields: Mutex<HashMap<StructFieldId, (Type<'ctx>, Struct<'ctx>)>>,
     types: Types<'ctx>,
-    ptr_size: u64,
+    ptr_size: PtrSize,
     type_layout_cache: Mutex<HashMap<Type<'ctx>, Layout>>,
 }
 
 impl<'ctx> ContextInner<'ctx> {
-    fn new(arena: &'ctx Bump, ptr_size: u64) -> Self {
+    fn new(arena: &'ctx Bump, ptr_size: PtrSize) -> Self {
         let type_info_interner = Interner::new(arena);
         let types = Types::new(&type_info_interner);
         Self {
@@ -155,6 +155,8 @@ pub struct Types<'ctx> {
     pub u32: Type<'ctx>,
     pub i64: Type<'ctx>,
     pub u64: Type<'ctx>,
+    pub isize: Type<'ctx>,
+    pub usize: Type<'ctx>,
     pub opaque_ptr: Type<'ctx>,
     pub i8_ptr: Type<'ctx>,
 }
@@ -172,6 +174,8 @@ impl<'ctx> Types<'ctx> {
             u32: Type::new(interner, TypeInfo::Int(IntType::U32)),
             i64: Type::new(interner, TypeInfo::Int(IntType::I64)),
             u64: Type::new(interner, TypeInfo::Int(IntType::U64)),
+            isize: Type::new(interner, TypeInfo::Int(IntType::ISize)),
+            usize: Type::new(interner, TypeInfo::Int(IntType::USize)),
             opaque_ptr: Type::new(interner, TypeInfo::Ptr { pointee: None }),
             i8_ptr: Type::new(interner, TypeInfo::Ptr { pointee: Some(i8) }),
         }

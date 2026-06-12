@@ -37,10 +37,10 @@ impl Type {
             Type::Bool | Type::I8 => Layout { size: 1, align: 1 },
             Type::I32 => Layout { size: 4, align: 4 },
             Type::I64 => Layout { size: 8, align: 8 },
-            Type::Ptr => Layout {
-                size: ctx.ptr_size(),
-                align: ctx.ptr_size(),
-            },
+            Type::Ptr => {
+                let size = ctx.ptr_size().bytes();
+                Layout { size, align: size }
+            }
             Type::Struct(_, layout) => *layout,
             Type::Array(element, length) => {
                 let element_layout = element.layout(ctx);
