@@ -535,30 +535,11 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 })
             }
             ast::ExprKind::Literal(literal) => match literal {
-                ast::Literal::Number(number, suffix) => {
-                    let int_ty = match suffix {
-                        None => expect_type.and_then(|ty| ty.as_int()).unwrap_or(IntType::I32),
-                        Some(suffix) => match &*suffix.value {
-                            "i8" => IntType::I8,
-                            "u8" => IntType::U8,
-                            "i32" => IntType::I32,
-                            "u32" => IntType::U32,
-                            "i64" => IntType::I64,
-                            "u64" => IntType::U64,
-                            "isize" => IntType::ISize,
-                            "usize" => IntType::USize,
-                            other => {
-                                return Err(Error::new(format!("unknown integer literal suffix: {other:?}"))
-                                    .with_span(suffix.span));
-                            }
-                        },
-                    };
-                    let ty = Type::new(self.ctx, TypeInfo::Int(int_ty));
-                    if let Some(expect_type) = expect_type
-                        && expect_type != ty
-                    {
-                        return Err(Error::expr_type_mismatch(expect_type, ty, expr.span));
-                    }
+                ast::Literal::Number(number) => {
+                    let ty = expect_type.unwrap_or_else(|| self.ctx.types().i32);
+                    let int_ty = ty
+                        .as_int()
+                        .ok_or_else(|| Error::expr_type_mismatch(ty, self.ctx.types().i32, expr.span))?;
                     let Some(const_value) = Constant::int(self.ctx, *number, int_ty) else {
                         return Err(Error::new(format!("number does not fit into {int_ty:?}")).with_span(expr.span));
                     };

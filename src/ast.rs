@@ -226,7 +226,7 @@ impl BlockExpr {
 pub enum Literal {
     Undefined,
     Null,
-    Number(i128, Option<Ident>),
+    Number(i128),
     String(String),
     Bool(bool),
 }
@@ -889,10 +889,10 @@ impl Parser<'_> {
                 Ok(match self.next_unary_expr()? {
                     Expr {
                         span,
-                        kind: ExprKind::Literal(Literal::Number(number, suffix)),
+                        kind: ExprKind::Literal(Literal::Number(number)),
                     } => Expr {
                         span: span.join(op_span),
-                        kind: ExprKind::Literal(Literal::Number(-number, suffix)),
+                        kind: ExprKind::Literal(Literal::Number(-number)),
                     },
                     rhs => Expr {
                         span: op_span.join(rhs.span),
@@ -980,9 +980,7 @@ impl Parser<'_> {
                 Ok(Expr {
                     span,
                     kind: ExprKind::Literal(match lit {
-                        lex::Literal::Number(num, suffix) => {
-                            Literal::Number(num, suffix.map(|s| Ident { span: s.1, value: s.0 }))
-                        }
+                        lex::Literal::Number(num) => Literal::Number(num),
                         lex::Literal::String(str) => Literal::String(str),
                     }),
                 })
@@ -1206,7 +1204,7 @@ impl fmt::Debug for Literal {
         match self {
             Self::Undefined => f.write_str("undefined"),
             Self::Null => f.write_str("null"),
-            Self::Number(num, _suffix) => num.fmt(f),
+            Self::Number(num) => num.fmt(f),
             Self::String(s) => s.fmt(f),
             Self::Bool(b) => b.fmt(f),
         }

@@ -438,7 +438,7 @@ pub fn type_from_ast<'ctx>(
         } => {
             let element_ty = type_from_ast(ctx, types_scope, element_type)?;
             let length = match &length.kind {
-                ast::ExprKind::Literal(ast::Literal::Number(num, _)) => *num as u64,
+                ast::ExprKind::Literal(ast::Literal::Number(num)) => *num as u64,
                 _ => return Err(Error::new("array length must be a number literal").with_span(length.span)),
             };
             Type::new(ctx, TypeInfo::Array { element_ty, length })

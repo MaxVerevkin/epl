@@ -89,7 +89,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
 /// A literal token
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
-    Number(i128, Option<(String, Span)>),
+    Number(i128),
     String(String),
 }
 
@@ -417,15 +417,7 @@ impl Lexer<'_> {
             });
         };
 
-        let suffix = self.consume_chars_while(is_valid_ident_start, is_valid_ident_char);
-
-        Ok((
-            match suffix.as_ref() {
-                Some(suffix) => number_span.join(suffix.1),
-                None => number_span,
-            },
-            Token::Literal(Literal::Number(number, suffix)),
-        ))
+        Ok((number_span, Token::Literal(Literal::Number(number))))
     }
 }
 

@@ -112,14 +112,11 @@ type_arguments  ::= '<' [ type { ',' type } [ ',' ] ] '>'
 
 ```ebnf
 literal               ::= number_literal | string_literal | bool_literal | 'undefined'
-number_literal        ::= /[0-9]+/ [ number_literal_suffix ]
-number_literal_suffix ::= ident
+number_literal        ::= /[0-9]+/
 string_literal        ::= '"' { string_char | escape_sequence } '"'
 string_char           ::= any non-quote, non-backslash character
 escape_sequence       ::= '\n' | '\r' | '\t' | '\\'
 bool_literal          ::= 'true' | 'false'
 ```
-
-There must be no whitespace between a number literal and its suffix.
 
 String literals support four escape sequences: `\n`, `\r`, `\t`, and `\\`.
