@@ -57,6 +57,7 @@ pub enum Keyword {
     Enum,
     Undefined,
     As,
+    Of,
     Comptime,
     Null,
 }
@@ -80,6 +81,7 @@ const KEYWORD_MAP: &[(&str, Keyword)] = &[
     ("enum", Keyword::Enum),
     ("undefined", Keyword::Undefined),
     ("as", Keyword::As),
+    ("of", Keyword::Of),
     ("comptime", Keyword::Comptime),
     ("null", Keyword::Null),
 ];

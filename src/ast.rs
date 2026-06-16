@@ -197,7 +197,7 @@ pub enum ExprKind {
     While(Box<Expr>, BlockExpr),
     For(Ident, Box<Expr>, BlockExpr),
     ArrayInitializer(Vec<Expr>),
-    StructInitializer(Option<Type>, Vec<StructInitializerField>),
+    StructInitializer(Vec<StructInitializerField>),
     Return(Option<Box<Expr>>),
     Break(Option<Box<Expr>>),
     Continue,
@@ -208,6 +208,7 @@ pub enum ExprKind {
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
     AsCast(Box<Expr>, Type),
+    TypeAscription(Box<Expr>, Type),
     Comptime(Box<Expr>),
     Range(Box<Expr>, Box<Expr>),
     FieldAccess(Box<Expr>, Ident),
@@ -865,12 +866,17 @@ impl Parser<'_> {
 
     fn next_as_expr(&mut self) -> Result<Expr, Error> {
         let mut expr = self.next_unary_expr()?;
-        while self.peek_token()? == Some(&lex::Token::Keyword(lex::Keyword::As)) {
+        while let Some(lex::Token::Keyword(kw @ (lex::Keyword::As | lex::Keyword::Of))) = self.peek_token()? {
+            let is_as = *kw == lex::Keyword::As;
             self.consume_token()?.unwrap();
             let ty = self.next_type()?;
             expr = Expr {
                 span: expr.span.join(ty.span()),
-                kind: ExprKind::AsCast(Box::new(expr), ty),
+                kind: if is_as {
+                    ExprKind::AsCast(Box::new(expr), ty)
+                } else {
+                    ExprKind::TypeAscription(Box::new(expr), ty)
+                },
             };
         }
         Ok(expr)
@@ -960,8 +966,6 @@ impl Parser<'_> {
             Some(lex::Token::Ident(_)) => {
                 if self.lookahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
                     self.next_function_call_expr()
-                } else if self.lookahead(1)? == Some(&lex::Token::Punct(lex::Punct::DotLeftBrace)) {
-                    self.next_struct_initializer_expr()
                 } else {
                     self.next_ident().map(|ident| Expr {
                         span: ident.span,
@@ -1057,11 +1061,7 @@ impl Parser<'_> {
 
     /// Parse struct initializer
     fn next_struct_initializer_expr(&mut self) -> Result<Expr, Error> {
-        let (struct_ty, opening_brace_span) = match self.peek_token()? {
-            Some(lex::Token::Ident(_)) => (Some(self.next_type()?), self.expect_punct(lex::Punct::DotLeftBrace)?),
-            Some(lex::Token::Punct(lex::Punct::DotLeftBrace)) => (None, self.expect_punct(lex::Punct::DotLeftBrace)?),
-            _ => return self.consume_unexpected_token("struct name or .{"),
-        };
+        let opening_brace_span = self.expect_punct(lex::Punct::DotLeftBrace)?;
         let fields = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightBrace, |parser| {
             let name = parser.next_ident()?;
             parser.expect_punct(lex::Punct::Colon)?;
@@ -1070,11 +1070,8 @@ impl Parser<'_> {
         })?;
         let closing_brace_span = self.expect_punct(lex::Punct::RightBrace)?;
         Ok(Expr {
-            span: struct_ty
-                .as_ref()
-                .map_or(opening_brace_span, |x| x.span())
-                .join(closing_brace_span),
-            kind: ExprKind::StructInitializer(struct_ty, fields),
+            span: opening_brace_span.join(closing_brace_span),
+            kind: ExprKind::StructInitializer(fields),
         })
     }
 

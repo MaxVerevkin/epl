@@ -433,40 +433,12 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     kind: ExprKind::ArrayInitializer(lowered_elements),
                 })
             }
-            ast::ExprKind::StructInitializer(specified_type, fields) => {
-                let (ty, struct_, type_arguments) = match specified_type {
-                    Some(ast_ty) => {
-                        let ty = type_from_ast(self.ctx, self.types_scope, ast_ty)?;
-                        let TypeInfo::Struct {
-                            struct_,
-                            type_arguments,
-                        } = ty.info()
-                        else {
-                            return Err(Error::new(format!("{ty:?} is not a struct type")).with_span(ast_ty.span()));
-                        };
-                        if let Some(expect_type) = expect_type
-                            && expect_type != ty
-                        {
-                            return Err(Error::expr_type_mismatch(expect_type, ty, expr.span));
-                        }
-                        (ty, *struct_, type_arguments)
-                    }
-                    None => match expect_type {
-                        Some(expect_type) => match expect_type.info() {
-                            TypeInfo::Struct {
-                                struct_,
-                                type_arguments,
-                            } => (expect_type, *struct_, type_arguments),
-                            _ => {
-                                return Err(Error::new(format!(
-                                    "expected expr of type {expect_type:?}, got struct initializer"
-                                ))
-                                .with_span(expr.span));
-                            }
-                        },
-                        None => return Err(Error::new("type annotations needed").with_span(expr.span)),
-                    },
-                };
+            ast::ExprKind::StructInitializer(fields) => {
+                let ty = expect_type.ok_or_else(|| Error::new("type annotations needed").with_span(expr.span))?;
+                let (struct_, type_arguments) = ty.as_struct().ok_or_else(|| {
+                    Error::new(format!("expected expr of type {}, got struct initializer", ty.render()))
+                        .with_span(expr.span)
+                })?;
                 if let Some(missing_field) = struct_
                     .info()
                     .fields
@@ -900,7 +872,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 {
                     return Err(Error::expr_type_mismatch(expect_type, ty, expr.span));
                 }
-                let lowered_expr = self.lower_expr(value, None)?; // TODO: pass ty as a hint (but not a requirement!)
+                let lowered_expr = self.lower_expr(value, None)?;
                 if (lowered_expr.ty.is_int() && ty.is_int()) || (lowered_expr.ty.is_ptr() && ty.is_ptr()) {
                     Ok(Expr {
                         ty,
@@ -910,6 +882,16 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 } else {
                     Err(Error::new(format!("cannot cast from {:?} to {:?}", lowered_expr.ty, ty)).with_span(expr.span))
                 }
+            }
+            ast::ExprKind::TypeAscription(value, ty) => {
+                let ty = type_from_ast(self.ctx, self.types_scope, ty)?;
+                if let Some(expect_type) = expect_type
+                    && expect_type != ty
+                {
+                    return Err(Error::expr_type_mismatch(expect_type, ty, expr.span));
+                }
+                let lowered_value = self.lower_expr(value, Some(ty))?;
+                Ok(Expr { span, ..lowered_value })
             }
             ast::ExprKind::Comptime(cexpr) => {
                 let lowered_cexpr = self.lower_expr(cexpr, expect_type)?;

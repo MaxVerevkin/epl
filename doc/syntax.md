@@ -21,7 +21,7 @@ Everything after `#` is treated as a comment.
 
 ## Keywords
 
-`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `enum` `undefined` `as` `comptime` `null`
+`fn` `return` `break` `continue` `if` `else` `loop` `while` `for` `in` `let` `true` `false` `struct` `enum` `undefined` `as` `of` `comptime` `null`
 
 ## Items
 
@@ -75,7 +75,7 @@ comp_expr            ::= range_expr [ ( '==' | '!=' | '<=' | '>=' | '<' | '>' ) 
 range_expr           ::= additive_expr [ '..' additive_expr ]
 additive_expr        ::= multiplicative_expr { ( '+' | '-' ) multiplicative_expr }
 multiplicative_expr  ::= as_expr { ( '*' | '/' | '%' ) as_expr }
-as_expr              ::= unary_expr { 'as' type }
+as_expr              ::= unary_expr { ( 'as' | 'of' ) type }
 unary_expr           ::= ( '-' | '!' | '&' ) unary_expr | field_access_expr
 field_access_expr    ::= base_expr { ( '.' '*' | '.' ident | '[' expr ']' ) }
 base_expr            ::= literal
@@ -86,7 +86,7 @@ base_expr            ::= literal
                        | array_initializer
 expr_with_block      ::= block_expr | if_expr | loop_expr | while_expr | for_expr | struct_initializer
 array_initializer    ::= '[' [ expr { ',' expr } [ ',' ] ] ']'
-struct_initializer   ::= [ ident ] '.{' struct_initializer_fields '}'
+struct_initializer   ::= '.{' struct_initializer_fields '}'
 struct_initializer_fields ::= [ struct_initializer_field { ',' struct_initializer_field } [ ',' ] ]
 struct_initializer_field  ::= ident ':' expr
 expr_with_no_block       ::= expr except expr_with_block
