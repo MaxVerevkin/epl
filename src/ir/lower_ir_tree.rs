@@ -55,7 +55,7 @@ fn lower_type<'ctx>(module: &ir_tree::Module<'ctx>, ty: ir_tree::Type<'ctx>) -> 
                 .info()
                 .fields
                 .iter()
-                .map(|f| lower_type(module, module.ctx.type_of_struct_field(f.1, type_arguments)))
+                .map(|f| lower_type(module, module.ctx.type_of_struct_field(f.1, *type_arguments)))
                 .collect::<Vec<_>>();
             Type::Struct(fields, ty.layout(module.ctx))
         }

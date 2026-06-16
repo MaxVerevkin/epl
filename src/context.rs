@@ -6,7 +6,7 @@ use bumpalo::Bump;
 use crate::ast;
 use crate::common::{Layout, PtrSize};
 use crate::interning::{Interned, Interner};
-use crate::ir_tree::{IntType, Struct, StructFieldId, StructInfo, Type, TypeInfo};
+use crate::ir_tree::{IntType, Struct, StructFieldId, StructInfo, Type, TypeArguments, TypeInfo};
 
 pub fn run_with_context<R, F>(ptr_size: PtrSize, cb: F) -> R
 where
@@ -81,7 +81,11 @@ impl<'ctx> Context<'ctx> {
         ty
     }
 
-    pub fn type_of_struct_field(self, struct_field_id: StructFieldId, type_arguments: &[Type<'ctx>]) -> Type<'ctx> {
+    pub fn type_of_struct_field(
+        self,
+        struct_field_id: StructFieldId,
+        type_arguments: TypeArguments<'ctx>,
+    ) -> Type<'ctx> {
         let (ty, struct_owner) = *self
             .inner
             .type_of_struct_fields
@@ -93,7 +97,7 @@ impl<'ctx> Context<'ctx> {
         ty.instantiate(self, struct_owner, type_arguments)
     }
 
-    pub fn offset_of_struct_field(self, struct_field_id: StructFieldId, type_arguments: &[Type<'ctx>]) -> u64 {
+    pub fn offset_of_struct_field(self, struct_field_id: StructFieldId, type_arguments: TypeArguments<'ctx>) -> u64 {
         // TODO: cache this
 
         let (_ty, struct_owner) = *self
@@ -124,6 +128,7 @@ impl<'ctx> Context<'ctx> {
 struct ContextInner<'ctx> {
     arena: &'ctx Bump,
     type_info_interner: Interner<'ctx, TypeInfo<'ctx>>,
+    type_arguments_interner: Interner<'ctx, [Type<'ctx>]>,
     type_of_struct_fields: Mutex<HashMap<StructFieldId, (Type<'ctx>, Struct<'ctx>)>>,
     types: Types<'ctx>,
     ptr_size: PtrSize,
@@ -137,6 +142,7 @@ impl<'ctx> ContextInner<'ctx> {
         Self {
             arena,
             type_info_interner,
+            type_arguments_interner: Interner::new(arena),
             type_of_struct_fields: Mutex::default(),
             types,
             ptr_size,
@@ -185,5 +191,11 @@ impl<'ctx> Types<'ctx> {
 impl<'ctx> AsRef<Interner<'ctx, TypeInfo<'ctx>>> for Context<'ctx> {
     fn as_ref(&self) -> &Interner<'ctx, TypeInfo<'ctx>> {
         &self.inner.type_info_interner
+    }
+}
+
+impl<'ctx> AsRef<Interner<'ctx, [Type<'ctx>]>> for Context<'ctx> {
+    fn as_ref(&self) -> &Interner<'ctx, [Type<'ctx>]> {
+        &self.inner.type_arguments_interner
     }
 }

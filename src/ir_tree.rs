@@ -117,7 +117,7 @@ impl<'ctx> Module<'ctx> {
                             ctx,
                             TypeInfo::Struct {
                                 struct_,
-                                type_arguments: Vec::new(),
+                                type_arguments: TypeArguments::new(ctx, &[]),
                             },
                         ))
                     } else {

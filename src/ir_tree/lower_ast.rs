@@ -897,7 +897,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     TypeInfo::Struct {
                         struct_,
                         type_arguments,
-                    } => (lowered_lhs.ty, *struct_, type_arguments.as_slice(), false),
+                    } => (lowered_lhs.ty, *struct_, *type_arguments, false),
                     TypeInfo::Ptr { pointee: Some(pointee) } if pointee.as_struct().is_some() => {
                         let (struct_, type_arguments) = pointee.as_struct().unwrap();
                         (*pointee, struct_, type_arguments, true)

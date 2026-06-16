@@ -7,6 +7,9 @@ use crate::interning::{Interned, Interner};
 pub struct Type<'ctx>(pub Interned<'ctx, TypeInfo<'ctx>>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TypeArguments<'ctx>(pub Interned<'ctx, [Type<'ctx>]>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Struct<'ctx>(pub Interned<'ctx, StructInfo>);
 
 impl<'ctx> Type<'ctx> {
@@ -34,7 +37,7 @@ impl<'ctx> Type<'ctx> {
                 let mut size = 0u64;
                 let mut align = 1u64;
                 for (_, field_id) in &struct_.info().fields {
-                    let field_ty = ctx.type_of_struct_field(*field_id, type_arguments);
+                    let field_ty = ctx.type_of_struct_field(*field_id, *type_arguments);
                     let field_layout = field_ty.layout(ctx);
                     size = size.next_multiple_of(field_layout.align);
                     align = align.max(field_layout.align);
@@ -60,12 +63,12 @@ impl<'ctx> Type<'ctx> {
         layout
     }
 
-    pub fn as_struct(self) -> Option<(Struct<'ctx>, &'ctx [Self])> {
+    pub fn as_struct(self) -> Option<(Struct<'ctx>, TypeArguments<'ctx>)> {
         match self.info() {
             TypeInfo::Struct {
                 struct_,
                 type_arguments,
-            } => Some((*struct_, type_arguments)),
+            } => Some((*struct_, *type_arguments)),
             _ => None,
         }
     }
@@ -119,22 +122,32 @@ impl<'ctx> Type<'ctx> {
         }
     }
 
-    pub fn instantiate(self, ctx: Context<'ctx>, struct_owner: Struct<'ctx>, type_arguments: &[Self]) -> Self {
+    pub fn instantiate(
+        self,
+        ctx: Context<'ctx>,
+        struct_owner: Struct<'ctx>,
+        type_arguments: TypeArguments<'ctx>,
+    ) -> Self {
         match self.info() {
             TypeInfo::Never | TypeInfo::Unit | TypeInfo::Bool | TypeInfo::Int(_) => self,
             TypeInfo::Struct {
                 struct_,
                 type_arguments: args,
-            } => Type::new(
-                ctx,
-                TypeInfo::Struct {
-                    struct_: *struct_,
-                    type_arguments: args
-                        .iter()
-                        .map(|ty| ty.instantiate(ctx, struct_owner, type_arguments))
-                        .collect(),
-                },
-            ),
+            } => {
+                let instanciated_type_args = args
+                    .0
+                    .get()
+                    .iter()
+                    .map(|ty| ty.instantiate(ctx, struct_owner, type_arguments))
+                    .collect::<Vec<_>>();
+                Type::new(
+                    ctx,
+                    TypeInfo::Struct {
+                        struct_: *struct_,
+                        type_arguments: TypeArguments::new(ctx, &instanciated_type_args),
+                    },
+                )
+            }
             TypeInfo::Ptr { pointee } => Type::new(
                 ctx,
                 TypeInfo::Ptr {
@@ -150,7 +163,7 @@ impl<'ctx> Type<'ctx> {
             ),
             TypeInfo::TypeParameter { name: _, owner, index } => {
                 if *owner == struct_owner {
-                    type_arguments[*index]
+                    type_arguments.0.get()[*index]
                 } else {
                     self
                 }
@@ -185,11 +198,11 @@ impl<'ctx> Type<'ctx> {
                 type_arguments,
             } => {
                 output.push_str(&struct_.info().name.value);
-                if !type_arguments.is_empty() {
+                if !type_arguments.0.get().is_empty() {
                     output.push('<');
-                    for (i, type_arg) in type_arguments.iter().enumerate() {
+                    for (i, type_arg) in type_arguments.0.get().iter().enumerate() {
                         type_arg.render_into(output);
-                        if i + 1 != type_arguments.len() {
+                        if i + 1 != type_arguments.0.get().len() {
                             output.push_str(", ");
                         }
                     }
@@ -213,19 +226,27 @@ impl<'ctx> Type<'ctx> {
     }
 }
 
+impl<'ctx> TypeArguments<'ctx> {
+    pub fn new(ctx: Context<'ctx>, args: &[Type<'ctx>]) -> Self {
+        let type_args_interner: &Interner<[Type<'ctx>]> = ctx.as_ref();
+        Self(type_args_interner.intern_slice(args))
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum TypeConstructor<'ctx> {
     NonGeneric(Type<'ctx>),
     Struct(Struct<'ctx>),
 }
 
+// TODO: once TypeParameter's name is interned, derive Copy
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeInfo<'ctx> {
     Never,
     Unit,
     Bool,
     Int(IntType),
-    Struct { struct_: Struct<'ctx>, type_arguments: Vec<Type<'ctx>> },
+    Struct { struct_: Struct<'ctx>, type_arguments: TypeArguments<'ctx> },
     Ptr { pointee: Option<Type<'ctx>> },
     Array { element_ty: Type<'ctx>, length: u64 },
     TypeParameter { name: String, owner: Struct<'ctx>, index: usize },
@@ -334,7 +355,7 @@ impl<'ctx> Struct<'ctx> {
                     type_arguments,
                 } => {
                     visit(ctx, path, *struct_, predecessor)?;
-                    for ty in type_arguments {
+                    for ty in type_arguments.0.get() {
                         visit_ty(ctx, path, *ty, predecessor)?;
                     }
                 }
@@ -421,7 +442,7 @@ pub fn type_from_ast<'ctx>(
                         ctx,
                         TypeInfo::Struct {
                             struct_,
-                            type_arguments,
+                            type_arguments: TypeArguments::new(ctx, &type_arguments),
                         },
                     )
                 }

@@ -32,14 +32,17 @@ fn constant_to_bytes_into<'ctx>(ctx: Context<'ctx>, constant: &Constant<'ctx>, o
             };
             let mut written = 0;
             for ((_, field_def_id), field_value) in struct_.info().fields.iter().zip(fields) {
-                let offset = ctx.offset_of_struct_field(*field_def_id, type_arguments);
+                let offset = ctx.offset_of_struct_field(*field_def_id, *type_arguments);
                 while written < offset {
                     // padding
                     output.push(0);
                     written += 1;
                 }
                 constant_to_bytes_into(ctx, field_value, output);
-                written += ctx.type_of_struct_field(*field_def_id, type_arguments).layout(ctx).size;
+                written += ctx
+                    .type_of_struct_field(*field_def_id, *type_arguments)
+                    .layout(ctx)
+                    .size;
             }
             for _ in written..ty.layout(ctx).size {
                 // padding
@@ -81,9 +84,9 @@ pub fn constant_from_bytes<'ctx>(ctx: Context<'ctx>, bytes: &[u8], ty: Type<'ctx
             let mut fields = Vec::new();
             assert_eq!(ty.layout(ctx).size, bytes.len() as u64);
             for (_, field_def_id) in &struct_.info().fields {
-                let field_ty = ctx.type_of_struct_field(*field_def_id, type_arguments);
+                let field_ty = ctx.type_of_struct_field(*field_def_id, *type_arguments);
                 let field_size = field_ty.layout(ctx).size;
-                let field_offset = ctx.offset_of_struct_field(*field_def_id, type_arguments);
+                let field_offset = ctx.offset_of_struct_field(*field_def_id, *type_arguments);
                 let field_bytes = &bytes[field_offset as usize..][..field_size as usize];
                 fields.push(constant_from_bytes(ctx, field_bytes, field_ty));
             }
