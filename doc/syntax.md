@@ -95,7 +95,7 @@ block_expr               ::= '{' { statement } [ expr ] '}'
 if_expr                  ::= 'if' expr block_expr [ 'else' ( block_expr | if_expr ) ]
 loop_expr                ::= 'loop' block_expr
 while_expr               ::= 'while' expr block_expr
-for_expr                 ::= 'for' ident 'in' expr block_expr
+for_expr                 ::= 'for' ident [ ':' type ] 'in' expr block_expr
 function_call_expr       ::= ident '(' [ expr { ',' expr } [ ',' ] ] ')'
 let_statement            ::= 'let' ident ':' type ';' | 'let' ident [ ':' type ] '=' expr ';'
 ```

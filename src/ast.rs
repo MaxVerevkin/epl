@@ -195,7 +195,7 @@ pub enum ExprKind {
     If(Box<Expr>, BlockExpr, Option<Box<Expr>>),
     Loop(BlockExpr),
     While(Box<Expr>, BlockExpr),
-    For(Ident, Box<Expr>, BlockExpr),
+    For(Ident, Option<Type>, Box<Expr>, BlockExpr),
     ArrayInitializer(Vec<Expr>),
     StructInitializer(Vec<StructInitializerField>),
     Return(Option<Box<Expr>>),
@@ -1121,12 +1121,18 @@ impl Parser<'_> {
     fn next_for_expr(&mut self) -> Result<Expr, Error> {
         let for_keyword_span = self.expect_keyword(lex::Keyword::For)?;
         let i = self.next_ident()?;
+        let i_ty = if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::Colon)) {
+            self.consume_token()?.unwrap();
+            Some(self.next_type()?)
+        } else {
+            None
+        };
         self.expect_keyword(lex::Keyword::In)?;
         let iterator = self.next_expr()?;
         let body = self.next_block_expr()?;
         Ok(Expr {
             span: for_keyword_span.join(body.closing_brace_span),
-            kind: ExprKind::For(i, Box::new(iterator), body),
+            kind: ExprKind::For(i, i_ty, Box::new(iterator), body),
         })
     }
 

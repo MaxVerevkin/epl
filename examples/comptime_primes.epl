@@ -13,7 +13,7 @@ fn main() -> i32 {
 		}
 		lut
 	};
-	for i in 0usize..20 {
+	for i: usize in 0..20 {
 		printf("%i ", primes[i]);
 	}
 	printf("\n");

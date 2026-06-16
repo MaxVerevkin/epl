@@ -252,7 +252,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     ),
                 })
             }
-            ast::ExprKind::For(i, iterator_range, body) => {
+            ast::ExprKind::For(i, i_ty, iterator_range, body) => {
                 // transform
                 //
                 // for <var> in <expr_from>..<expr_to> { $body }
@@ -279,6 +279,11 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     return Err(Error::expr_type_mismatch(expect_type, self.ctx.types().unit, expr.span));
                 }
 
+                let i_ty = i_ty
+                    .as_ref()
+                    .map(|ast| type_from_ast(self.ctx, self.types_scope, ast))
+                    .transpose()?;
+
                 let ast::ExprKind::Range(range_from, range_to) = &iterator_range.kind else {
                     return Err(
                         Error::new("only range exprs (e.g. 'a..b') are supported as iterator in 'for' yet")
@@ -286,7 +291,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     );
                 };
 
-                let lowered_range_from = self.lower_expr(range_from, None)?;
+                let lowered_range_from = self.lower_expr(range_from, i_ty)?;
                 let var_type = lowered_range_from.ty;
                 let var_type_int = var_type
                     .as_int()
