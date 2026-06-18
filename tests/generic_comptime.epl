@@ -1,0 +1,20 @@
+@pure
+fn id<T>(x: T) -> T {
+	x
+}
+
+@pure
+fn select<T>(a: T, b: T, cond: bool) -> T {
+	let zero = comptime noop::<[T; 10]>();
+	if cond { a } else { b }
+}
+
+@pure
+fn noop<T>() -> i32 {
+	0
+}
+
+fn test() {
+	let num = comptime id::<usize>(123);
+	let answer = comptime select::<i8>(42, 0, true);
+}

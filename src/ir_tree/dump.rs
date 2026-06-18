@@ -63,12 +63,15 @@ impl<'a, 'ctx> ExprVisitor<'a, 'ctx> for Writer<'a, 'ctx> {
             ExprKind::Loop(loop_id, _) => write!(self.output, "LOOP({loop_id:?})").unwrap(),
             ExprKind::ArrayInitializer(_) => self.output.push_str("ARRAY_INITIALIZER"),
             ExprKind::StructInitializer(_) => self.output.push_str("STRUCT_INITIALIZER"),
-            ExprKind::FunctionCall(function_id, _) => write!(
-                self.output,
-                "FUNCTION_CALL({:?})",
-                self.module.functions.get(function_id).unwrap().name.value
-            )
-            .unwrap(),
+            ExprKind::FunctionCall(function_id, type_arguments, _) => {
+                self.output.push_str("FUNCTION_CALL(");
+                self.output
+                    .push_str(&self.module.functions.get(function_id).unwrap().debug_name);
+                if !type_arguments.is_empty() {
+                    type_arguments.render_into(&mut self.output);
+                }
+                self.output.push(')');
+            }
             ExprKind::Cast(_) => self.output.push_str("CAST"),
             ExprKind::Not(_) => self.output.push_str("NOT"),
             ExprKind::Comptime(_) => self.output.push_str("COMPTIME"),
@@ -132,7 +135,7 @@ impl<'ctx> Writer<'_, 'ctx> {
 
     fn dump_function_desc(&mut self, function: &Function<'ctx>) {
         self.output.push_str("fn ");
-        self.output.push_str(&function.name.value);
+        self.output.push_str(&function.debug_name);
         self.output.push('(');
         for (arg_i, (arg_name, arg_ty)) in function.args.iter().enumerate() {
             self.output.push_str(arg_name);

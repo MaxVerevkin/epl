@@ -6,7 +6,7 @@ use bumpalo::Bump;
 use crate::ast;
 use crate::common::{Layout, PtrSize};
 use crate::interning::{Interned, Interner};
-use crate::ir_tree::{IntType, Struct, StructFieldId, StructInfo, Type, TypeArguments, TypeInfo};
+use crate::ir_tree::{IntType, Struct, StructFieldId, StructInfo, Type, TypeArguments, TypeInfo, TypeParameterOwner};
 
 pub fn run_with_context<R, F>(ptr_size: PtrSize, cb: F) -> R
 where
@@ -94,7 +94,7 @@ impl<'ctx> Context<'ctx> {
             .get(&struct_field_id)
             .expect("type_of_struct_field called for not-yet-registered struct field");
 
-        ty.instantiate(self, struct_owner, type_arguments)
+        ty.instantiate(self, TypeParameterOwner::Struct(struct_owner), type_arguments)
     }
 
     pub fn offset_of_struct_field(self, struct_field_id: StructFieldId, type_arguments: TypeArguments<'ctx>) -> u64 {

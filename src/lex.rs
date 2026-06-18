@@ -98,6 +98,8 @@ pub enum Literal {
 pub enum Punct {
     /// ...
     TripleDot,
+    /// ::
+    PathSegment,
     /// ..
     DoubleDot,
     // ||
@@ -173,6 +175,7 @@ pub enum Punct {
 /// A mapping from strings to punct tokens
 const PUNCT_MAP: &[(&str, Punct)] = &[
     ("...", Punct::TripleDot),
+    ("::", Punct::PathSegment),
     ("..", Punct::DoubleDot),
     ("||", Punct::LogicalOr),
     ("&&", Punct::LogicalAnd),

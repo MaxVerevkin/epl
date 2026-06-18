@@ -1,21 +1,21 @@
 fn main() -> i32
     BLOCK TYPE=!
     |   DECLARE var_1 "board" : Board
-    |   FUNCTION_CALL("clear_board") TYPE=unit
+    |   FUNCTION_CALL(clear_board) TYPE=unit
     |   |   GET_POINTER TYPE=*Board
     |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
-    |   FUNCTION_CALL("seed_board") TYPE=unit
+    |   FUNCTION_CALL(seed_board) TYPE=unit
     |   |   GET_POINTER TYPE=*Board
     |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
     |   LOOP(loop_1) TYPE=!
     |   |   BLOCK TYPE=unit
-    |   |   |   FUNCTION_CALL("print_board") TYPE=unit
+    |   |   |   FUNCTION_CALL(print_board) TYPE=unit
     |   |   |   |   GET_POINTER TYPE=*Board
     |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
-    |   |   |   FUNCTION_CALL("update_board") TYPE=unit
+    |   |   |   FUNCTION_CALL(update_board) TYPE=unit
     |   |   |   |   GET_POINTER TYPE=*Board
     |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=Board
-    |   |   |   FUNCTION_CALL("usleep") TYPE=i32
+    |   |   |   FUNCTION_CALL(usleep) TYPE=i32
     |   |   |   |   CONST 250000 TYPE=u32
     |   |   |   CONST UNIT TYPE=unit
 
@@ -75,7 +75,7 @@ fn clear_board(board: *Board) -> unit
     |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
     |   |   |   |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=isize
-    |   |   |   |   |   |   |   |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   |   |   |   |   |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
@@ -95,31 +95,31 @@ fn seed_board(board: *Board) -> unit
     |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   ARGUMENT("board") TYPE=*Board
     |   BLOCK TYPE=unit
-    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   LOAD TYPE=*Board
     |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 8 TYPE=usize
     |   |   |   CONST 10 TYPE=usize
     |   |   |   CONST true TYPE=bool
-    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   LOAD TYPE=*Board
     |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 9 TYPE=usize
     |   |   |   CONST 11 TYPE=usize
     |   |   |   CONST true TYPE=bool
-    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   LOAD TYPE=*Board
     |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 10 TYPE=usize
     |   |   |   CONST 9 TYPE=usize
     |   |   |   CONST true TYPE=bool
-    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   LOAD TYPE=*Board
     |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 10 TYPE=usize
     |   |   |   CONST 10 TYPE=usize
     |   |   |   CONST true TYPE=bool
-    |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   LOAD TYPE=*Board
     |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Board
     |   |   |   CONST 10 TYPE=usize
@@ -133,7 +133,7 @@ fn print_board(board: *Board) -> unit
     |   |   VARIABLE(var_10) [PLACE] TYPE=*Board
     |   |   ARGUMENT("board") TYPE=*Board
     |   BLOCK TYPE=unit
-    |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   CONST_STRING("\n") TYPE=*i8
     |   |   BLOCK TYPE=unit
     |   |   |   DECLARE var_11 "<immutable-row>" : usize
@@ -186,9 +186,9 @@ fn print_board(board: *Board) -> unit
     |   |   |   |   |   |   |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_14) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   |   CONST 1 TYPE=isize
-    |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   IF TYPE=*i8
-    |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL(get_cell) TYPE=bool
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_10) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
@@ -199,7 +199,7 @@ fn print_board(board: *Board) -> unit
     |   |   |   |   |   |   |   |   |   |   |   |   |   CONST_STRING(".") TYPE=*i8
     |   |   |   |   |   |   |   |   |   |   BREAK(loop_5) TYPE=!
     |   |   |   |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
-    |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   |   |   |   |   |   CONST_STRING("\n") TYPE=*i8
     |   |   |   |   |   BREAK(loop_4) TYPE=!
     |   |   |   |   |   |   CONST UNIT TYPE=unit
@@ -268,7 +268,7 @@ fn update_board(board: *Board) -> unit
     |   |   |   |   |   |   |   |   |   |   |   DECLARE var_27 "next_cell" : bool
     |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_25) [PLACE] TYPE=bool
-    |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL(get_cell) TYPE=bool
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
@@ -277,7 +277,7 @@ fn update_board(board: *Board) -> unit
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_24) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   STORE TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=usize
-    |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_alive_neighbors") TYPE=usize
+    |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL(get_alive_neighbors) TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_17) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
@@ -303,7 +303,7 @@ fn update_board(board: *Board) -> unit
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_26) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   CONST 3 TYPE=usize
-    |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("set_cell") TYPE=unit
+    |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL(set_cell) TYPE=unit
     |   |   |   |   |   |   |   |   |   |   |   |   GET_POINTER TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_18) [PLACE] TYPE=Board
     |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
@@ -441,7 +441,7 @@ fn get_alive_neighbors(board: *Board, row: usize, col: usize) -> usize
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_39) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_30) [PLACE] TYPE=usize
-    |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL("get_cell") TYPE=bool
+    |   |   |   |   |   |   |   |   |   |   |   |   |   FUNCTION_CALL(get_cell) TYPE=bool
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   VARIABLE(var_28) [PLACE] TYPE=*Board
     |   |   |   |   |   |   |   |   |   |   |   |   |   |   LOAD TYPE=usize

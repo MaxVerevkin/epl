@@ -134,7 +134,7 @@ impl<'ctx> EvalCtx<'_, 'ctx> {
                     _other => unreachable!(),
                 };
                 let index_value = match self.eval_expr(index)? {
-                    Constant::U64(index) => index,
+                    Constant::USize(index) => index,
                     _other => unreachable!(),
                 };
                 elements.remove(index_value as usize)
@@ -248,10 +248,14 @@ impl<'ctx> EvalCtx<'_, 'ctx> {
                 }
                 Constant::Struct(expr.ty, fields_in_order)
             }
-            ExprKind::FunctionCall(function_id, arguments) => {
+            ExprKind::FunctionCall(function_id, type_arguments, arguments) => {
                 assert!(
                     self.module.functions[function_id].is_pure,
                     "can only call pure functions"
+                );
+                assert!(
+                    type_arguments.is_empty(),
+                    "generic functions should have beed monomorphized"
                 );
                 let arguments_values = arguments
                     .iter()

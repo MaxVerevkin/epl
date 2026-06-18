@@ -9,7 +9,7 @@ pub fn lower_function<'ctx>(
     module: &ir_tree::Module<'ctx>,
 ) -> Result<Function, Error> {
     let mut ir_function = Function {
-        mangled_name: function.name.value.clone(),
+        mangled_name: function.mangled_name.clone(),
         args: function
             .args
             .iter()
@@ -23,7 +23,7 @@ pub fn lower_function<'ctx>(
 
     if let Some(body) = &function.body {
         if function.is_variadic {
-            return Err(Error::new("defining variadic functions is not supported").with_span(function.name.span));
+            return Err(Error::new("defining variadic functions is not supported").with_span(function.name_ident.span));
         }
         ir_function.body = Some(lower_function_body(module, &ir_function, body)?);
     }
@@ -383,7 +383,8 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
                     EvalResult::Value(Value::Definition(value))
                 }
             }
-            ir_tree::ExprKind::FunctionCall(function_id, args) => {
+            ir_tree::ExprKind::FunctionCall(function_id, type_arguments, args) => {
+                assert!(type_arguments.0.get().is_empty(), "should have been monomorphized");
                 let mut arg_vals = Vec::new();
                 for arg_expr in args {
                     match self.eval_expr(arg_expr)? {
@@ -391,7 +392,7 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
                         EvalResult::Value(val) => arg_vals.push(val),
                     }
                 }
-                let name = self.module.functions[function_id].name.value.clone();
+                let name = self.module.functions[function_id].mangled_name.clone();
                 let val_def_id = self.cursor().function_call(name, arg_vals, ty);
                 if expr.ty.is_never() {
                     self.finalize_block(Terminator::Unreachable);

@@ -1,5 +1,5 @@
 fn main() -> i32 {
-	let list = list_new();
+	let list = list_new::<i32>();
 	for i in 1..6 {
 		list_print(&list);
 		list_insert(&list, i);
@@ -17,7 +17,7 @@ struct Node<T> {
 	next: *Node<T>,
 }
 
-fn list_new() -> List<i32> {
+fn list_new<T>() -> List<T> {
 	.{ head: null }
 }
 

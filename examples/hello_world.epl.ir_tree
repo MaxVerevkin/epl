@@ -1,6 +1,6 @@
 fn main() -> i32
     BLOCK TYPE=i32
-    |   FUNCTION_CALL("printf") TYPE=unit
+    |   FUNCTION_CALL(printf) TYPE=unit
     |   |   CONST_STRING("hello world\n") TYPE=*i8
     |   CONST 0 TYPE=i32
 

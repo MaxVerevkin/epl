@@ -29,7 +29,7 @@ fn main() -> i32
     |   |   |   |   |   INPLACE_ARITHMETIC(Add) TYPE=unit
     |   |   |   |   |   |   VARIABLE(var_5) [PLACE] TYPE=usize
     |   |   |   |   |   |   CONST 1 TYPE=isize
-    |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   |   |   |   CONST_STRING("%i ") TYPE=*i8
     |   |   |   |   |   |   ARRAY_ELEMENT TYPE=i32
     |   |   |   |   |   |   |   LOAD TYPE=[i32; 20]
@@ -38,7 +38,7 @@ fn main() -> i32
     |   |   |   |   |   |   |   |   VARIABLE(var_7) [PLACE] TYPE=usize
     |   |   |   |   BREAK(loop_3) TYPE=!
     |   |   |   |   |   CONST UNIT TYPE=unit
-    |   FUNCTION_CALL("printf") TYPE=unit
+    |   FUNCTION_CALL(printf) TYPE=unit
     |   |   CONST_STRING("\n") TYPE=*i8
     |   CONST 0 TYPE=i32
 

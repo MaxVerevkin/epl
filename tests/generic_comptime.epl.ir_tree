@@ -1,0 +1,51 @@
+fn test() -> unit
+    BLOCK TYPE=unit
+    |   DECLARE var_6 "num" : usize
+    |   DECLARE var_7 "answer" : i8
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_6) [PLACE] TYPE=usize
+    |   |   CONST 123 TYPE=usize
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_7) [PLACE] TYPE=i8
+    |   |   CONST 42 TYPE=i8
+
+fn id<usize>(x: usize) -> usize
+    BLOCK TYPE=usize
+    |   DECLARE var_1 "x" : usize
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_1) [PLACE] TYPE=usize
+    |   |   ARGUMENT("x") TYPE=usize
+    |   LOAD TYPE=usize
+    |   |   VARIABLE(var_1) [PLACE] TYPE=usize
+
+fn select<i8>(a: i8, b: i8, cond: bool) -> i8
+    BLOCK TYPE=i8
+    |   DECLARE var_2 "a" : i8
+    |   DECLARE var_3 "b" : i8
+    |   DECLARE var_4 "cond" : bool
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_2) [PLACE] TYPE=i8
+    |   |   ARGUMENT("a") TYPE=i8
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_3) [PLACE] TYPE=i8
+    |   |   ARGUMENT("b") TYPE=i8
+    |   STORE TYPE=unit
+    |   |   VARIABLE(var_4) [PLACE] TYPE=bool
+    |   |   ARGUMENT("cond") TYPE=bool
+    |   BLOCK TYPE=i8
+    |   |   DECLARE var_5 "zero" : i32
+    |   |   STORE TYPE=unit
+    |   |   |   VARIABLE(var_5) [PLACE] TYPE=i32
+    |   |   |   CONST 0 TYPE=i32
+    |   |   IF TYPE=i8
+    |   |   |   LOAD TYPE=bool
+    |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=bool
+    |   |   |   LOAD TYPE=i8
+    |   |   |   |   VARIABLE(var_2) [PLACE] TYPE=i8
+    |   |   |   LOAD TYPE=i8
+    |   |   |   |   VARIABLE(var_3) [PLACE] TYPE=i8
+
+fn noop<[i8; 10]>() -> i32
+    CONST 0 TYPE=i32
+
+

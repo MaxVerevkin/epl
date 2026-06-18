@@ -30,7 +30,7 @@ fn vec2_print(vec: Vec2) -> unit
     |   STORE TYPE=unit
     |   |   VARIABLE(var_3) [PLACE] TYPE=Vec2
     |   |   ARGUMENT("vec") TYPE=Vec2
-    |   FUNCTION_CALL("printf") TYPE=unit
+    |   FUNCTION_CALL(printf) TYPE=unit
     |   |   CONST_STRING("Vec2 .{ x: %i, y: %i }\n") TYPE=*i8
     |   |   FIELD(x) TYPE=i32
     |   |   |   LOAD TYPE=Vec2
@@ -47,17 +47,17 @@ fn main() -> i32
     |   |   STRUCT_INITIALIZER TYPE=Vec2
     |   |   |   CONST 10 TYPE=i32
     |   |   |   CONST 20 TYPE=i32
-    |   FUNCTION_CALL("vec2_print") TYPE=unit
+    |   FUNCTION_CALL(vec2_print) TYPE=unit
     |   |   LOAD TYPE=Vec2
     |   |   |   VARIABLE(var_4) [PLACE] TYPE=Vec2
-    |   FUNCTION_CALL("vec2_print") TYPE=unit
-    |   |   FUNCTION_CALL("vec2_add") TYPE=Vec2
+    |   FUNCTION_CALL(vec2_print) TYPE=unit
+    |   |   FUNCTION_CALL(vec2_add) TYPE=Vec2
     |   |   |   LOAD TYPE=Vec2
     |   |   |   |   VARIABLE(var_4) [PLACE] TYPE=Vec2
     |   |   |   STRUCT_INITIALIZER TYPE=Vec2
     |   |   |   |   CONST 5 TYPE=i32
     |   |   |   |   CONST 5 TYPE=i32
-    |   FUNCTION_CALL("vec2_print") TYPE=unit
+    |   FUNCTION_CALL(vec2_print) TYPE=unit
     |   |   CONST {21, 12} TYPE=Vec2
     |   CONST 0 TYPE=i32
 

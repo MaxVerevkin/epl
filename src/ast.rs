@@ -42,6 +42,7 @@ pub enum ItemKind {
 #[derive(Debug)]
 pub struct Function {
     pub name: Ident,
+    pub type_parameters: Vec<TypeParameter>,
     pub args: Vec<FunctionArg>,
     pub is_variadic: bool,
     pub return_ty: Option<Type>,
@@ -202,7 +203,7 @@ pub enum ExprKind {
     Break(Option<Box<Expr>>),
     Continue,
     Literal(Literal),
-    FunctionCallExpr(Ident, Vec<Expr>),
+    FunctionCallExpr(Ident, Option<TypeArguments>, Vec<Expr>),
     Assignment(Box<Expr>, Box<Expr>),
     CompoundAssignment(Box<Expr>, ArithmeticOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
@@ -464,6 +465,7 @@ impl Parser<'_> {
     fn next_function(&mut self, annotations: Vec<Annotation>) -> Result<Item, Error> {
         self.expect_keyword(lex::Keyword::Fn)?;
         let name = self.next_ident()?;
+        let type_parameters = self.next_opt_type_parameters()?;
         self.expect_punct(lex::Punct::LeftParen)?;
         let mut args = Vec::new();
         let mut is_variadic = false;
@@ -533,6 +535,7 @@ impl Parser<'_> {
             annotations,
             kind: ItemKind::Function(Function {
                 name,
+                type_parameters,
                 args,
                 is_variadic,
                 return_ty,
@@ -964,12 +967,19 @@ impl Parser<'_> {
     fn next_base_expr(&mut self) -> Result<Expr, Error> {
         match self.peek_token()? {
             Some(lex::Token::Ident(_)) => {
-                if self.lookahead(1)? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
-                    self.next_function_call_expr()
+                let name = self.next_ident()?;
+                if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::PathSegment))
+                    && self.lookahead(1)? == Some(&lex::Token::Punct(lex::Punct::CmpL))
+                {
+                    self.consume_token()?.unwrap();
+                    let type_arguments = self.next_opt_type_arguments()?;
+                    self.next_function_call_expr(name, type_arguments)
+                } else if self.peek_token()? == Some(&lex::Token::Punct(lex::Punct::LeftParen)) {
+                    self.next_function_call_expr(name, None)
                 } else {
-                    self.next_ident().map(|ident| Expr {
-                        span: ident.span,
-                        kind: ExprKind::Ident(ident),
+                    Ok(Expr {
+                        span: name.span,
+                        kind: ExprKind::Ident(name),
                     })
                 }
             }
@@ -1034,14 +1044,13 @@ impl Parser<'_> {
     }
 
     /// Parse function call
-    fn next_function_call_expr(&mut self) -> Result<Expr, Error> {
-        let name = self.next_ident()?;
+    fn next_function_call_expr(&mut self, name: Ident, type_arguments: Option<TypeArguments>) -> Result<Expr, Error> {
         self.expect_punct(lex::Punct::LeftParen)?;
         let args = self.parse_delimited(lex::Punct::Comma, lex::Punct::RightParen, |parser| parser.next_expr())?;
         let right_paren_span = self.expect_punct(lex::Punct::RightParen)?;
         Ok(Expr {
             span: name.span.join(right_paren_span),
-            kind: ExprKind::FunctionCallExpr(name, args),
+            kind: ExprKind::FunctionCallExpr(name, type_arguments, args),
         })
     }
 

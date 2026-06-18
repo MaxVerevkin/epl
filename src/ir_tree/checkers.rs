@@ -13,13 +13,14 @@ pub fn run_checkers<'ctx>(function_id: FunctionId, module: &Module<'ctx>) -> Res
 
 /// Verify that the signature of `main` is `fn main() -> i32`
 fn check_main_abi<'ctx>(ctx: Context<'ctx>, function: &Function<'ctx>) -> Result<(), Error> {
-    if function.name.value != "main" {
+    if function.name_ident.value != "main" {
         return Ok(());
     }
 
     if function.is_variadic || !function.args.is_empty() || function.return_ty != ctx.types().i32 {
         return Err(
-            Error::new("incorrect 'main' function signature: must be 'fn main() -> i32'").with_span(function.name.span),
+            Error::new("incorrect 'main' function signature: must be 'fn main() -> i32'")
+                .with_span(function.name_ident.span),
         );
     }
 
@@ -59,7 +60,7 @@ fn check_pure_function<'ctx>(function: &Function<'ctx>, module: &Module<'ctx>) -
     }
     match &function.body {
         Some(body) => purity_check(PurityContext::PureFunctionBody, body, module),
-        None => Err(Error::new("pure functions must have a body").with_span(function.name.span)),
+        None => Err(Error::new("pure functions must have a body").with_span(function.name_ident.span)),
     }
 }
 
@@ -113,7 +114,7 @@ fn purity_check<'ctx>(context: PurityContext, expr: &Expr<'ctx>, module: &Module
                     self.result =
                         Err(Error::new("getting pointers is not a pure operation").with_span(expr.span.unwrap()));
                 }
-                ExprKind::FunctionCall(function_id, _) => match self.module.functions[function_id].is_pure {
+                ExprKind::FunctionCall(function_id, _, _) => match self.module.functions[function_id].is_pure {
                     true => (),
                     false => {
                         self.result = Err(Error::new("only pure functions may be called from pure functions")

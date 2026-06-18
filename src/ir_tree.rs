@@ -2,6 +2,7 @@ mod checkers;
 mod dump;
 mod evaluator;
 mod lower_ast;
+mod mono;
 mod opt;
 mod types;
 mod visit;
@@ -138,26 +139,11 @@ impl<'ctx> Module<'ctx> {
                 ast::ItemKind::Struct(s_def) => {
                     types_scope.push();
                     let struct_ = structs[&*s_def.name.value];
-                    for (type_parameter_i, type_parameter) in s_def.type_parameters.iter().enumerate() {
-                        if types_scope
-                            .by_name
-                            .insert(
-                                type_parameter.name.value.clone(),
-                                TypeConstructor::NonGeneric(Type::new(
-                                    ctx,
-                                    TypeInfo::TypeParameter {
-                                        name: type_parameter.name.value.clone(),
-                                        owner: struct_,
-                                        index: type_parameter_i,
-                                    },
-                                )),
-                            )
-                            .is_some()
-                        {
-                            return Err(Error::new("type parameter with this name already exists")
-                                .with_span(type_parameter.name.span));
-                        }
-                    }
+                    types_scope.insert_ast_type_parameters(
+                        ctx,
+                        TypeParameterOwner::Struct(struct_),
+                        &s_def.type_parameters,
+                    )?;
                     for ((_, field_id), field_ast) in struct_.info().fields.iter().zip(&s_def.fields) {
                         let field_ty = type_from_ast(ctx, &types_scope, &field_ast.ty)?;
                         ctx.register_struct_field_type(*field_id, field_ty, struct_);
@@ -184,12 +170,12 @@ impl<'ctx> Module<'ctx> {
         for item in &ast.items {
             match &item.kind {
                 ast::ItemKind::Function(function) => {
-                    let decl = lower_ast::decl::lower_function(ctx, function, &item.annotations, &types_scope)?;
+                    let decl = lower_ast::lower_function_decl(ctx, function, &item.annotations, &mut types_scope)?;
                     if functions_namespace
                         .insert(function.name.value.clone(), decl.id)
                         .is_some()
                     {
-                        return Err(Error::new("function with this name already exists").with_span(decl.name.span));
+                        return Err(Error::new("function with this name already exists").with_span(function.name.span));
                     }
                     module.functions.insert(decl.id, decl);
                 }
@@ -207,10 +193,11 @@ impl<'ctx> Module<'ctx> {
                         let body = lower_ast::lower_function_body(
                             ctx,
                             decl,
+                            function,
                             body,
                             &functions_namespace,
                             &module.functions,
-                            &types_scope,
+                            &mut types_scope,
                         )?;
                         module.functions.get_mut(&function_id).unwrap().body = Some(body);
                     }
@@ -228,6 +215,9 @@ impl<'ctx> Module<'ctx> {
                 opt::BasicOptVisitor(ctx).visit_expr(body);
             }
         }
+
+        let to_mono = mono::collect_for_monomorphization(&module);
+        mono::monomorphize(&mut module, &to_mono);
 
         for function_id in module.functions.keys().copied().collect::<Vec<_>>() {
             // TODO: this is ridiculously inefficient O(n^2), for something that could potentially be O(n).
@@ -289,7 +279,11 @@ impl<'ctx> Module<'ctx> {
 #[derive(Debug)]
 pub struct Function<'ctx> {
     pub id: FunctionId,
-    pub name: ast::Ident,
+    pub name_ident: ast::Ident,
+    pub mangled_name: String,
+    pub debug_name: String,
+    pub monomorphized_for: Option<(FunctionId, TypeArguments<'ctx>)>,
+    pub type_parameters: usize,
     pub args: Vec<(String, Type<'ctx>)>,
     pub return_ty: Type<'ctx>,
     pub is_variadic: bool,
@@ -297,14 +291,14 @@ pub struct Function<'ctx> {
     pub body: Option<Expr<'ctx>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expr<'ctx> {
     pub ty: Type<'ctx>,
     pub span: Option<lex::Span>,
     pub kind: ExprKind<'ctx>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Place<'ctx> {
     pub ty: Type<'ctx>,
     pub span: Option<lex::Span>,
@@ -329,7 +323,7 @@ impl<'ctx> Place<'ctx> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExprKind<'ctx> {
     Const(Constant<'ctx>),
     ConstString(String),
@@ -353,13 +347,13 @@ pub enum ExprKind<'ctx> {
     Loop(LoopId, Box<Expr<'ctx>>),
     ArrayInitializer(Vec<Expr<'ctx>>),
     StructInitializer(Vec<(StructFieldId, Expr<'ctx>)>),
-    FunctionCall(FunctionId, Vec<Expr<'ctx>>),
+    FunctionCall(FunctionId, TypeArguments<'ctx>, Vec<Expr<'ctx>>),
     Cast(Box<Expr<'ctx>>),
     Not(Box<Expr<'ctx>>),
     Comptime(Box<Expr<'ctx>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PlaceKind<'ctx> {
     Dereference(Box<Expr<'ctx>>),
     Variable(VariableId),
@@ -447,13 +441,13 @@ impl<'ctx> Constant<'ctx> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockExpr<'ctx> {
     pub variables: Vec<VariableDeclaration<'ctx>>,
     pub exprs: Vec<Expr<'ctx>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VariableDeclaration<'ctx> {
     pub id: VariableId,
     pub ty: Type<'ctx>,

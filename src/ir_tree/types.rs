@@ -125,7 +125,7 @@ impl<'ctx> Type<'ctx> {
     pub fn instantiate(
         self,
         ctx: Context<'ctx>,
-        struct_owner: Struct<'ctx>,
+        type_parameters_owner: TypeParameterOwner<'ctx>,
         type_arguments: TypeArguments<'ctx>,
     ) -> Self {
         match self.info() {
@@ -138,7 +138,7 @@ impl<'ctx> Type<'ctx> {
                     .0
                     .get()
                     .iter()
-                    .map(|ty| ty.instantiate(ctx, struct_owner, type_arguments))
+                    .map(|ty| ty.instantiate(ctx, type_parameters_owner, type_arguments))
                     .collect::<Vec<_>>();
                 Type::new(
                     ctx,
@@ -151,18 +151,18 @@ impl<'ctx> Type<'ctx> {
             TypeInfo::Ptr { pointee } => Type::new(
                 ctx,
                 TypeInfo::Ptr {
-                    pointee: pointee.map(|ty| ty.instantiate(ctx, struct_owner, type_arguments)),
+                    pointee: pointee.map(|ty| ty.instantiate(ctx, type_parameters_owner, type_arguments)),
                 },
             ),
             TypeInfo::Array { element_ty, length } => Type::new(
                 ctx,
                 TypeInfo::Array {
-                    element_ty: element_ty.instantiate(ctx, struct_owner, type_arguments),
+                    element_ty: element_ty.instantiate(ctx, type_parameters_owner, type_arguments),
                     length: *length,
                 },
             ),
             TypeInfo::TypeParameter { name: _, owner, index } => {
-                if *owner == struct_owner {
+                if *owner == type_parameters_owner {
                     type_arguments.0.get()[*index]
                 } else {
                     self
@@ -198,15 +198,8 @@ impl<'ctx> Type<'ctx> {
                 type_arguments,
             } => {
                 output.push_str(&struct_.info().name.value);
-                if !type_arguments.0.get().is_empty() {
-                    output.push('<');
-                    for (i, type_arg) in type_arguments.0.get().iter().enumerate() {
-                        type_arg.render_into(output);
-                        if i + 1 != type_arguments.0.get().len() {
-                            output.push_str(", ");
-                        }
-                    }
-                    output.push('>');
+                if !type_arguments.is_empty() {
+                    type_arguments.render_into(output);
                 }
             }
             TypeInfo::Ptr { pointee: None } => output.push_str("ptr"),
@@ -219,9 +212,14 @@ impl<'ctx> Type<'ctx> {
                 element_ty.render_into(output);
                 write!(output, "; {length}]").unwrap();
             }
-            TypeInfo::TypeParameter { name, owner, index: _ } => {
-                write!(output, "`{name} of {}`", owner.info().name.value).unwrap()
-            }
+            TypeInfo::TypeParameter { name, owner, index: _ } => match owner {
+                TypeParameterOwner::Struct(owner) => {
+                    write!(output, "`{name} of {}`", owner.info().name.value).unwrap();
+                }
+                TypeParameterOwner::Function(function_id) => {
+                    write!(output, "`{name} of {function_id:?}`").unwrap();
+                }
+            },
         }
     }
 }
@@ -230,6 +228,27 @@ impl<'ctx> TypeArguments<'ctx> {
     pub fn new(ctx: Context<'ctx>, args: &[Type<'ctx>]) -> Self {
         let type_args_interner: &Interner<[Type<'ctx>]> = ctx.as_ref();
         Self(type_args_interner.intern_slice(args))
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0.get().is_empty()
+    }
+
+    pub fn render(self) -> String {
+        let mut retval = String::new();
+        self.render_into(&mut retval);
+        retval
+    }
+
+    pub fn render_into(self, output: &mut String) {
+        output.push('<');
+        for (i, type_arg) in self.0.get().iter().enumerate() {
+            type_arg.render_into(output);
+            if i + 1 != self.0.get().len() {
+                output.push_str(", ");
+            }
+        }
+        output.push('>');
     }
 }
 
@@ -249,7 +268,13 @@ pub enum TypeInfo<'ctx> {
     Struct { struct_: Struct<'ctx>, type_arguments: TypeArguments<'ctx> },
     Ptr { pointee: Option<Type<'ctx>> },
     Array { element_ty: Type<'ctx>, length: u64 },
-    TypeParameter { name: String, owner: Struct<'ctx>, index: usize },
+    TypeParameter { name: String, owner: TypeParameterOwner<'ctx>, index: usize },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypeParameterOwner<'ctx> {
+    Struct(Struct<'ctx>),
+    Function(FunctionId),
 }
 
 /// Integer data type
@@ -494,5 +519,35 @@ impl<'ctx> TypesScope<'ctx> {
             return parent.lookup(name);
         }
         None
+    }
+
+    pub fn insert_ast_type_parameters(
+        &mut self,
+        ctx: Context<'ctx>,
+        owner: TypeParameterOwner<'ctx>,
+        type_parameters: &[ast::TypeParameter],
+    ) -> Result<(), Error> {
+        for (type_parameter_i, type_parameter) in type_parameters.iter().enumerate() {
+            if self
+                .by_name
+                .insert(
+                    type_parameter.name.value.clone(),
+                    TypeConstructor::NonGeneric(Type::new(
+                        ctx,
+                        TypeInfo::TypeParameter {
+                            name: type_parameter.name.value.clone(),
+                            owner,
+                            index: type_parameter_i,
+                        },
+                    )),
+                )
+                .is_some()
+            {
+                return Err(
+                    Error::new("type parameter with this name already exists").with_span(type_parameter.name.span)
+                );
+            }
+        }
+        Ok(())
     }
 }

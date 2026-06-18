@@ -1,22 +1,73 @@
-pub mod decl;
-
 use std::collections::HashMap;
 
 use super::*;
 use crate::ast;
 use crate::common::{ArithmeticOp, CmpOp};
 
+pub fn lower_function_decl<'ctx>(
+    ctx: Context<'ctx>,
+    ast: &ast::Function,
+    annotations: &[ast::Annotation],
+    types_scope: &mut TypesScope<'ctx>,
+) -> Result<Function<'ctx>, Error> {
+    let id = FunctionId::new();
+
+    let mut is_pure = false;
+    for annotation in annotations {
+        match annotation.ident.value.as_str() {
+            "pure" => is_pure = true,
+            _ => return Err(Error::unknown_annotation(annotation)),
+        }
+    }
+
+    types_scope.push();
+
+    types_scope.insert_ast_type_parameters(ctx, TypeParameterOwner::Function(id), &ast.type_parameters)?;
+
+    let mut args: Vec<(String, Type)> = Vec::new();
+    for arg in &ast.args {
+        if args.iter().any(|x| x.0 == arg.name.value) {
+            return Err(Error::new("argument with this name already exists").with_span(arg.name.span));
+        }
+        args.push((arg.name.value.clone(), type_from_ast(ctx, types_scope, &arg.ty)?));
+    }
+
+    let return_ty = ast
+        .return_ty
+        .as_ref()
+        .map(|ty| type_from_ast(ctx, types_scope, ty))
+        .transpose()?
+        .unwrap_or_else(|| ctx.types().unit);
+
+    types_scope.pop();
+
+    Ok(Function {
+        id,
+        name_ident: ast.name.clone(),
+        mangled_name: ast.name.value.clone(),
+        debug_name: ast.name.value.clone(),
+        monomorphized_for: None,
+        type_parameters: ast.type_parameters.len(),
+        args,
+        return_ty,
+        is_variadic: ast.is_variadic,
+        is_pure,
+        body: None,
+    })
+}
+
 /// Construct an IR of a function from its AST
 pub fn lower_function_body<'ctx>(
     ctx: Context<'ctx>,
     decl: &Function<'ctx>,
+    ast: &ast::Function,
     body: &ast::BlockExpr,
     functions_namespace: &HashMap<String, FunctionId>,
     functions: &BTreeMap<FunctionId, Function<'ctx>>,
-    types_scope: &TypesScope<'ctx>,
+    types_scope: &mut TypesScope<'ctx>,
 ) -> Result<Expr<'ctx>, Error> {
     if decl.is_variadic {
-        return Err(Error::new("defining variadic functions is not supported").with_span(decl.name.span));
+        return Err(Error::new("defining variadic functions is not supported").with_span(decl.name_ident.span));
     }
 
     let mut builder = FunctionLoweringCtx::new(ctx, decl, functions_namespace, functions, types_scope);
@@ -43,7 +94,12 @@ pub fn lower_function_body<'ctx>(
         ));
     }
 
+    builder.types_scope.push();
+    builder
+        .types_scope
+        .insert_ast_type_parameters(ctx, TypeParameterOwner::Function(decl.id), &ast.type_parameters)?;
     exprs.push(builder.lower_block_expr(body, Some(decl.return_ty))?);
+    builder.types_scope.pop();
 
     Ok(Expr {
         ty: decl.return_ty,
@@ -58,7 +114,7 @@ struct FunctionLoweringCtx<'a, 'ctx> {
     decl: &'a Function<'ctx>,
     functions_namespace: &'a HashMap<String, FunctionId>,
     functions: &'a BTreeMap<FunctionId, Function<'ctx>>,
-    types_scope: &'a TypesScope<'ctx>,
+    types_scope: &'a mut TypesScope<'ctx>,
     scope: Scope<'ctx>,
 }
 
@@ -125,7 +181,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
         decl: &'a Function<'ctx>,
         functions_namespace: &'a HashMap<String, FunctionId>,
         functions: &'a BTreeMap<FunctionId, Function<'ctx>>,
-        types_scope: &'a TypesScope<'ctx>,
+        types_scope: &'a mut TypesScope<'ctx>,
     ) -> Self {
         Self {
             ctx,
@@ -607,12 +663,34 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     })
                 }
             },
-            ast::ExprKind::FunctionCallExpr(name, args) => {
+            ast::ExprKind::FunctionCallExpr(name, type_arguments, args) => {
                 let callee_id = self
                     .functions_namespace
                     .get(&name.value)
                     .ok_or_else(|| Error::new(format!("function {:?} not found", name.value)).with_span(name.span))?;
                 let callee = &self.functions[callee_id];
+
+                let type_arguments = TypeArguments::new(
+                    self.ctx,
+                    &type_arguments
+                        .as_ref()
+                        .map(|args| {
+                            args.arguments
+                                .iter()
+                                .map(|arg| type_from_ast(self.ctx, self.types_scope, arg))
+                                .collect::<Result<Vec<_>, _>>()
+                        })
+                        .transpose()?
+                        .unwrap_or(Vec::new()),
+                );
+                if callee.type_parameters != type_arguments.0.get().len() {
+                    return Err(Error::new(format!(
+                        "expected {} type argument(s), found {}",
+                        callee.type_parameters,
+                        type_arguments.0.get().len(),
+                    ))
+                    .with_span(expr.span));
+                }
                 if callee.is_variadic {
                     if callee.args.len() > args.len() {
                         return Err(Error::new(format!(
@@ -632,19 +710,36 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 }
                 let mut lowered_args = Vec::new();
                 for (arg_i, arg_expr) in args.iter().enumerate() {
-                    let expect_arg_type = callee.args.get(arg_i).map(|a| a.1);
-                    lowered_args.push(self.lower_expr(arg_expr, expect_arg_type)?);
+                    let mut arg_type = callee.args.get(arg_i).map(|a| a.1);
+                    if !type_arguments.is_empty()
+                        && let Some(arg_type_generic) = arg_type
+                    {
+                        arg_type = Some(arg_type_generic.instantiate(
+                            self.ctx,
+                            TypeParameterOwner::Function(*callee_id),
+                            type_arguments,
+                        ));
+                    }
+                    lowered_args.push(self.lower_expr(arg_expr, arg_type)?);
                 }
+
+                let mut return_ty = callee.return_ty;
+                if !type_arguments.is_empty() {
+                    return_ty =
+                        return_ty.instantiate(self.ctx, TypeParameterOwner::Function(*callee_id), type_arguments);
+                }
+
                 if let Some(expect_type) = expect_type
-                    && expect_type != callee.return_ty
-                    && !callee.return_ty.is_never()
+                    && expect_type != return_ty
+                    && !return_ty.is_never()
                 {
                     return Err(Error::expr_type_mismatch(expect_type, callee.return_ty, expr.span));
                 }
+
                 Ok(Expr {
-                    ty: callee.return_ty,
+                    ty: return_ty,
                     span,
-                    kind: ExprKind::FunctionCall(*callee_id, lowered_args),
+                    kind: ExprKind::FunctionCall(*callee_id, type_arguments, lowered_args),
                 })
             }
             ast::ExprKind::Assignment(place, value) => {

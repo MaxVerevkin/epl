@@ -63,7 +63,7 @@ impl<'ctx> Expr<'ctx> {
                 visitor.visit_expr(if_false.as_ref());
             }
 
-            ExprKind::ArrayInitializer(exprs) | ExprKind::FunctionCall(_, exprs) => {
+            ExprKind::ArrayInitializer(exprs) | ExprKind::FunctionCall(_, _, exprs) => {
                 for expr in exprs {
                     visitor.visit_expr(expr);
                 }
@@ -119,7 +119,7 @@ impl<'ctx> Expr<'ctx> {
                 visitor.visit_expr(&mut *if_false);
             }
 
-            ExprKind::ArrayInitializer(exprs) | ExprKind::FunctionCall(_, exprs) => {
+            ExprKind::ArrayInitializer(exprs) | ExprKind::FunctionCall(_, _, exprs) => {
                 for expr in exprs {
                     visitor.visit_expr(expr);
                 }

@@ -1,7 +1,7 @@
 fn main() -> i32
     BLOCK TYPE=i32
-    |   FUNCTION_CALL("print_array") TYPE=unit
-    |   |   FUNCTION_CALL("fib_array") TYPE=[i32; 10]
+    |   FUNCTION_CALL(print_array) TYPE=unit
+    |   |   FUNCTION_CALL(fib_array) TYPE=[i32; 10]
     |   CONST 0 TYPE=i32
 
 fn fib_array() -> [i32; 10]
@@ -74,7 +74,7 @@ fn print_array(array: [i32; 10]) -> unit
     |   |   VARIABLE(var_5) [PLACE] TYPE=[i32; 10]
     |   |   ARGUMENT("array") TYPE=[i32; 10]
     |   BLOCK TYPE=unit
-    |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   CONST_STRING("[") TYPE=*i8
     |   |   BLOCK TYPE=unit
     |   |   |   DECLARE var_6 "<immutable-i>" : usize
@@ -102,7 +102,7 @@ fn print_array(array: [i32; 10]) -> unit
     |   |   |   |   |   |   |   VARIABLE(var_6) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   CONST 1 TYPE=isize
     |   |   |   |   |   |   BLOCK TYPE=unit
-    |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   |   |   |   |   |   CONST_STRING("%i") TYPE=*i8
     |   |   |   |   |   |   |   |   ARRAY_ELEMENT TYPE=i32
     |   |   |   |   |   |   |   |   |   LOAD TYPE=[i32; 10]
@@ -114,12 +114,12 @@ fn print_array(array: [i32; 10]) -> unit
     |   |   |   |   |   |   |   |   |   LOAD TYPE=usize
     |   |   |   |   |   |   |   |   |   |   VARIABLE(var_8) [PLACE] TYPE=usize
     |   |   |   |   |   |   |   |   |   CONST 9 TYPE=usize
-    |   |   |   |   |   |   |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   |   |   |   |   |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   |   |   |   |   |   |   CONST_STRING(", ") TYPE=*i8
     |   |   |   |   |   |   |   |   CONST UNIT TYPE=unit
     |   |   |   |   |   BREAK(loop_2) TYPE=!
     |   |   |   |   |   |   CONST UNIT TYPE=unit
-    |   |   FUNCTION_CALL("printf") TYPE=unit
+    |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   CONST_STRING("]\n") TYPE=*i8
 
 fn printf(fmt: *i8, ...) -> unit
