@@ -107,13 +107,15 @@ pub fn monomorphize<'ctx>(module: &mut Module<'ctx>, entries: &BTreeSet<(Functio
                 ),
                 is_variadic: poly_fn.is_variadic,
                 is_pure: poly_fn.is_pure,
+                is_intrinsic: poly_fn.is_intrinsic,
                 body: None,
             },
         );
     }
 
     for (&(poly_id, type_arguments), &mono_id) in &monomorphized_cache {
-        if let Some(body) = &module.functions[&poly_id].body {
+        let poly = &module.functions[&poly_id];
+        if let Some(body) = &poly.body {
             let mut instantiation_ctx = InstantiationCtx {
                 ctx: module.ctx,
                 poly_id,
@@ -122,6 +124,13 @@ pub fn monomorphize<'ctx>(module: &mut Module<'ctx>, entries: &BTreeSet<(Functio
             let mut body = body.clone();
             instantiation_ctx.visit_expr(&mut body);
             module.functions.get_mut(&mono_id).unwrap().body = Some(body);
+        } else if poly.is_intrinsic {
+            match poly.name_ident.value.as_str() {
+                "size_of" => {
+                    module.functions.get_mut(&mono_id).unwrap().body = Some(build_size_of(module.ctx, type_arguments));
+                }
+                other => panic!("unhandled intrinsic: {other:?}"),
+            }
         }
     }
 
@@ -224,5 +233,15 @@ impl<'a, 'ctx> ExprVisitorMut<'a, 'ctx> for InstantiationCtx<'ctx> {
     fn visit_place(&mut self, place: &'a mut Place<'ctx>) {
         place.visit_children_mut(self);
         self.visit_type(&mut place.ty);
+    }
+}
+
+fn build_size_of<'ctx>(ctx: Context<'ctx>, type_arguments: TypeArguments<'ctx>) -> Expr<'ctx> {
+    let type_argument = type_arguments.0.get()[0];
+    let layout = type_argument.layout(ctx);
+    Expr {
+        ty: ctx.types().usize,
+        span: None,
+        kind: ExprKind::Const(Constant::USize(layout.size as _)),
     }
 }

@@ -2,7 +2,7 @@ fn main() -> i32 {
 	let list = list_new::<i32>();
 	for i in 1..6 {
 		list_print(&list);
-		list_insert(&list, i);
+		list_insert::<i32>(&list, i);
 	}
 	list_print(&list);
 	0
@@ -32,11 +32,16 @@ fn list_print(list: *List<i32>) {
 	printf("]\n");
 }
 
-fn list_insert(list: *List<i32>, value: i32) {
-	let new_head = malloc(16) as *Node<i32>;
+fn list_insert<T>(list: *List<T>, value: T) {
+	let new_head = alloc::<Node<T>>();
 	new_head.* = .{ value: value, next: list.head };
 	list.head = new_head;
 }
 
-fn malloc(size: u64) -> ptr;
+fn alloc<T>() -> *T {
+	malloc(size_of::<T>()) as *T
+}
+
+@intrinsic @pure fn size_of<T>() -> usize;
+fn malloc(size: usize) -> ptr;
 fn printf(fmt: *i8, ...);

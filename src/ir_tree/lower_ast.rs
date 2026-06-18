@@ -13,9 +13,11 @@ pub fn lower_function_decl<'ctx>(
     let id = FunctionId::new();
 
     let mut is_pure = false;
+    let mut is_intrinsic = false;
     for annotation in annotations {
         match annotation.ident.value.as_str() {
             "pure" => is_pure = true,
+            "intrinsic" => is_intrinsic = true,
             _ => return Err(Error::unknown_annotation(annotation)),
         }
     }
@@ -52,6 +54,7 @@ pub fn lower_function_decl<'ctx>(
         return_ty,
         is_variadic: ast.is_variadic,
         is_pure,
+        is_intrinsic,
         body: None,
     })
 }

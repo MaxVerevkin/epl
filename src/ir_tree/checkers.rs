@@ -6,6 +6,7 @@ use crate::ir_tree::visit::ExprVisitor;
 pub fn run_checkers<'ctx>(function_id: FunctionId, module: &Module<'ctx>) -> Result<(), Error> {
     let function = &module.functions[&function_id];
     check_main_abi(module.ctx, function)?;
+    check_intrinsic(function)?;
     check_comptime_exprs(function, module)?;
     check_pure_function(function, module)?;
     Ok(())
@@ -22,6 +23,24 @@ fn check_main_abi<'ctx>(ctx: Context<'ctx>, function: &Function<'ctx>) -> Result
             Error::new("incorrect 'main' function signature: must be 'fn main() -> i32'")
                 .with_span(function.name_ident.span),
         );
+    }
+
+    Ok(())
+}
+
+/// Verify all known intrinsics
+fn check_intrinsic<'ctx>(function: &Function<'ctx>) -> Result<(), Error> {
+    if !function.is_intrinsic {
+        return Ok(());
+    }
+
+    if function.body.is_some() {
+        return Err(Error::new("intrinsics must not have bodies").with_span(function.name_ident.span));
+    }
+
+    match function.name_ident.value.as_str() {
+        "size_of" => (),
+        other => return Err(Error::new(format!("unknown intrinsic: {other:?}")).with_span(function.name_ident.span)),
     }
 
     Ok(())
@@ -60,6 +79,7 @@ fn check_pure_function<'ctx>(function: &Function<'ctx>, module: &Module<'ctx>) -
     }
     match &function.body {
         Some(body) => purity_check(PurityContext::PureFunctionBody, body, module),
+        None if function.is_intrinsic => Ok(()),
         None => Err(Error::new("pure functions must have a body").with_span(function.name_ident.span)),
     }
 }

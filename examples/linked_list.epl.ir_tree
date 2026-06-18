@@ -33,7 +33,7 @@ fn main() -> i32
     |   |   |   |   |   |   FUNCTION_CALL(list_print) TYPE=unit
     |   |   |   |   |   |   |   GET_POINTER TYPE=*List<i32>
     |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=List<i32>
-    |   |   |   |   |   |   FUNCTION_CALL(list_insert) TYPE=unit
+    |   |   |   |   |   |   FUNCTION_CALL(list_insert<i32>) TYPE=unit
     |   |   |   |   |   |   |   GET_POINTER TYPE=*List<i32>
     |   |   |   |   |   |   |   |   VARIABLE(var_1) [PLACE] TYPE=List<i32>
     |   |   |   |   |   |   |   LOAD TYPE=i32
@@ -100,7 +100,15 @@ fn list_print(list: *List<i32>) -> unit
     |   |   FUNCTION_CALL(printf) TYPE=unit
     |   |   |   CONST_STRING("]\n") TYPE=*i8
 
-fn list_insert(list: *List<i32>, value: i32) -> unit
+fn malloc(size: usize) -> ptr
+
+fn printf(fmt: *i8, ...) -> unit
+
+fn list_new<i32>() -> List<i32>
+    STRUCT_INITIALIZER TYPE=List<i32>
+    |   CONST NULL TYPE=*Node<i32>
+
+fn list_insert<i32>(list: *List<i32>, value: i32) -> unit
     BLOCK TYPE=unit
     |   DECLARE var_7 "list" : *List<i32>
     |   DECLARE var_8 "value" : i32
@@ -114,9 +122,7 @@ fn list_insert(list: *List<i32>, value: i32) -> unit
     |   |   DECLARE var_9 "new_head" : *Node<i32>
     |   |   STORE TYPE=unit
     |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Node<i32>
-    |   |   |   CAST TYPE=*Node<i32>
-    |   |   |   |   FUNCTION_CALL(malloc) TYPE=ptr
-    |   |   |   |   |   CONST 16 TYPE=u64
+    |   |   |   FUNCTION_CALL(alloc<Node<i32>>) TYPE=*Node<i32>
     |   |   STORE TYPE=unit
     |   |   |   DEREFERENCE [PLACE] TYPE=Node<i32>
     |   |   |   |   LOAD TYPE=*Node<i32>
@@ -137,12 +143,12 @@ fn list_insert(list: *List<i32>, value: i32) -> unit
     |   |   |   LOAD TYPE=*Node<i32>
     |   |   |   |   VARIABLE(var_9) [PLACE] TYPE=*Node<i32>
 
-fn malloc(size: u64) -> ptr
+fn alloc<Node<i32>>() -> *Node<i32>
+    CAST TYPE=*Node<i32>
+    |   FUNCTION_CALL(malloc) TYPE=ptr
+    |   |   FUNCTION_CALL(size_of<Node<i32>>) TYPE=usize
 
-fn printf(fmt: *i8, ...) -> unit
-
-fn list_new<i32>() -> List<i32>
-    STRUCT_INITIALIZER TYPE=List<i32>
-    |   CONST NULL TYPE=*Node<i32>
+fn size_of<Node<i32>>() -> usize
+    CONST 16 TYPE=usize
 
 

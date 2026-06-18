@@ -288,6 +288,7 @@ pub struct Function<'ctx> {
     pub return_ty: Type<'ctx>,
     pub is_variadic: bool,
     pub is_pure: bool,
+    pub is_intrinsic: bool,
     pub body: Option<Expr<'ctx>>,
 }
 
