@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use super::*;
 use crate::ast;
 use crate::common::Layout;
@@ -7,7 +9,7 @@ use crate::interning::{Interned, Interner};
 pub struct Type<'ctx>(pub Interned<'ctx, TypeInfo<'ctx>>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TypeArguments<'ctx>(pub Interned<'ctx, [Type<'ctx>]>);
+pub struct TypeArguments<'ctx>(Interned<'ctx, [Type<'ctx>]>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Struct<'ctx>(pub Interned<'ctx, StructInfo>);
@@ -58,6 +60,7 @@ impl<'ctx> Type<'ctx> {
                 }
             }
             TypeInfo::TypeParameter { .. } => panic!("cannot compute layout of a type parameter"),
+            TypeInfo::InferenceVariable { .. } => panic!("cannot compute layout of an unresolved type"),
         };
         ctx.cache_type_layout(self, layout);
         layout
@@ -69,6 +72,13 @@ impl<'ctx> Type<'ctx> {
                 struct_,
                 type_arguments,
             } => Some((*struct_, *type_arguments)),
+            _ => None,
+        }
+    }
+
+    pub fn pointer_get_pointee(self) -> Option<Option<Self>> {
+        match self.info() {
+            TypeInfo::Ptr { pointee } => Some(*pointee),
             _ => None,
         }
     }
@@ -122,21 +132,35 @@ impl<'ctx> Type<'ctx> {
         }
     }
 
+    pub fn instantiate_for_fn(
+        self,
+        ctx: Context<'ctx>,
+        function_id: FunctionId,
+        type_arguments: TypeArguments<'ctx>,
+    ) -> Self {
+        self.instantiate(ctx, TypeParameterOwner::Function(function_id), type_arguments)
+    }
+
     pub fn instantiate(
         self,
         ctx: Context<'ctx>,
         type_parameters_owner: TypeParameterOwner<'ctx>,
         type_arguments: TypeArguments<'ctx>,
     ) -> Self {
+        if type_arguments.is_empty() {
+            return self;
+        }
         match self.info() {
-            TypeInfo::Never | TypeInfo::Unit | TypeInfo::Bool | TypeInfo::Int(_) => self,
+            TypeInfo::Never
+            | TypeInfo::Unit
+            | TypeInfo::Bool
+            | TypeInfo::Int(_)
+            | TypeInfo::InferenceVariable { .. } => self,
             TypeInfo::Struct {
                 struct_,
                 type_arguments: args,
             } => {
                 let instanciated_type_args = args
-                    .0
-                    .get()
                     .iter()
                     .map(|ty| ty.instantiate(ctx, type_parameters_owner, type_arguments))
                     .collect::<Vec<_>>();
@@ -163,11 +187,125 @@ impl<'ctx> Type<'ctx> {
             ),
             TypeInfo::TypeParameter { name: _, owner, index } => {
                 if *owner == type_parameters_owner {
-                    type_arguments.0.get()[*index]
+                    type_arguments[*index]
                 } else {
                     self
                 }
             }
+        }
+    }
+
+    pub fn instantiate_inferred(self, ctx: Context<'ctx>, inferred: &HashMap<usize, Type<'ctx>>) -> Self {
+        match self.info() {
+            TypeInfo::Never | TypeInfo::Unit | TypeInfo::Bool | TypeInfo::Int(_) | TypeInfo::TypeParameter { .. } => {
+                self
+            }
+            TypeInfo::Struct {
+                struct_,
+                type_arguments,
+            } => {
+                let instanciated_type_args = type_arguments
+                    .iter()
+                    .map(|ty| ty.instantiate_inferred(ctx, inferred))
+                    .collect::<Vec<_>>();
+                Type::new(
+                    ctx,
+                    TypeInfo::Struct {
+                        struct_: *struct_,
+                        type_arguments: TypeArguments::new(ctx, &instanciated_type_args),
+                    },
+                )
+            }
+            TypeInfo::Ptr { pointee } => Type::new(
+                ctx,
+                TypeInfo::Ptr {
+                    pointee: pointee.map(|ty| ty.instantiate_inferred(ctx, inferred)),
+                },
+            ),
+            TypeInfo::Array { element_ty, length } => Type::new(
+                ctx,
+                TypeInfo::Array {
+                    element_ty: element_ty.instantiate_inferred(ctx, inferred),
+                    length: *length,
+                },
+            ),
+            TypeInfo::InferenceVariable { index } => inferred.get(index).copied().unwrap_or(self),
+        }
+    }
+
+    pub fn has_inference_variables(self) -> bool {
+        match self.info() {
+            TypeInfo::InferenceVariable { .. } => true,
+            TypeInfo::Never | TypeInfo::Unit | TypeInfo::Bool | TypeInfo::Int(_) | TypeInfo::TypeParameter { .. } => {
+                false
+            }
+            TypeInfo::Struct { type_arguments, .. } => type_arguments.iter().any(|ty| ty.has_inference_variables()),
+            TypeInfo::Ptr { pointee } => pointee.is_some_and(Self::has_inference_variables),
+            TypeInfo::Array { element_ty, length: _ } => element_ty.has_inference_variables(),
+        }
+    }
+
+    /// Try to unify `self` with `actual_type`. Returns a map `inference variable index -> unified type`. On conflict, returns `None`.
+    pub fn unify(self, actual_type: Self) -> Option<HashMap<usize, Self>> {
+        fn eq<T: Eq>(lhs: T, rhs: T) -> Result<(), ()> {
+            match lhs == rhs {
+                true => Ok(()),
+                false => Err(()),
+            }
+        }
+
+        fn unify<'ctx>(
+            lhs: Type<'ctx>,
+            actual_type: Type<'ctx>,
+            bindings: &mut HashMap<usize, Type<'ctx>>,
+        ) -> Result<(), ()> {
+            match lhs.info() {
+                TypeInfo::Never
+                | TypeInfo::Unit
+                | TypeInfo::Bool
+                | TypeInfo::Int(_)
+                | TypeInfo::TypeParameter { .. } => eq(lhs, actual_type),
+                TypeInfo::Struct {
+                    struct_,
+                    type_arguments,
+                } => {
+                    let (actual_struct, actual_type_arguments) = actual_type.as_struct().ok_or(())?;
+                    eq(*struct_, actual_struct)?;
+                    for (arg, actual_arg) in type_arguments.iter().zip(actual_type_arguments.iter()) {
+                        unify(*arg, *actual_arg, bindings)?;
+                    }
+                    Ok(())
+                }
+                TypeInfo::Ptr { pointee } => {
+                    let actual_pointee = actual_type.pointer_get_pointee().ok_or(())?;
+                    match (*pointee, actual_pointee) {
+                        (Some(lhs), Some(actual)) => unify(lhs, actual, bindings),
+                        (None, None) => Ok(()),
+                        _ => Err(()),
+                    }
+                }
+                TypeInfo::Array { element_ty, length } => {
+                    let (actual_element_ty, actual_length) = actual_type.as_array().ok_or(())?;
+                    eq(*length, actual_length)?;
+                    unify(*element_ty, actual_element_ty, bindings)
+                }
+                TypeInfo::InferenceVariable { index } => {
+                    let prev_binding = bindings.insert(*index, actual_type);
+                    if let Some(prev_binding) = prev_binding
+                        && prev_binding != actual_type
+                    {
+                        Err(())
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
+        }
+
+        let mut bindings = HashMap::new();
+        match unify(self, actual_type, &mut bindings) {
+            Ok(()) => Some(bindings),
+            Err(()) => None,
         }
     }
 
@@ -220,7 +358,16 @@ impl<'ctx> Type<'ctx> {
                     write!(output, "`{name} of {function_id:?}`").unwrap();
                 }
             },
+            TypeInfo::InferenceVariable { index } => write!(output, "{index}?").unwrap(),
         }
+    }
+}
+
+impl<'ctx> Deref for TypeArguments<'ctx> {
+    type Target = [Type<'ctx>];
+
+    fn deref(&self) -> &Self::Target {
+        self.0.get()
     }
 }
 
@@ -230,8 +377,14 @@ impl<'ctx> TypeArguments<'ctx> {
         Self(type_args_interner.intern_slice(args))
     }
 
-    pub fn is_empty(self) -> bool {
-        self.0.get().is_empty()
+    pub fn instantiate_inferred(self, ctx: Context<'ctx>, inferred: &HashMap<usize, Type<'ctx>>) -> Self {
+        Self::new(
+            ctx,
+            &self
+                .iter()
+                .map(|ty| ty.instantiate_inferred(ctx, inferred))
+                .collect::<Vec<_>>(),
+        )
     }
 
     pub fn render(self) -> String {
@@ -242,9 +395,9 @@ impl<'ctx> TypeArguments<'ctx> {
 
     pub fn render_into(self, output: &mut String) {
         output.push('<');
-        for (i, type_arg) in self.0.get().iter().enumerate() {
+        for (i, type_arg) in self.iter().enumerate() {
             type_arg.render_into(output);
-            if i + 1 != self.0.get().len() {
+            if i + 1 != self.len() {
                 output.push_str(", ");
             }
         }
@@ -269,6 +422,7 @@ pub enum TypeInfo<'ctx> {
     Ptr { pointee: Option<Type<'ctx>> },
     Array { element_ty: Type<'ctx>, length: u64 },
     TypeParameter { name: String, owner: TypeParameterOwner<'ctx>, index: usize },
+    InferenceVariable { index: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -374,13 +528,14 @@ impl<'ctx> Struct<'ctx> {
                 | TypeInfo::Bool
                 | TypeInfo::Int(_)
                 | TypeInfo::Ptr { .. }
-                | TypeInfo::TypeParameter { .. } => (),
+                | TypeInfo::TypeParameter { .. }
+                | TypeInfo::InferenceVariable { .. } => (),
                 TypeInfo::Struct {
                     struct_,
                     type_arguments,
                 } => {
                     visit(ctx, path, *struct_, predecessor)?;
-                    for ty in type_arguments.0.get() {
+                    for ty in type_arguments.iter() {
                         visit_ty(ctx, path, *ty, predecessor)?;
                     }
                 }

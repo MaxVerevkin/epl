@@ -17,8 +17,6 @@ pub fn collect_for_monomorphization<'ctx>(module: &Module<'ctx>) -> BTreeSet<(Fu
 
             if let ExprKind::FunctionCall(id, type_arguments, _) = &expr.kind {
                 let raw_type_arguments: Vec<_> = type_arguments
-                    .0
-                    .get()
                     .iter()
                     .map(|ty| {
                         ty.instantiate(
@@ -193,8 +191,6 @@ impl<'a, 'ctx> ExprVisitorMut<'a, 'ctx> for InstantiationCtx<'ctx> {
             }
             ExprKind::FunctionCall(_, type_arguments, _) => {
                 let raw_type_arguments: Vec<_> = type_arguments
-                    .0
-                    .get()
                     .iter()
                     .map(|ty| {
                         ty.instantiate(
@@ -237,7 +233,7 @@ impl<'a, 'ctx> ExprVisitorMut<'a, 'ctx> for InstantiationCtx<'ctx> {
 }
 
 fn build_size_of<'ctx>(ctx: Context<'ctx>, type_arguments: TypeArguments<'ctx>) -> Expr<'ctx> {
-    let type_argument = type_arguments.0.get()[0];
+    let type_argument = type_arguments[0];
     let layout = type_argument.layout(ctx);
     Expr {
         ty: ctx.types().usize,

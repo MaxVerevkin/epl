@@ -62,6 +62,9 @@ fn lower_type<'ctx>(module: &ir_tree::Module<'ctx>, ty: ir_tree::Type<'ctx>) -> 
         ir_tree::TypeInfo::TypeParameter { .. } => {
             panic!("generic type parameters are expected to be instantiated before IR lowering");
         }
+        ir_tree::TypeInfo::InferenceVariable { .. } => {
+            panic!("uninferred types are expected to be resolved before IR lowering");
+        }
     }
 }
 
@@ -384,7 +387,7 @@ impl<'a, 'ctx> BodyLoweringCtx<'a, 'ctx> {
                 }
             }
             ir_tree::ExprKind::FunctionCall(function_id, type_arguments, args) => {
-                assert!(type_arguments.0.get().is_empty(), "should have been monomorphized");
+                assert!(type_arguments.is_empty(), "should have been monomorphized");
                 let mut arg_vals = Vec::new();
                 for arg_expr in args {
                     match self.eval_expr(arg_expr)? {

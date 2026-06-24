@@ -60,7 +60,7 @@ pub fn constant_to_bytes<'ctx>(ctx: Context<'ctx>, constant: &Constant<'ctx>) ->
 
 pub fn constant_from_bytes<'ctx>(ctx: Context<'ctx>, bytes: &[u8], ty: Type<'ctx>) -> Constant<'ctx> {
     match ty.info() {
-        TypeInfo::Never | TypeInfo::TypeParameter { .. } => unreachable!(),
+        TypeInfo::Never | TypeInfo::TypeParameter { .. } | TypeInfo::InferenceVariable { .. } => unreachable!(),
         TypeInfo::Unit => Constant::Unit,
         TypeInfo::Bool => Constant::Bool(bytes[0] == 1),
         TypeInfo::Int(int_type) => match int_type {

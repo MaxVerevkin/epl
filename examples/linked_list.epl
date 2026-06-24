@@ -1,8 +1,8 @@
 fn main() -> i32 {
-	let list = list_new::<i32>();
+	let list: List<i32> = list_new();
 	for i in 1..6 {
 		list_print(&list);
-		list_insert::<i32>(&list, i);
+		list_insert(&list, i);
 	}
 	list_print(&list);
 	0

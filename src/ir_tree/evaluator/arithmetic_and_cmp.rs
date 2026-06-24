@@ -106,7 +106,15 @@ pub fn eval_cast<'ctx>(
             $(
                 fn $name(from: $ty, target_ty: Type, ptr_size: PtrSize) -> Constant {
                     match target_ty.info() {
-                        TypeInfo::Never | TypeInfo::Unit | TypeInfo::Struct { .. } | TypeInfo::Array { .. } | TypeInfo::Ptr { .. } | TypeInfo::Bool | TypeInfo::TypeParameter { .. } => {
+                        TypeInfo::Never
+                            | TypeInfo::Unit
+                            | TypeInfo::Struct { .. }
+                            | TypeInfo::Array { .. }
+                            | TypeInfo::Ptr { .. }
+                            | TypeInfo::Bool
+                            | TypeInfo::TypeParameter { .. }
+                            | TypeInfo::InferenceVariable { .. } =>
+                        {
                             unreachable!()
                         }
                         TypeInfo::Int(int_type) => match int_type {

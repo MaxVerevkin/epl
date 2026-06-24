@@ -667,33 +667,38 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 }
             },
             ast::ExprKind::FunctionCallExpr(name, type_arguments, args) => {
-                let callee_id = self
+                let callee_id = *self
                     .functions_namespace
                     .get(&name.value)
                     .ok_or_else(|| Error::new(format!("function {:?} not found", name.value)).with_span(name.span))?;
-                let callee = &self.functions[callee_id];
+                let callee = &self.functions[&callee_id];
 
-                let type_arguments = TypeArguments::new(
-                    self.ctx,
-                    &type_arguments
-                        .as_ref()
-                        .map(|args| {
-                            args.arguments
-                                .iter()
-                                .map(|arg| type_from_ast(self.ctx, self.types_scope, arg))
-                                .collect::<Result<Vec<_>, _>>()
-                        })
-                        .transpose()?
-                        .unwrap_or(Vec::new()),
-                );
-                if callee.type_parameters != type_arguments.0.get().len() {
+                let mut type_arguments = match type_arguments {
+                    None => TypeArguments::new(
+                        self.ctx,
+                        &(0..callee.type_parameters)
+                            .map(|index| Type::new(self.ctx, TypeInfo::InferenceVariable { index }))
+                            .collect::<Vec<_>>(),
+                    ),
+                    Some(type_arguments) => TypeArguments::new(
+                        self.ctx,
+                        &type_arguments
+                            .arguments
+                            .iter()
+                            .map(|arg| type_from_ast(self.ctx, self.types_scope, arg))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    ),
+                };
+
+                if callee.type_parameters != type_arguments.len() {
                     return Err(Error::new(format!(
                         "expected {} type argument(s), found {}",
                         callee.type_parameters,
-                        type_arguments.0.get().len(),
+                        type_arguments.len(),
                     ))
                     .with_span(expr.span));
                 }
+
                 if callee.is_variadic {
                     if callee.args.len() > args.len() {
                         return Err(Error::new(format!(
@@ -711,26 +716,44 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                     ))
                     .with_span(expr.span));
                 }
-                let mut lowered_args = Vec::new();
-                for (arg_i, arg_expr) in args.iter().enumerate() {
-                    let mut arg_type = callee.args.get(arg_i).map(|a| a.1);
-                    if !type_arguments.is_empty()
-                        && let Some(arg_type_generic) = arg_type
+
+                {
+                    let return_ty = callee.return_ty.instantiate_for_fn(self.ctx, callee_id, type_arguments);
+                    if return_ty.has_inference_variables()
+                        && let Some(expect_type) = expect_type
                     {
-                        arg_type = Some(arg_type_generic.instantiate(
-                            self.ctx,
-                            TypeParameterOwner::Function(*callee_id),
-                            type_arguments,
-                        ));
+                        let unification = return_ty
+                            .unify(expect_type)
+                            .ok_or_else(|| Error::expr_type_mismatch(expect_type, return_ty, expr.span))?;
+                        type_arguments = type_arguments.instantiate_inferred(self.ctx, &unification);
                     }
-                    lowered_args.push(self.lower_expr(arg_expr, arg_type)?);
                 }
 
-                let mut return_ty = callee.return_ty;
-                if !type_arguments.is_empty() {
-                    return_ty =
-                        return_ty.instantiate(self.ctx, TypeParameterOwner::Function(*callee_id), type_arguments);
+                let mut lowered_args = Vec::new();
+                for (arg_i, arg_expr) in args.iter().enumerate() {
+                    let expected_arg_type = callee
+                        .args
+                        .get(arg_i)
+                        .map(|a| a.1.instantiate_for_fn(self.ctx, callee_id, type_arguments));
+                    if let Some(expected_arg_type) = expected_arg_type
+                        && expected_arg_type.has_inference_variables()
+                    {
+                        let lowered_args_expr = self.lower_expr(arg_expr, None)?;
+                        let unification = expected_arg_type.unify(lowered_args_expr.ty).ok_or_else(|| {
+                            Error::expr_type_mismatch(expected_arg_type, lowered_args_expr.ty, arg_expr.span)
+                        })?;
+                        type_arguments = type_arguments.instantiate_inferred(self.ctx, &unification);
+                        lowered_args.push(lowered_args_expr);
+                    } else {
+                        lowered_args.push(self.lower_expr(arg_expr, expected_arg_type)?);
+                    }
                 }
+
+                if type_arguments.iter().any(|ty| ty.has_inference_variables()) {
+                    return Err(Error::new("type annotations needed").with_span(expr.span));
+                }
+
+                let return_ty = callee.return_ty.instantiate_for_fn(self.ctx, callee_id, type_arguments);
 
                 if let Some(expect_type) = expect_type
                     && expect_type != return_ty
@@ -742,7 +765,7 @@ impl<'a, 'ctx> FunctionLoweringCtx<'a, 'ctx> {
                 Ok(Expr {
                     ty: return_ty,
                     span,
-                    kind: ExprKind::FunctionCall(*callee_id, type_arguments, lowered_args),
+                    kind: ExprKind::FunctionCall(callee_id, type_arguments, lowered_args),
                 })
             }
             ast::ExprKind::Assignment(place, value) => {
